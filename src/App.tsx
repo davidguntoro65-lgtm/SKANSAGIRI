@@ -15,11 +15,26 @@ import Achievements from "./components/Achievements";
 import CampusLife from "./components/CampusLife";
 import SuccessStories from "./components/SuccessStories";
 import News from "./components/News";
-import Headmaster from "./components/Headmaster";
 import PPDBcta from "./components/PPDBcta";
 import Footer from "./components/Footer";
 import AdminPanel from "./components/AdminPanel";
+import KepalaSokolah from "./pages/KepalaSokolah";
+import ManajemenSekolah from "./pages/ManajemenSekolah";
+import VisiMisi from "./pages/VisiMisi";
 import { DataStore } from "./dataStore";
+
+type AppPath = "/" | "/adm-panel" | "/tentang/kepala-sekolah" | "/tentang/manajemen-sekolah" | "/tentang/visi-misi";
+
+function getPath(): AppPath {
+  const p = window.location.pathname;
+  if (p === "/adm-panel") return "/adm-panel";
+  if (p === "/tentang/kepala-sekolah") return "/tentang/kepala-sekolah";
+  if (p === "/tentang/manajemen-sekolah") return "/tentang/manajemen-sekolah";
+  if (p === "/tentang/visi-misi") return "/tentang/visi-misi";
+  const h = window.location.hash;
+  if (h === "#/adm-panel" || h === "#adm-panel") return "/adm-panel";
+  return "/";
+}
 
 export default function App() {
   const [theme, setTheme] = useState<"light" | "dark">(() => {
@@ -39,26 +54,13 @@ export default function App() {
     DataStore.initializeFromServer();
   }, []);
 
-  const [currentPath, setCurrentPath] = useState<"/" | "/adm-panel">(() => {
-    if (typeof window !== "undefined") {
-      const p = window.location.pathname;
-      if (p === "/adm-panel") return "/adm-panel";
-      const h = window.location.hash;
-      if (h === "#/adm-panel" || h === "#adm-panel") return "/adm-panel";
-    }
+  const [currentPath, setCurrentPath] = useState<AppPath>(() => {
+    if (typeof window !== "undefined") return getPath();
     return "/";
   });
 
   useEffect(() => {
-    const handleLocationChange = () => {
-      const p = window.location.pathname;
-      const h = window.location.hash;
-      if (p === "/adm-panel" || h === "#/adm-panel" || h === "#adm-panel") {
-        setCurrentPath("/adm-panel");
-      } else {
-        setCurrentPath("/");
-      }
-    };
+    const handleLocationChange = () => setCurrentPath(getPath());
     window.addEventListener("popstate", handleLocationChange);
     window.addEventListener("hashchange", handleLocationChange);
     return () => {
@@ -95,11 +97,44 @@ export default function App() {
     );
   }
 
+  const containerClass = `relative min-h-screen ${theme === "dark" ? "bg-slate-950 text-slate-100" : "bg-white text-slate-900"} font-sans antialiased overflow-x-hidden selection:bg-amber-500 selection:text-slate-950 transition-colors duration-500`;
+
+  // Sub-pages (Tentang) — with Navbar + Footer but no hero sections
+  if (currentPath === "/tentang/kepala-sekolah") {
+    return (
+      <div className={containerClass} id="application-container">
+        <GlobalPageBg theme={theme} />
+        <Navbar theme={theme} toggleTheme={toggleTheme} />
+        <KepalaSokolah theme={theme} />
+        <Footer theme={theme} />
+      </div>
+    );
+  }
+
+  if (currentPath === "/tentang/manajemen-sekolah") {
+    return (
+      <div className={containerClass} id="application-container">
+        <GlobalPageBg theme={theme} />
+        <Navbar theme={theme} toggleTheme={toggleTheme} />
+        <ManajemenSekolah theme={theme} />
+        <Footer theme={theme} />
+      </div>
+    );
+  }
+
+  if (currentPath === "/tentang/visi-misi") {
+    return (
+      <div className={containerClass} id="application-container">
+        <GlobalPageBg theme={theme} />
+        <Navbar theme={theme} toggleTheme={toggleTheme} />
+        <VisiMisi theme={theme} />
+        <Footer theme={theme} />
+      </div>
+    );
+  }
+
   return (
-    <div
-      className={`relative min-h-screen ${theme === "dark" ? "bg-slate-950 text-slate-100" : "bg-white text-slate-900"} font-sans antialiased overflow-x-hidden selection:bg-amber-500 selection:text-slate-950 transition-colors duration-500`}
-      id="application-container"
-    >
+    <div className={containerClass} id="application-container">
       <GlobalPageBg theme={theme} />
       <Navbar theme={theme} toggleTheme={toggleTheme} />
 
@@ -113,7 +148,6 @@ export default function App() {
         <CampusLife theme={theme} />
         <SuccessStories theme={theme} />
         <News theme={theme} />
-        <Headmaster theme={theme} />
         <PPDBcta theme={theme} />
       </main>
 

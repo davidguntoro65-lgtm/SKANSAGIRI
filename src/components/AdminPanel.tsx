@@ -4,7 +4,7 @@ import {
   LayoutDashboard, LogOut, KeyRound, User, Lock, Save, Trash2, Edit2, Plus, X, Globe, 
   Trophy, Camera, Users, Newspaper, CheckCircle2, RefreshCw, ArrowLeft, Image, Link, 
   Compass, ChevronRight, AlertCircle, BookOpen, GraduationCap, HardDrive,
-  Upload, SlidersHorizontal, Sparkles, Crop, Check, Eye, Handshake
+  Upload, SlidersHorizontal, Sparkles, Crop, Check, Eye, Handshake, Target, Telescope
 } from "lucide-react";
 import { Competency, Milestone, GalleryItem, Alumnus, NewsArticle, IndustriPartner } from "../data";
 import { DataStore } from "../dataStore";
@@ -30,7 +30,7 @@ export default function AdminPanel({
   const [loginLoading, setLoginLoading] = useState(false);
 
   // Active Admin Sidebar Tab
-  const [activeTab, setActiveTab] = useState<"competencies" | "milestones" | "gallery" | "alumni" | "news" | "partners" | "branding">("competencies");
+  const [activeTab, setActiveTab] = useState<"competencies" | "milestones" | "gallery" | "alumni" | "news" | "partners" | "branding" | "kepala-sekolah" | "manajemen-sekolah" | "visi-misi">("competencies");
   const { branding, saveBranding, getLogo } = useBranding();
   const [brandingDraft, setBrandingDraft] = useState<Branding | null>(null);
   const [brandingLoading, setBrandingLoading] = useState(false);
@@ -42,6 +42,18 @@ export default function AdminPanel({
   const [alumni, setAlumni] = useState<Alumnus[]>([]);
   const [news, setNews] = useState<NewsArticle[]>([]);
   const [partners, setPartners] = useState<IndustriPartner[]>([]);
+
+  // Tentang section datasets
+  interface KepalaSekolahData { nama: string; nip: string; foto: string | null; sambutan: string; }
+  interface ManajemenItem { id: string; jabatan: string; nama: string; foto: string | null; }
+  interface VisiMisiData { visi: string; misi: string[]; }
+
+  const [kepalaSekolah, setKepalaSekolah] = useState<KepalaSekolahData>({ nama: "", nip: "", foto: null, sambutan: "" });
+  const [kepalaLoading, setKepalaLoading] = useState(false);
+  const [manajemenSekolah, setManajemenSekolah] = useState<ManajemenItem[]>([]);
+  const [manajemenLoading, setManajemenLoading] = useState(false);
+  const [visiMisi, setVisiMisi] = useState<VisiMisiData>({ visi: "", misi: [] });
+  const [visiMisiLoading, setVisiMisiLoading] = useState(false);
 
   // Editing state
   const [editingItem, setEditingItem] = useState<any>(null);
@@ -232,6 +244,9 @@ export default function AdminPanel({
       setAlumni(DataStore.getAlumni());
       setNews(DataStore.getNews());
       setPartners(DataStore.getPartners());
+      fetch("/api/kepala-sekolah").then(r => r.json()).then(d => setKepalaSekolah(d)).catch(() => {});
+      fetch("/api/manajemen-sekolah").then(r => r.json()).then(d => setManajemenSekolah(d)).catch(() => {});
+      fetch("/api/visi-misi").then(r => r.json()).then(d => setVisiMisi(d)).catch(() => {});
     }
   }, [isLoggedIn]);
 
@@ -707,7 +722,10 @@ export default function AdminPanel({
                     { id: "alumni", label: "Testimoni Alumni", icon: Users, count: alumni.length },
                     { id: "news", label: "Warta & Agenda", icon: Newspaper, count: news.length },
                     { id: "partners", label: "Mitra Dunia Industri", icon: Handshake, count: partners.length },
-                    { id: "branding", label: "Identitas & Logo", icon: Image, count: null }
+                    { id: "branding", label: "Identitas & Logo", icon: Image, count: null },
+                    { id: "kepala-sekolah", label: "Kepala Sekolah", icon: User, count: null },
+                    { id: "manajemen-sekolah", label: "Manajemen Sekolah", icon: Users, count: null },
+                    { id: "visi-misi", label: "Visi & Misi", icon: Target, count: null }
                   ].map((tab) => {
                     const TabIcon = tab.icon;
                     const isActive = activeTab === tab.id;
@@ -782,6 +800,9 @@ export default function AdminPanel({
                     {activeTab === "news" && "Kelola Warta & Agenda Utama"}
                     {activeTab === "partners" && "Kelola Mitra Dunia Industri"}
                     {activeTab === "branding" && "Identitas Visual & Logo Sekolah"}
+                    {activeTab === "kepala-sekolah" && "Profil & Sambutan Kepala Sekolah"}
+                    {activeTab === "manajemen-sekolah" && "Manajemen & Pimpinan Sekolah"}
+                    {activeTab === "visi-misi" && "Visi & Misi Sekolah"}
                   </h2>
                   <p className={`text-xs ${isDarkTheme ? "text-slate-400" : "text-slate-500"} font-light mt-0.5`}>
                     {activeTab === "competencies" && "Perbarui deskripsi, kurikulum, bidang karir, and detail program keahlian sekolah."}
@@ -791,10 +812,13 @@ export default function AdminPanel({
                     {activeTab === "news" && "Atur artikel warta, rilis berita baru, edit pencapaian murid terdepan di media cetak."}
                     {activeTab === "partners" && "Tambah, edit, atau hapus mitra industri yang tampil di bagian Dunia Industri halaman utama."}
                     {activeTab === "branding" && "Upload logo sekolah untuk Navbar, Footer, dan seluruh komponen branding portal."}
+                    {activeTab === "kepala-sekolah" && "Edit foto, nama, NIP, dan teks sambutan Kepala Sekolah yang tampil di halaman Kepala Sekolah."}
+                    {activeTab === "manajemen-sekolah" && "Perbarui foto dan nama untuk setiap jabatan pimpinan yang tampil di halaman Manajemen Sekolah."}
+                    {activeTab === "visi-misi" && "Edit teks Visi dan butir-butir Misi sekolah yang tampil di halaman Visi & Misi."}
                   </p>
                 </div>
 
-                {!isAddingNew && !editingItem && activeTab !== "branding" && (
+                {!isAddingNew && !editingItem && activeTab !== "branding" && activeTab !== "kepala-sekolah" && activeTab !== "manajemen-sekolah" && activeTab !== "visi-misi" && (
                   <button
                     onClick={() => {
                       setIsAddingNew(true);
@@ -2230,6 +2254,252 @@ export default function AdminPanel({
                             <span className="text-[10px] font-mono text-amber-500">● Perubahan belum disimpan</span>
                           )}
                         </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* KEPALA SEKOLAH PANEL */}
+                  {activeTab === "kepala-sekolah" && (() => {
+                    const handleKepalaFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        if (ev.target?.result) setKepalaSekolah(prev => ({ ...prev, foto: ev.target!.result as string }));
+                      };
+                      reader.readAsDataURL(file);
+                    };
+                    const handleSaveKepala = async () => {
+                      setKepalaLoading(true);
+                      try {
+                        await fetch("/api/kepala-sekolah", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(kepalaSekolah) });
+                        showFeedback("Data Kepala Sekolah berhasil disimpan!", "success");
+                      } catch { showFeedback("Gagal menyimpan data!", "error"); }
+                      setKepalaLoading(false);
+                    };
+                    return (
+                      <div className="space-y-8 max-w-3xl">
+                        {/* Photo Upload */}
+                        <div className={`p-6 rounded-2xl border ${isDarkTheme ? "bg-slate-900 border-white/5" : "bg-white border-slate-200"}`}>
+                          <h4 className={`text-xs font-bold mb-4 ${isDarkTheme ? "text-white" : "text-slate-900"}`}>Foto Kepala Sekolah</h4>
+                          <div className="flex flex-col sm:flex-row gap-6 items-start">
+                            <div className={`w-36 h-44 rounded-2xl overflow-hidden border flex items-center justify-center shrink-0 ${isDarkTheme ? "bg-slate-800 border-white/5" : "bg-slate-100 border-slate-200"}`}>
+                              {kepalaSekolah.foto ? (
+                                <img src={kepalaSekolah.foto} alt="Kepala Sekolah" className="w-full h-full object-cover object-top" />
+                              ) : (
+                                <div className="flex flex-col items-center gap-2">
+                                  <User className={`w-10 h-10 ${isDarkTheme ? "text-slate-600" : "text-slate-300"}`} />
+                                  <span className={`text-[9px] font-mono ${isDarkTheme ? "text-slate-600" : "text-slate-400"}`}>Belum ada foto</span>
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex flex-col gap-3 flex-1">
+                              <label className={`flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border cursor-pointer transition-all text-[10px] font-mono uppercase tracking-widest font-bold ${isDarkTheme ? "border-white/10 text-slate-300 hover:bg-white/5" : "border-slate-300 text-slate-700 hover:bg-slate-100"}`}>
+                                <Upload className="w-3.5 h-3.5" />
+                                {kepalaSekolah.foto ? "Ganti Foto" : "Upload Foto"}
+                                <input type="file" accept="image/*" className="hidden" onChange={handleKepalaFoto} />
+                              </label>
+                              {kepalaSekolah.foto && (
+                                <button onClick={() => setKepalaSekolah(prev => ({ ...prev, foto: null }))} className="flex items-center justify-center gap-2 py-2 px-4 rounded-xl border border-red-500/20 text-red-500 text-[10px] font-mono hover:bg-red-500/5 transition-colors">
+                                  <Trash2 className="w-3.5 h-3.5" /> Hapus Foto
+                                </button>
+                              )}
+                              <p className={`text-[10px] font-mono ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>Format: JPG, PNG, WebP. Ukuran maks 10MB.</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Identity Fields */}
+                        <div className={`p-6 rounded-2xl border space-y-5 ${isDarkTheme ? "bg-slate-900 border-white/5" : "bg-white border-slate-200"}`}>
+                          <h4 className={`text-xs font-bold ${isDarkTheme ? "text-white" : "text-slate-900"}`}>Identitas Kepala Sekolah</h4>
+                          <div>
+                            <label className={`block text-[10px] font-mono uppercase tracking-widest mb-1.5 ${isDarkTheme ? "text-slate-400" : "text-slate-500"}`}>Nama Lengkap</label>
+                            <input
+                              type="text"
+                              value={kepalaSekolah.nama}
+                              onChange={e => setKepalaSekolah(prev => ({ ...prev, nama: e.target.value }))}
+                              placeholder="Nama Kepala Sekolah"
+                              className={`w-full px-4 py-3 rounded-xl border text-sm outline-none transition-colors ${isDarkTheme ? "bg-slate-800 border-white/10 text-white placeholder-slate-600 focus:border-amber-500/40" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-300 focus:border-amber-400"}`}
+                            />
+                          </div>
+                          <div>
+                            <label className={`block text-[10px] font-mono uppercase tracking-widest mb-1.5 ${isDarkTheme ? "text-slate-400" : "text-slate-500"}`}>NIP</label>
+                            <input
+                              type="text"
+                              value={kepalaSekolah.nip}
+                              onChange={e => setKepalaSekolah(prev => ({ ...prev, nip: e.target.value }))}
+                              placeholder="Nomor Induk Pegawai"
+                              className={`w-full px-4 py-3 rounded-xl border text-sm outline-none transition-colors ${isDarkTheme ? "bg-slate-800 border-white/10 text-white placeholder-slate-600 focus:border-amber-500/40" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-300 focus:border-amber-400"}`}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Sambutan Text */}
+                        <div className={`p-6 rounded-2xl border space-y-4 ${isDarkTheme ? "bg-slate-900 border-white/5" : "bg-white border-slate-200"}`}>
+                          <h4 className={`text-xs font-bold ${isDarkTheme ? "text-white" : "text-slate-900"}`}>Teks Sambutan</h4>
+                          <p className={`text-[10px] font-mono ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>Gunakan baris baru untuk memisahkan paragraf.</p>
+                          <textarea
+                            rows={10}
+                            value={kepalaSekolah.sambutan}
+                            onChange={e => setKepalaSekolah(prev => ({ ...prev, sambutan: e.target.value }))}
+                            placeholder="Tulis sambutan kepala sekolah di sini..."
+                            className={`w-full px-4 py-3 rounded-xl border text-sm outline-none transition-colors resize-y leading-relaxed ${isDarkTheme ? "bg-slate-800 border-white/10 text-white placeholder-slate-600 focus:border-amber-500/40" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-300 focus:border-amber-400"}`}
+                          />
+                        </div>
+
+                        <button onClick={handleSaveKepala} disabled={kepalaLoading} className="flex items-center gap-2 px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 text-xs font-bold tracking-wider shadow-md active:scale-95 duration-150">
+                          {kepalaLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                          Simpan Profil Kepala Sekolah
+                        </button>
+                      </div>
+                    );
+                  })()}
+
+                  {/* MANAJEMEN SEKOLAH PANEL */}
+                  {activeTab === "manajemen-sekolah" && (() => {
+                    const handleManajemenFoto = (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        if (ev.target?.result) {
+                          setManajemenSekolah(prev => prev.map(p => p.id === id ? { ...p, foto: ev.target!.result as string } : p));
+                        }
+                      };
+                      reader.readAsDataURL(file);
+                    };
+                    const handleSaveManajemen = async () => {
+                      setManajemenLoading(true);
+                      try {
+                        await fetch("/api/manajemen-sekolah", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(manajemenSekolah) });
+                        showFeedback("Data Manajemen Sekolah berhasil disimpan!", "success");
+                      } catch { showFeedback("Gagal menyimpan data!", "error"); }
+                      setManajemenLoading(false);
+                    };
+                    return (
+                      <div className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                          {manajemenSekolah.map((person) => (
+                            <div key={person.id} className={`p-5 rounded-2xl border space-y-4 ${isDarkTheme ? "bg-slate-900 border-white/5" : "bg-white border-slate-200"}`}>
+                              <div className={`text-[9px] font-mono uppercase tracking-widest font-bold px-2.5 py-1 rounded-full inline-flex ${isDarkTheme ? "bg-amber-500/10 text-amber-400" : "bg-amber-50 text-amber-600"}`}>
+                                {person.jabatan}
+                              </div>
+
+                              {/* Photo */}
+                              <div className="flex items-center gap-4">
+                                <div className={`w-20 h-24 rounded-xl overflow-hidden border flex items-center justify-center shrink-0 ${isDarkTheme ? "bg-slate-800 border-white/5" : "bg-slate-100 border-slate-200"}`}>
+                                  {person.foto ? (
+                                    <img src={person.foto} alt={person.jabatan} className="w-full h-full object-cover object-top" />
+                                  ) : (
+                                    <User className={`w-8 h-8 ${isDarkTheme ? "text-slate-600" : "text-slate-300"}`} />
+                                  )}
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                  <label className={`flex items-center gap-1.5 py-1.5 px-3 rounded-lg border cursor-pointer text-[10px] font-mono uppercase tracking-widest font-bold transition-all ${isDarkTheme ? "border-white/10 text-slate-300 hover:bg-white/5" : "border-slate-200 text-slate-600 hover:bg-slate-100"}`}>
+                                    <Upload className="w-3 h-3" />
+                                    {person.foto ? "Ganti" : "Upload"} Foto
+                                    <input type="file" accept="image/*" className="hidden" onChange={e => handleManajemenFoto(person.id, e)} />
+                                  </label>
+                                  {person.foto && (
+                                    <button onClick={() => setManajemenSekolah(prev => prev.map(p => p.id === person.id ? { ...p, foto: null } : p))} className="flex items-center gap-1.5 py-1.5 px-3 rounded-lg border border-red-500/20 text-red-500 text-[10px] font-mono hover:bg-red-500/5 transition-colors">
+                                      <Trash2 className="w-3 h-3" /> Hapus
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Name field */}
+                              <div>
+                                <label className={`block text-[10px] font-mono uppercase tracking-widest mb-1.5 ${isDarkTheme ? "text-slate-400" : "text-slate-500"}`}>Nama Lengkap</label>
+                                <input
+                                  type="text"
+                                  value={person.nama === "-" ? "" : person.nama}
+                                  onChange={e => setManajemenSekolah(prev => prev.map(p => p.id === person.id ? { ...p, nama: e.target.value } : p))}
+                                  placeholder={`Nama ${person.jabatan}`}
+                                  className={`w-full px-3 py-2.5 rounded-xl border text-sm outline-none transition-colors ${isDarkTheme ? "bg-slate-800 border-white/10 text-white placeholder-slate-600 focus:border-amber-500/40" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-300 focus:border-amber-400"}`}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <button onClick={handleSaveManajemen} disabled={manajemenLoading} className="flex items-center gap-2 px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 text-xs font-bold tracking-wider shadow-md active:scale-95 duration-150">
+                          {manajemenLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                          Simpan Data Manajemen Sekolah
+                        </button>
+                      </div>
+                    );
+                  })()}
+
+                  {/* VISI MISI PANEL */}
+                  {activeTab === "visi-misi" && (() => {
+                    const handleSaveVisiMisi = async () => {
+                      setVisiMisiLoading(true);
+                      try {
+                        await fetch("/api/visi-misi", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(visiMisi) });
+                        showFeedback("Visi & Misi berhasil disimpan!", "success");
+                      } catch { showFeedback("Gagal menyimpan data!", "error"); }
+                      setVisiMisiLoading(false);
+                    };
+                    const updateMisiItem = (i: number, val: string) => {
+                      setVisiMisi(prev => { const m = [...prev.misi]; m[i] = val; return { ...prev, misi: m }; });
+                    };
+                    const addMisiItem = () => setVisiMisi(prev => ({ ...prev, misi: [...prev.misi, ""] }));
+                    const removeMisiItem = (i: number) => setVisiMisi(prev => ({ ...prev, misi: prev.misi.filter((_, idx) => idx !== i) }));
+                    return (
+                      <div className="space-y-8 max-w-3xl">
+                        {/* Visi */}
+                        <div className={`p-6 rounded-2xl border space-y-4 ${isDarkTheme ? "bg-slate-900 border-white/5" : "bg-white border-slate-200"}`}>
+                          <div className="flex items-center gap-2">
+                            <Telescope className="w-4 h-4 text-amber-500" />
+                            <h4 className={`text-xs font-bold ${isDarkTheme ? "text-white" : "text-slate-900"}`}>Visi Sekolah</h4>
+                          </div>
+                          <textarea
+                            rows={4}
+                            value={visiMisi.visi}
+                            onChange={e => setVisiMisi(prev => ({ ...prev, visi: e.target.value }))}
+                            placeholder="Tulis visi sekolah di sini..."
+                            className={`w-full px-4 py-3 rounded-xl border text-sm outline-none transition-colors resize-y leading-relaxed ${isDarkTheme ? "bg-slate-800 border-white/10 text-white placeholder-slate-600 focus:border-amber-500/40" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-300 focus:border-amber-400"}`}
+                          />
+                        </div>
+
+                        {/* Misi */}
+                        <div className={`p-6 rounded-2xl border space-y-4 ${isDarkTheme ? "bg-slate-900 border-white/5" : "bg-white border-slate-200"}`}>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Target className="w-4 h-4 text-slate-500" />
+                              <h4 className={`text-xs font-bold ${isDarkTheme ? "text-white" : "text-slate-900"}`}>Misi Sekolah</h4>
+                            </div>
+                            <button onClick={addMisiItem} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-mono uppercase tracking-widest font-bold transition-all ${isDarkTheme ? "border-white/10 text-slate-300 hover:bg-white/5" : "border-slate-200 text-slate-600 hover:bg-slate-100"}`}>
+                              <Plus className="w-3 h-3" /> Tambah Butir Misi
+                            </button>
+                          </div>
+                          <div className="space-y-3">
+                            {visiMisi.misi.map((item, i) => (
+                              <div key={i} className="flex items-start gap-3">
+                                <span className={`mt-3 text-[10px] font-mono font-bold shrink-0 w-5 text-center ${isDarkTheme ? "text-amber-500" : "text-amber-600"}`}>{i + 1}.</span>
+                                <input
+                                  type="text"
+                                  value={item}
+                                  onChange={e => updateMisiItem(i, e.target.value)}
+                                  placeholder={`Butir misi ke-${i + 1}`}
+                                  className={`flex-1 px-4 py-2.5 rounded-xl border text-sm outline-none transition-colors ${isDarkTheme ? "bg-slate-800 border-white/10 text-white placeholder-slate-600 focus:border-amber-500/40" : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-300 focus:border-amber-400"}`}
+                                />
+                                <button onClick={() => removeMisiItem(i)} className="mt-2 p-1.5 rounded-lg border border-red-500/20 text-red-500 hover:bg-red-500/5 transition-colors">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                            {visiMisi.misi.length === 0 && (
+                              <p className={`text-xs italic ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>Belum ada butir misi. Klik "Tambah Butir Misi" untuk menambahkan.</p>
+                            )}
+                          </div>
+                        </div>
+
+                        <button onClick={handleSaveVisiMisi} disabled={visiMisiLoading} className="flex items-center gap-2 px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 text-xs font-bold tracking-wider shadow-md active:scale-95 duration-150">
+                          {visiMisiLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                          Simpan Visi &amp; Misi
+                        </button>
                       </div>
                     );
                   })()}

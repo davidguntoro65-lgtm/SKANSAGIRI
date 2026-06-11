@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, useScroll, useSpring, AnimatePresence } from "motion/react";
-import { Menu, X, Landmark, GraduationCap, ArrowUpRight, Sun, Moon, ChevronDown, Award, Newspaper, Camera } from "lucide-react";
+import { Menu, X, Landmark, GraduationCap, ArrowUpRight, Sun, Moon, ChevronDown, Award, Newspaper, Camera, User, Users, Target } from "lucide-react";
 import { useBranding } from "../hooks/useBranding";
 
 interface NavbarProps {
@@ -8,12 +8,20 @@ interface NavbarProps {
   toggleTheme: () => void;
 }
 
+function navigate(path: string) {
+  window.history.pushState({}, "", path);
+  window.dispatchEvent(new Event("popstate"));
+}
+
 export default function Navbar({ theme, toggleTheme }: NavbarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [aktifitasOpen, setAktifitasOpen] = useState(false);
+  const [tentangOpen, setTentangOpen] = useState(false);
   const [mobileAktifitasOpen, setMobileAktifitasOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [mobileTentangOpen, setMobileTentangOpen] = useState(false);
+  const aktifitasRef = useRef<HTMLDivElement>(null);
+  const tentangRef = useRef<HTMLDivElement>(null);
   const isDark = theme === "dark";
 
   const { getLogo } = useBranding();
@@ -30,8 +38,11 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      if (aktifitasRef.current && !aktifitasRef.current.contains(e.target as Node)) {
         setAktifitasOpen(false);
+      }
+      if (tentangRef.current && !tentangRef.current.contains(e.target as Node)) {
+        setTentangOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -39,11 +50,15 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
   }, []);
 
   const navLinks = [
-    { name: "Tentang", href: "#about" },
     { name: "Kompetensi", href: "#kompetensi" },
     { name: "Kemitraan", href: "#kemitraan" },
     { name: "Alumni", href: "#testimoni" },
-    { name: "Sambutan", href: "#headmaster" }
+  ];
+
+  const tentangLinks = [
+    { name: "Kepala Sekolah", href: "/tentang/kepala-sekolah", icon: User, desc: "Sambutan & Profil Pimpinan" },
+    { name: "Manajemen Sekolah", href: "/tentang/manajemen-sekolah", icon: Users, desc: "Pimpinan & Staf Manajemen" },
+    { name: "Visi & Misi", href: "/tentang/visi-misi", icon: Target, desc: "Tujuan & Arah Pengembangan" },
   ];
 
   const aktifitasLinks = [
@@ -60,6 +75,18 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
     ? "text-xs text-slate-300 hover:text-white font-sans uppercase tracking-widest font-medium transition-colors relative group py-2"
     : "text-xs text-slate-600 hover:text-slate-950 font-sans uppercase tracking-widest font-medium transition-colors relative group py-2";
 
+  const dropdownPanel = (isDark: boolean) =>
+    `absolute top-full left-1/2 -translate-x-1/2 mt-3 w-64 rounded-2xl shadow-2xl overflow-hidden border backdrop-blur-xl ${
+      isDark
+        ? "bg-slate-900/95 border-white/8 shadow-black/50"
+        : "bg-white/98 border-slate-200 shadow-slate-200/80"
+    }`;
+
+  const dropdownItem = (isDark: boolean) =>
+    `flex items-center gap-3 px-4 py-3 rounded-xl transition-colors group/item ${
+      isDark ? "hover:bg-white/5" : "hover:bg-slate-50"
+    }`;
+
   return (
     <>
       <motion.nav
@@ -73,7 +100,7 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
       >
         <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between">
           {/* Logo */}
-          <a href="#" className="flex items-center gap-3 group" id="brand-logo">
+          <a href="/" onClick={(e) => { e.preventDefault(); navigate("/"); }} className="flex items-center gap-3 group" id="brand-logo">
             {logoUrl ? (
               <img
                 src={logoUrl}
@@ -100,6 +127,69 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
 
           {/* Desktop Nav Links */}
           <div className="hidden lg:flex items-center gap-8" id="nav-links-desktop">
+
+            {/* TENTANG Dropdown */}
+            <div className="relative" ref={tentangRef}>
+              <button
+                onClick={() => setTentangOpen((v) => !v)}
+                className={`${linkClass} flex items-center gap-1 cursor-pointer bg-transparent border-0 outline-none`}
+                id="btn-tentang-dropdown"
+              >
+                Tentang
+                <ChevronDown className={`w-3.5 h-3.5 text-amber-500 transition-transform duration-200 ${tentangOpen ? "rotate-180" : ""}`} />
+                <span className="absolute bottom-0 left-0 w-0 h-[1.5px] bg-amber-500 transition-all duration-300 group-hover:w-full" />
+              </button>
+
+              <AnimatePresence>
+                {tentangOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8, scale: 0.97 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 6, scale: 0.97 }}
+                    transition={{ duration: 0.18, ease: "easeOut" }}
+                    className={dropdownPanel(isDark)}
+                    id="tentang-dropdown-panel"
+                  >
+                    <div className="p-2">
+                      {tentangLinks.map((item) => {
+                        const Icon = item.icon;
+                        return (
+                          <a
+                            key={item.name}
+                            href={item.href}
+                            onClick={(e) => { e.preventDefault(); navigate(item.href); setTentangOpen(false); }}
+                            className={dropdownItem(isDark)}
+                            id={`link-tentang-${item.name.toLowerCase().replace(/\s/g, "-")}`}
+                          >
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                              isDark
+                                ? "bg-amber-500/10 group-hover/item:bg-amber-500/20"
+                                : "bg-amber-50 group-hover/item:bg-amber-100"
+                            }`}>
+                              <Icon className="w-4 h-4 text-amber-500" />
+                            </div>
+                            <div>
+                              <span className={`text-xs font-semibold uppercase tracking-widest block ${
+                                isDark ? "text-white" : "text-slate-900"
+                              }`}>
+                                {item.name}
+                              </span>
+                              <span className={`text-[9px] font-mono mt-0.5 block ${
+                                isDark ? "text-slate-500" : "text-slate-400"
+                              }`}>
+                                {item.desc}
+                              </span>
+                            </div>
+                          </a>
+                        );
+                      })}
+                    </div>
+                    <div className="h-[2px] bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
             {navLinks.map((link) => (
               <a
                 key={link.name}
@@ -113,7 +203,7 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
             ))}
 
             {/* AKTIFITAS Dropdown */}
-            <div className="relative" ref={dropdownRef}>
+            <div className="relative" ref={aktifitasRef}>
               <button
                 onClick={() => setAktifitasOpen((v) => !v)}
                 className={`${linkClass} flex items-center gap-1 cursor-pointer bg-transparent border-0 outline-none`}
@@ -131,11 +221,7 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 6, scale: 0.97 }}
                     transition={{ duration: 0.18, ease: "easeOut" }}
-                    className={`absolute top-full left-1/2 -translate-x-1/2 mt-3 w-64 rounded-2xl shadow-2xl overflow-hidden border backdrop-blur-xl ${
-                      isDark
-                        ? "bg-slate-900/95 border-white/8 shadow-black/50"
-                        : "bg-white/98 border-slate-200 shadow-slate-200/80"
-                    }`}
+                    className={dropdownPanel(isDark)}
                     id="aktifitas-dropdown-panel"
                   >
                     <div className="p-2">
@@ -146,9 +232,7 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
                             key={item.name}
                             href={item.href}
                             onClick={() => setAktifitasOpen(false)}
-                            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors group/item ${
-                              isDark ? "hover:bg-white/5" : "hover:bg-slate-50"
-                            }`}
+                            className={dropdownItem(isDark)}
                             id={`link-aktifitas-${item.name.toLowerCase()}`}
                           >
                             <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
@@ -240,7 +324,7 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
         />
       </motion.nav>
 
-      {/* Mobile Menu Panel — always dark for full-screen overlay readability */}
+      {/* Mobile Menu Panel */}
       <div
         className={`fixed inset-0 z-40 bg-slate-950/97 backdrop-blur-2xl flex flex-col justify-center transition-all duration-500 lg:hidden ${
           isOpen ? "opacity-100 pointer-events-auto translate-y-0" : "opacity-0 pointer-events-none -translate-y-4"
@@ -258,6 +342,52 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
             Center of Excellence & Innovation
           </p>
           <div className="h-[1px] w-12 bg-amber-500/20 my-1" />
+
+          {/* Mobile TENTANG Accordion */}
+          <div className="w-full">
+            <button
+              onClick={() => setMobileTentangOpen((v) => !v)}
+              className="w-full flex items-center justify-center gap-2 text-base text-slate-300 hover:text-white font-serif tracking-widest hover:scale-105 transition-all py-1 cursor-pointer bg-transparent border-0 outline-none"
+              id="btn-tentang-mobile"
+            >
+              Tentang
+              <ChevronDown className={`w-4 h-4 text-amber-500 transition-transform duration-200 ${mobileTentangOpen ? "rotate-180" : ""}`} />
+            </button>
+
+            <AnimatePresence>
+              {mobileTentangOpen && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden mt-2"
+                >
+                  <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-1">
+                    {tentangLinks.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <a
+                          key={item.name}
+                          href={item.href}
+                          onClick={(e) => { e.preventDefault(); navigate(item.href); setIsOpen(false); setMobileTentangOpen(false); }}
+                          className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/5 transition-colors"
+                          id={`link-tentang-mob-${item.name.toLowerCase().replace(/\s/g, "-")}`}
+                        >
+                          <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+                            <Icon className="w-3.5 h-3.5 text-amber-400" />
+                          </div>
+                          <span className="text-sm text-slate-300 font-serif tracking-widest">
+                            {item.name}
+                          </span>
+                        </a>
+                      );
+                    })}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
           {navLinks.map((link) => (
             <a

@@ -27,7 +27,10 @@ const filePaths = {
   alumni: path.join(DATA_DIR, "alumni.json"),
   news: path.join(DATA_DIR, "news.json"),
   partners: path.join(DATA_DIR, "partners.json"),
-  branding: path.join(DATA_DIR, "branding.json")
+  branding: path.join(DATA_DIR, "branding.json"),
+  kepalaSekolah: path.join(DATA_DIR, "kepala-sekolah.json"),
+  manajemenSekolah: path.join(DATA_DIR, "manajemen-sekolah.json"),
+  visiMisi: path.join(DATA_DIR, "visi-misi.json")
 };
 
 // Helper to initialize files with initial data if they don't exist
@@ -58,6 +61,29 @@ initJsonFile(filePaths.branding, {
   schoolLogoLight: null,
   schoolFavicon: null,
   schoolAppIcon: null
+});
+initJsonFile(filePaths.kepalaSekolah, {
+  nama: "Drs. Gunawan, M.Pd.",
+  nip: "19680324 199403 1 008",
+  foto: null,
+  sambutan: "Atas nama segenap keluarga besar SMKN 1 Wonogiri, saya menyambut kehadiran Anda di gerbang digital institusi terakreditasi unggul kami. Kami percaya bahwa pendidikan kejuruan mandiri tidak hanya mengajarkan metode teknis semata, namun mencetak kesiapan karakter, kepemimpinan, dan etika moral kelas dunia.\n\nSebagai Center of Excellence Nasional, kami mendesain setiap detail proses belajar mengajar dengan standar internasional paling prima. Kami mendedikasikan seluruh daya upaya guna meluncurkan lulusan yang siap mengambil peranan krusial sebagai inovator bisnis, ahli kriya, serta motor penggerak ekonomi global."
+});
+initJsonFile(filePaths.manajemenSekolah, [
+  { id: "waka-kesiswaan", jabatan: "Waka Kesiswaan", nama: "-", foto: null },
+  { id: "waka-kurikulum", jabatan: "Waka Kurikulum", nama: "-", foto: null },
+  { id: "waka-sarpras", jabatan: "Waka Sarpras & Ketenagakerjaan", nama: "-", foto: null },
+  { id: "waka-humas", jabatan: "Waka Humas", nama: "-", foto: null },
+  { id: "kepala-tu", jabatan: "Kepala Tata Usaha", nama: "-", foto: null }
+]);
+initJsonFile(filePaths.visiMisi, {
+  visi: "Terwujudnya SMKN 1 Wonogiri sebagai lembaga pendidikan kejuruan yang unggul, berkarakter, dan berdaya saing global dalam rangka mewujudkan masyarakat yang sejahtera.",
+  misi: [
+    "Menyelenggarakan pendidikan dan pelatihan kejuruan berkualitas tinggi berbasis kompetensi dan standar industri nasional maupun internasional.",
+    "Mengembangkan karakter peserta didik yang beriman, bertaqwa kepada Tuhan Yang Maha Esa, berakhlak mulia, dan berwawasan kebangsaan.",
+    "Membangun kemitraan strategis dengan dunia usaha dan dunia industri (DUDI) untuk penguatan kompetensi lulusan.",
+    "Menciptakan lingkungan belajar yang inovatif, inspiratif, dan adaptif terhadap perkembangan ilmu pengetahuan dan teknologi.",
+    "Menghasilkan lulusan yang kompeten, produktif, mandiri, dan siap memasuki dunia kerja serta berwirausaha di era global."
+  ]
 });
 
 // Parsing Middlewares
@@ -204,7 +230,57 @@ app.post("/api/partners", (req, res) => {
   }
 });
 
-// 7. Reset API
+// 7. Kepala Sekolah API
+app.get("/api/kepala-sekolah", (req, res) => {
+  try {
+    res.json(JSON.parse(fs.readFileSync(filePaths.kepalaSekolah, "utf-8")));
+  } catch (e: any) {
+    res.status(500).json({ error: "Failed to read kepala sekolah: " + e.message });
+  }
+});
+app.post("/api/kepala-sekolah", (req, res) => {
+  try {
+    fs.writeFileSync(filePaths.kepalaSekolah, JSON.stringify(req.body, null, 2), "utf-8");
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: "Failed to save kepala sekolah: " + e.message });
+  }
+});
+
+// 8. Manajemen Sekolah API
+app.get("/api/manajemen-sekolah", (req, res) => {
+  try {
+    res.json(JSON.parse(fs.readFileSync(filePaths.manajemenSekolah, "utf-8")));
+  } catch (e: any) {
+    res.status(500).json({ error: "Failed to read manajemen sekolah: " + e.message });
+  }
+});
+app.post("/api/manajemen-sekolah", (req, res) => {
+  try {
+    fs.writeFileSync(filePaths.manajemenSekolah, JSON.stringify(req.body, null, 2), "utf-8");
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: "Failed to save manajemen sekolah: " + e.message });
+  }
+});
+
+// 9. Visi Misi API
+app.get("/api/visi-misi", (req, res) => {
+  try {
+    res.json(JSON.parse(fs.readFileSync(filePaths.visiMisi, "utf-8")));
+  } catch (e: any) {
+    res.status(500).json({ error: "Failed to read visi misi: " + e.message });
+  }
+});
+app.post("/api/visi-misi", (req, res) => {
+  try {
+    fs.writeFileSync(filePaths.visiMisi, JSON.stringify(req.body, null, 2), "utf-8");
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: "Failed to save visi misi: " + e.message });
+  }
+});
+
 // --- BRANDING LOGO MANAGEMENT API ---
 app.get("/api/branding", (req, res) => {
   try {
