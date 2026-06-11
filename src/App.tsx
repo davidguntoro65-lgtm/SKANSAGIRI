@@ -29,7 +29,6 @@ export default function App() {
   });
 
   useEffect(() => {
-    // Sinkronisasi data di server backend ke frontend
     DataStore.initializeFromServer();
   }, []);
 
@@ -53,7 +52,6 @@ export default function App() {
         setCurrentPath("/");
       }
     };
-
     window.addEventListener("popstate", handleLocationChange);
     window.addEventListener("hashchange", handleLocationChange);
     return () => {
@@ -80,59 +78,38 @@ export default function App() {
 
   if (currentPath === "/adm-panel") {
     return (
-      <AdminPanel 
-        theme={theme} 
+      <AdminPanel
+        theme={theme}
         onBackToFrontpage={() => {
           window.history.pushState({}, "", "/");
           window.dispatchEvent(new Event("popstate"));
-        }} 
+        }}
       />
     );
   }
 
   return (
-    <div className={`relative min-h-screen ${theme === "dark" ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"} font-sans antialiased overflow-x-hidden selection:bg-amber-500 selection:text-slate-950 transition-colors duration-500`} id="application-container">
-      {/* Global Premium Navigation */}
+    <div
+      className={`relative min-h-screen ${theme === "dark" ? "bg-slate-950 text-slate-100" : "bg-white text-slate-900"} font-sans antialiased overflow-x-hidden selection:bg-amber-500 selection:text-slate-950 transition-colors duration-500`}
+      id="application-container"
+    >
       <Navbar theme={theme} toggleTheme={toggleTheme} />
 
-      {/* Main Page Layout Wrapper */}
       <main className="relative" id="main-content-flow">
-        {/* Above the Fold: Fullscreen Cinematic Hero */}
         <Hero theme={theme} />
-
-        {/* Premium Stats - Floating Glassmorphism Cards */}
         <Stats theme={theme} />
-
-        {/* Section 2: About Experienced Narrative */}
-        <About />
-
-        {/* Section 3: Competency Excellence Specializations */}
+        <About theme={theme} />
         <Competencies theme={theme} />
-
-        {/* Section 4: Industry partners ecosystem */}
         <Ecosystem theme={theme} />
-
-        {/* Section 5: School Historical Agenda Achievements */}
-        <Achievements />
-
-        {/* Section 6: Campus Life Masonry Pinterest Grid */}
-        <CampusLife />
-
-        {/* Section 7: Success Stories & Testimonials */}
-        <SuccessStories />
-
-        {/* Section 8: Magazine-Style News and Agenda */}
-        <News />
-
-        {/* Section 9: Academic Address / Headmaster Speech */}
-        <Headmaster />
-
-        {/* Section 10: Glowing Animated Aurora PPDB CTA */}
+        <Achievements theme={theme} />
+        <CampusLife theme={theme} />
+        <SuccessStories theme={theme} />
+        <News theme={theme} />
+        <Headmaster theme={theme} />
         <PPDBcta theme={theme} />
       </main>
 
-      {/* Luxury Footer component */}
-      <Footer />
+      <Footer theme={theme} />
     </div>
   );
 }

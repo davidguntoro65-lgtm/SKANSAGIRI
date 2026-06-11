@@ -1,19 +1,22 @@
 import { motion } from "motion/react";
 import { Landmark, ArrowRight, ShieldCheck, Award } from "lucide-react";
 
-export default function About() {
+export default function About({ theme = "dark" }: { theme?: "light" | "dark" }) {
+  const isDark = theme === "dark";
+
   return (
-    <section 
-      className="py-24 md:py-32 bg-slate-950 relative overflow-hidden" 
+    <section
+      className={`py-24 md:py-32 relative overflow-hidden transition-colors duration-500 ${
+        isDark ? "bg-slate-950" : "bg-slate-50"
+      }`}
       id="about"
     >
-      {/* Visual background ambient details */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-amber-500/5 rounded-full blur-[140px] pointer-events-none" />
-      
+
       <div className="max-w-7xl mx-auto px-6 md:px-12 relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-24 items-center">
-          
-          {/* Left Column: Image with Mask & Reveal animations */}
+
+          {/* Left: Image */}
           <motion.div
             initial={{ opacity: 0, x: -50 }}
             whileInView={{ opacity: 1, x: 0 }}
@@ -22,26 +25,31 @@ export default function About() {
             className="relative group"
             id="about-visual-container"
           >
-            {/* Elegant outer background frame */}
-            <div className="absolute -inset-4 rounded-3xl border border-white/5 bg-slate-900/40 -z-10 group-hover:scale-[1.02] duration-500 transition-transform" />
-            
-            {/* Main high-resolution academic building illustration with masked corner styling */}
-            <div className="relative overflow-hidden rounded-2xl aspect-[4/5] md:aspect-[4/3] lg:aspect-[3/4] shadow-2xl shadow-black/80">
+            <div className={`absolute -inset-4 rounded-3xl border -z-10 group-hover:scale-[1.02] duration-500 transition-transform ${
+              isDark ? "border-white/5 bg-slate-900/40" : "border-slate-200 bg-white/60"
+            }`} />
+
+            <div className={`relative overflow-hidden rounded-2xl aspect-[4/5] md:aspect-[4/3] lg:aspect-[3/4] shadow-2xl ${
+              isDark ? "shadow-black/80" : "shadow-slate-200/80"
+            }`}>
               <img
                 src="https://images.unsplash.com/photo-1562774053-701939374585?auto=format&fit=crop&w=1000&q=80"
                 alt="SMKN 1 Wonogiri Premium Building"
                 referrerPolicy="no-referrer"
                 className="w-full h-full object-cover grayscale-[20%] group-hover:grayscale-0 group-hover:scale-105 duration-700 transition-all"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
-              
-              {/* Floating micro credential label */}
-              <div className="absolute bottom-6 left-6 right-6 p-6 rounded-xl glass-premium border border-white/10 flex items-center justify-between">
+              <div className={`absolute inset-0 bg-gradient-to-t ${
+                isDark ? "from-slate-950 via-slate-950/20 to-transparent" : "from-slate-900/60 via-transparent to-transparent"
+              }`} />
+
+              <div className={`absolute bottom-6 left-6 right-6 p-6 rounded-xl border flex items-center justify-between backdrop-blur-md ${
+                isDark ? "bg-slate-950/80 border-white/10" : "bg-white/90 border-slate-200/80"
+              }`}>
                 <div>
                   <span className="text-[10px] text-amber-500 font-mono uppercase tracking-widest block mb-1">
                     STATUS INSTITUSI
                   </span>
-                  <span className="text-white font-serif font-semibold text-sm">
+                  <span className={`font-serif font-semibold text-sm ${isDark ? "text-white" : "text-slate-900"}`}>
                     Badan Rujukan Nasional Terakreditasi A
                   </span>
                 </div>
@@ -49,12 +57,11 @@ export default function About() {
               </div>
             </div>
 
-            {/* Accent Gold Corner Ornaments expressing heritage and elite quality */}
             <div className="absolute -top-2 -left-2 w-8 h-8 border-t-2 border-l-2 border-amber-500/60 pointer-events-none" />
             <div className="absolute -bottom-2 -right-2 w-8 h-8 border-b-2 border-r-2 border-amber-500/60 pointer-events-none" />
           </motion.div>
 
-          {/* Right Column: Narrative content */}
+          {/* Right: Content */}
           <motion.div
             initial={{ opacity: 0, x: 50 }}
             whileInView={{ opacity: 1, x: 0 }}
@@ -63,59 +70,85 @@ export default function About() {
             className="flex flex-col text-left"
             id="about-context-container"
           >
-            <span className="text-xs text-amber-500 font-mono tracking-[0.3em] uppercase block mb-3 font-semibold">
+            <span className={`text-xs font-mono tracking-[0.3em] uppercase block mb-3 font-semibold ${
+              isDark ? "text-amber-500" : "text-amber-600"
+            }`}>
               PRESTIGIOUS HERITAGE
             </span>
-            
-            <h2 className="text-3xl md:text-5xl font-serif text-white mb-6 font-bold tracking-tight leading-tight">
-              Mendidik Pemimpin Industri, <span className="italic font-light text-amber-200">Bukan Sekadar Pekerja.</span>
+
+            <h2 className={`text-3xl md:text-5xl font-serif mb-6 font-bold tracking-tight leading-tight ${
+              isDark ? "text-white" : "text-slate-950"
+            }`}>
+              Mendidik Pemimpin Industri,{" "}
+              <span className={`italic font-light ${isDark ? "text-amber-200" : "text-amber-600"}`}>
+                Bukan Sekadar Pekerja.
+              </span>
             </h2>
 
             <div className="h-[1px] w-16 bg-amber-500/40 mb-8" />
 
-            <p className="text-slate-300 font-sans text-sm md:text-base leading-relaxed tracking-wide mb-6">
-              SMKN 1 Wonogiri berdiri kokoh sebagai mercusuar pendidikan vokasi terkemuka di Indonesia. Sebagai jajaran resmi <strong className="text-white font-semibold">Center of Excellence (Pusat Keunggulan)</strong>, kami melatih ribuan talenta muda untuk mendominasi lanskap finansial korporat, kriya kuliner mewah, arsitektur mode haute couture, serta akselerasi startup digital berskala global.
+            <p className={`font-sans text-sm md:text-base leading-relaxed tracking-wide mb-6 ${
+              isDark ? "text-slate-300" : "text-slate-600"
+            }`}>
+              SMKN 1 Wonogiri berdiri kokoh sebagai mercusuar pendidikan vokasi terkemuka di Indonesia. Sebagai jajaran resmi{" "}
+              <strong className={`font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>
+                Center of Excellence (Pusat Keunggulan)
+              </strong>
+              , kami melatih ribuan talenta muda untuk mendominasi lanskap finansial korporat, kriya kuliner mewah, arsitektur mode haute couture, serta akselerasi startup digital berskala global.
             </p>
 
-            <p className="text-slate-400 font-sans text-sm md:text-base leading-relaxed tracking-wide mb-8">
+            <p className={`font-sans text-sm md:text-base leading-relaxed tracking-wide mb-8 ${
+              isDark ? "text-slate-400" : "text-slate-500"
+            }`}>
               Dengan mengintegrasikan standar mutu operasional ISO dan membangun kolaborasi fisik langsung bersama puluhan konglomerasi industri multinasional, kami memastikan setiap siswa tumbuh dalam ekosistem nyata yang matang secara moral dan berdaya saing global tinggi.
             </p>
 
-            {/* Grid bullet keys */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10" id="about-keys-grid">
               <div className="flex items-start gap-3">
-                <div className="p-1 rounded bg-amber-500/10 border border-amber-500/20 text-amber-500 mt-1">
+                <div className={`p-1 rounded border text-amber-500 mt-1 ${
+                  isDark ? "bg-amber-500/10 border-amber-500/20" : "bg-amber-50 border-amber-200"
+                }`}>
                   <ShieldCheck className="w-4 h-4" />
                 </div>
                 <div>
-                  <h4 className="text-white font-sans font-semibold text-sm">Kurikulum Integratif</h4>
-                  <p className="text-xs text-slate-400">Selaras 100% kebutuhan korporat modern.</p>
+                  <h4 className={`font-sans font-semibold text-sm ${isDark ? "text-white" : "text-slate-900"}`}>
+                    Kurikulum Integratif
+                  </h4>
+                  <p className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                    Selaras 100% kebutuhan korporat modern.
+                  </p>
                 </div>
               </div>
 
               <div className="flex items-start gap-3">
-                <div className="p-1 rounded bg-amber-500/10 border border-amber-500/20 text-amber-500 mt-1">
+                <div className={`p-1 rounded border text-amber-500 mt-1 ${
+                  isDark ? "bg-amber-500/10 border-amber-500/20" : "bg-amber-50 border-amber-200"
+                }`}>
                   <Landmark className="w-4 h-4" />
                 </div>
                 <div>
-                  <h4 className="text-white font-sans font-semibold text-sm">Fasilitas Kelas Dunia</h4>
-                  <p className="text-xs text-slate-400">Laboratorium praktik berlisensi industri.</p>
+                  <h4 className={`font-sans font-semibold text-sm ${isDark ? "text-white" : "text-slate-900"}`}>
+                    Fasilitas Kelas Dunia
+                  </h4>
+                  <p className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                    Laboratorium praktik berlisensi industri.
+                  </p>
                 </div>
               </div>
             </div>
 
-            {/* Call to action arrow */}
             <div className="flex items-center gap-6">
               <a
                 href="#kompetensi"
-                className="group flex items-center gap-2 text-white font-sans uppercase tracking-widest text-xs font-bold hover:text-amber-400 duration-300"
+                className={`group flex items-center gap-2 font-sans uppercase tracking-widest text-xs font-bold duration-300 ${
+                  isDark ? "text-white hover:text-amber-400" : "text-slate-900 hover:text-amber-600"
+                }`}
                 id="link-explore-excellence"
               >
                 <span>Saksikan Keunggulan Spektrum</span>
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 duration-300" />
               </a>
             </div>
-
           </motion.div>
         </div>
       </div>
