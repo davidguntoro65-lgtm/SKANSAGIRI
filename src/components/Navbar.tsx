@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
-import { motion, useScroll, useSpring } from "motion/react";
-import { Menu, X, Landmark, GraduationCap, ArrowUpRight, Award, Sun, Moon } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { motion, useScroll, useSpring, AnimatePresence } from "motion/react";
+import { Menu, X, Landmark, GraduationCap, ArrowUpRight, Sun, Moon, ChevronDown, Award, Newspaper, Camera } from "lucide-react";
 
 interface NavbarProps {
   theme: "light" | "dark";
@@ -10,6 +10,10 @@ interface NavbarProps {
 export default function Navbar({ theme, toggleTheme }: NavbarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [aktifitasOpen, setAktifitasOpen] = useState(false);
+  const [mobileAktifitasOpen, setMobileAktifitasOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   const { scrollYProgress } = useScroll();
   const scaleX = useSpring(scrollYProgress, {
     stiffness: 100,
@@ -18,27 +22,36 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
   });
 
   useEffect(() => {
-    const handleScroll = () => {
-      if (window.scrollY > 40) {
-        setIsScrolled(true);
-      } else {
-        setIsScrolled(false);
-      }
-    };
+    const handleScroll = () => setIsScrolled(window.scrollY > 40);
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setAktifitasOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const navLinks = [
     { name: "Tentang", href: "#about" },
     { name: "Kompetensi", href: "#kompetensi" },
     { name: "Kemitraan", href: "#kemitraan" },
-    { name: "Prestasi", href: "#prestasi" },
-    { name: "Kehidupan Kampus", href: "#gallery" },
     { name: "Alumni", href: "#testimoni" },
-    { name: "Warta", href: "#news" },
     { name: "Sambutan", href: "#headmaster" }
   ];
+
+  const aktifitasLinks = [
+    { name: "Prestasi", href: "#prestasi", icon: Award, desc: "Penghargaan & Capaian Sekolah" },
+    { name: "Warta", href: "#news", icon: Newspaper, desc: "Berita & Agenda Terbaru" },
+    { name: "Kehidupan Kampus", href: "#gallery", icon: Camera, desc: "Galeri & Kegiatan Siswa" }
+  ];
+
+  const linkClass = "text-xs text-slate-300 hover:text-white font-sans uppercase tracking-widest font-medium transition-colors relative group py-2";
 
   return (
     <>
@@ -54,13 +67,12 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
         id="navbar-root"
       >
         <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between">
-          {/* Logo Brand Brand */}
+          {/* Logo */}
           <a href="#" className="flex items-center gap-3 group" id="brand-logo">
             <div className="relative w-10 h-10 rounded-lg bg-gradient-to-tr from-amber-500 to-yellow-600 flex items-center justify-center shadow-lg shadow-amber-500/10 group-hover:scale-110 transition-transform duration-300">
               <Landmark className="w-5.5 h-5.5 text-slate-950 stroke-[2]" />
               <div className="absolute inset-0 rounded-lg border border-white/30" />
             </div>
-            
             <div className="flex flex-col">
               <span className="text-white font-serif tracking-widest text-sm font-bold md:text-base">
                 SMKN 1 WONOGIRI
@@ -71,22 +83,80 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
             </div>
           </a>
 
-          {/* Nav Links Desktop */}
+          {/* Desktop Nav Links */}
           <div className="hidden lg:flex items-center gap-8" id="nav-links-desktop">
             {navLinks.map((link) => (
               <a
                 key={link.name}
                 href={link.href}
-                className="text-xs text-slate-300 hover:text-white font-sans uppercase tracking-widest font-medium transition-colors relative group py-2"
+                className={linkClass}
                 id={`link-desk-${link.name.toLowerCase()}`}
               >
                 {link.name}
                 <span className="absolute bottom-0 left-0 w-0 h-[1.5px] bg-amber-500 transition-all duration-300 group-hover:w-full" />
               </a>
             ))}
+
+            {/* AKTIFITAS Dropdown */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setAktifitasOpen((v) => !v)}
+                className={`${linkClass} flex items-center gap-1 cursor-pointer bg-transparent border-0 outline-none`}
+                id="btn-aktifitas-dropdown"
+              >
+                Aktifitas
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-amber-500 transition-transform duration-200 ${aktifitasOpen ? "rotate-180" : ""}`}
+                />
+                <span className="absolute bottom-0 left-0 w-0 h-[1.5px] bg-amber-500 transition-all duration-300 group-hover:w-full" />
+              </button>
+
+              <AnimatePresence>
+                {aktifitasOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8, scale: 0.97 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 6, scale: 0.97 }}
+                    transition={{ duration: 0.18, ease: "easeOut" }}
+                    className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-64 bg-slate-900/95 backdrop-blur-xl border border-white/8 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden"
+                    id="aktifitas-dropdown-panel"
+                  >
+                    <div className="p-2">
+                      {aktifitasLinks.map((item) => {
+                        const Icon = item.icon;
+                        return (
+                          <a
+                            key={item.name}
+                            href={item.href}
+                            onClick={() => setAktifitasOpen(false)}
+                            className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-colors group/item"
+                            id={`link-aktifitas-${item.name.toLowerCase()}`}
+                          >
+                            <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0 group-hover/item:bg-amber-500/20 transition-colors">
+                              <Icon className="w-4 h-4 text-amber-400" />
+                            </div>
+                            <div>
+                              <span className="text-xs text-white font-semibold uppercase tracking-widest block">
+                                {item.name}
+                              </span>
+                              <span className="text-[9px] text-slate-500 font-mono mt-0.5 block">
+                                {item.desc}
+                              </span>
+                            </div>
+                          </a>
+                        );
+                      })}
+                    </div>
+
+                    {/* Bottom accent */}
+                    <div className="h-[2px] bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
 
-          {/* Call To Action Button (Premium Magnetic Glow style) */}
+          {/* CTA */}
           <div className="hidden lg:flex items-center gap-4" id="nav-actions-desktop">
             <div className="flex items-center gap-2 bg-slate-900 border border-emerald-500/30 text-emerald-400 text-[10px] font-mono tracking-wider uppercase py-1.5 px-3 rounded-full">
               <span className="relative flex h-2 w-2">
@@ -105,7 +175,6 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
               <ArrowUpRight className="w-4 h-4 text-slate-950 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
             </a>
 
-            {/* Dark & Light Theme Mode Switcher */}
             <button
               onClick={toggleTheme}
               className="flex items-center justify-center w-10 h-10 rounded-full border border-slate-200/50 dark:border-white/10 bg-slate-100 dark:bg-slate-900/40 hover:bg-slate-200 dark:hover:bg-slate-800/60 text-slate-600 dark:text-amber-500 hover:text-amber-500 dark:hover:text-amber-400 transition-all shadow-md cursor-pointer hover:scale-105 active:scale-95 z-50"
@@ -117,7 +186,7 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
             </button>
           </div>
 
-          {/* Right Mobile Trigger */}
+          {/* Mobile Trigger */}
           <button
             onClick={() => setIsOpen(!isOpen)}
             className="lg:hidden text-white p-2 focus:outline-none focus:ring-1 focus:ring-amber-500/20 rounded-md"
@@ -128,7 +197,7 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
           </button>
         </div>
 
-        {/* Reading Progress Bar indicator at the very bottom of navbar */}
+        {/* Reading Progress Bar */}
         <motion.div
           className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 origin-left"
           style={{ scaleX }}
@@ -143,11 +212,11 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
         }`}
         id="mobile-nav-modal"
       >
-        <div className="flex flex-col items-center gap-6 px-12 text-center">
-          <div className="w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center mb-4">
+        <div className="flex flex-col items-center gap-5 px-12 text-center overflow-y-auto py-12">
+          <div className="w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center mb-2">
             <GraduationCap className="w-8 h-8 text-amber-500" />
           </div>
-          
+
           <h3 className="text-white font-serif tracking-widest uppercase font-bold text-lg">
             SMKN 1 Wonogiri
           </h3>
@@ -155,27 +224,72 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
             Center of Excellence & Innovation
           </p>
 
-          <div className="h-[1px] w-12 bg-amber-500/20 my-2" />
+          <div className="h-[1px] w-12 bg-amber-500/20 my-1" />
 
           {navLinks.map((link) => (
             <a
               key={link.name}
               href={link.href}
               onClick={() => setIsOpen(false)}
-              className="text-base text-slate-300 hover:text-white font-serif tracking-widest hover:scale-105 transition-all py-1.5"
+              className="text-base text-slate-300 hover:text-white font-serif tracking-widest hover:scale-105 transition-all py-1"
               id={`link-mob-${link.name.toLowerCase()}`}
             >
               {link.name}
             </a>
           ))}
 
-          {/* Mobile Theme Toggle Button */}
+          {/* Mobile AKTIFITAS Dropdown */}
+          <div className="w-full">
+            <button
+              onClick={() => setMobileAktifitasOpen((v) => !v)}
+              className="w-full flex items-center justify-center gap-2 text-base text-slate-300 hover:text-white font-serif tracking-widest hover:scale-105 transition-all py-1 cursor-pointer bg-transparent border-0 outline-none"
+              id="btn-aktifitas-mobile"
+            >
+              Aktifitas
+              <ChevronDown
+                className={`w-4 h-4 text-amber-500 transition-transform duration-200 ${mobileAktifitasOpen ? "rotate-180" : ""}`}
+              />
+            </button>
+
+            <AnimatePresence>
+              {mobileAktifitasOpen && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden mt-2"
+                >
+                  <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-1">
+                    {aktifitasLinks.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <a
+                          key={item.name}
+                          href={item.href}
+                          onClick={() => { setIsOpen(false); setMobileAktifitasOpen(false); }}
+                          className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/5 transition-colors"
+                          id={`link-aktifitas-mob-${item.name.toLowerCase()}`}
+                        >
+                          <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+                            <Icon className="w-3.5 h-3.5 text-amber-400" />
+                          </div>
+                          <span className="text-sm text-slate-300 font-serif tracking-widest">
+                            {item.name}
+                          </span>
+                        </a>
+                      );
+                    })}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Mobile Theme Toggle */}
           <button
-            onClick={() => {
-              toggleTheme();
-              setIsOpen(false);
-            }}
-            className="mt-2 flex items-center gap-3 px-6 py-2.5 rounded-full border border-slate-200/40 dark:border-white/10 bg-slate-100 dark:bg-slate-900/40 text-slate-700 dark:text-amber-500 transition-all hover:scale-105 active:scale-95 text-xs uppercase tracking-widest font-bold w-full justify-center cursor-pointer"
+            onClick={() => { toggleTheme(); setIsOpen(false); }}
+            className="mt-1 flex items-center gap-3 px-6 py-2.5 rounded-full border border-slate-200/40 dark:border-white/10 bg-slate-100 dark:bg-slate-900/40 text-slate-700 dark:text-amber-500 transition-all hover:scale-105 active:scale-95 text-xs uppercase tracking-widest font-bold w-full justify-center cursor-pointer"
             id="theme-toggle-mobile"
           >
             {theme === "dark" ? (
@@ -194,7 +308,7 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
           <a
             href="#ppdb-cta"
             onClick={() => setIsOpen(false)}
-            className="mt-6 w-full py-3.5 rounded-full text-slate-950 font-sans font-extrabold uppercase tracking-widest text-xs bg-gradient-to-r from-amber-400 to-yellow-500 text-center"
+            className="mt-4 w-full py-3.5 rounded-full text-slate-950 font-sans font-extrabold uppercase tracking-widest text-xs bg-gradient-to-r from-amber-400 to-yellow-500 text-center"
             id="btn-ppdb-mobile"
           >
             Admisi PPDB Online 2026
