@@ -21,9 +21,10 @@ import AdminPanel from "./components/AdminPanel";
 import KepalaSokolah from "./pages/KepalaSokolah";
 import ManajemenSekolah from "./pages/ManajemenSekolah";
 import VisiMisi from "./pages/VisiMisi";
+import TracerStudi from "./pages/TracerStudi";
 import { DataStore } from "./dataStore";
 
-type AppPath = "/" | "/adm-panel" | "/tentang/kepala-sekolah" | "/tentang/manajemen-sekolah" | "/tentang/visi-misi";
+type AppPath = "/" | "/adm-panel" | "/tentang/kepala-sekolah" | "/tentang/manajemen-sekolah" | "/tentang/visi-misi" | "/tracer-studi";
 
 function getPath(): AppPath {
   const p = window.location.pathname;
@@ -31,6 +32,7 @@ function getPath(): AppPath {
   if (p === "/tentang/kepala-sekolah") return "/tentang/kepala-sekolah";
   if (p === "/tentang/manajemen-sekolah") return "/tentang/manajemen-sekolah";
   if (p === "/tentang/visi-misi") return "/tentang/visi-misi";
+  if (p === "/tracer-studi") return "/tracer-studi";
   const h = window.location.hash;
   if (h === "#/adm-panel" || h === "#adm-panel") return "/adm-panel";
   return "/";
@@ -128,6 +130,17 @@ export default function App() {
         <GlobalPageBg theme={theme} />
         <Navbar theme={theme} toggleTheme={toggleTheme} />
         <VisiMisi theme={theme} />
+        <Footer theme={theme} />
+      </div>
+    );
+  }
+
+  if (currentPath === "/tracer-studi") {
+    return (
+      <div className={containerClass} id="application-container">
+        <GlobalPageBg theme={theme} />
+        <Navbar theme={theme} toggleTheme={toggleTheme} />
+        <TracerStudi theme={theme} />
         <Footer theme={theme} />
       </div>
     );

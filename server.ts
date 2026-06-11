@@ -300,6 +300,34 @@ app.post("/api/branding", (req, res) => {
   }
 });
 
+// 10. Tracer Study API
+const tracerPath = path.join(DATA_DIR, "tracer.json");
+initJsonFile(tracerPath, []);
+
+app.get("/api/tracer", (req, res) => {
+  try {
+    res.json(JSON.parse(fs.readFileSync(tracerPath, "utf-8")));
+  } catch (e: any) {
+    res.status(500).json({ error: "Failed to read tracer data: " + e.message });
+  }
+});
+
+app.post("/api/tracer", (req, res) => {
+  try {
+    const existing: any[] = JSON.parse(fs.readFileSync(tracerPath, "utf-8"));
+    const entry = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+      ...req.body,
+      createdAt: new Date().toISOString(),
+    };
+    existing.push(entry);
+    fs.writeFileSync(tracerPath, JSON.stringify(existing, null, 2), "utf-8");
+    res.json(entry);
+  } catch (e: any) {
+    res.status(500).json({ error: "Failed to save tracer entry: " + e.message });
+  }
+});
+
 app.post("/api/reset", (req, res) => {
   try {
     fs.writeFileSync(filePaths.competencies, JSON.stringify(COMPETENCY_DATA, null, 2), "utf-8");

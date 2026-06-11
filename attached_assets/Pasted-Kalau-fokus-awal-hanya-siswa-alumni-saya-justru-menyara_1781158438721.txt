@@ -1,0 +1,339 @@
+Kalau fokus awal hanya **siswa/alumni**, saya justru menyarankan **jangan langsung membuat portal alumni yang kompleks**. Penyebab kegagalan tracer study di SMK biasanya bukan teknologinya, tetapi **alumni malas mengisi**.
+
+Target fase pertama harus:
+
+> "Mengumpulkan data alumni sebanyak mungkin dengan usaha seminimal mungkin dari alumni."
+
+---
+
+# Strategi Paling Efektif
+
+## Tahap 1: Alumni Tidak Perlu Login
+
+Kesalahan umum:
+
+```text
+Login
+Verifikasi Email
+Reset Password
+Lengkapi Profil
+Isi Tracer
+```
+
+95% alumni akan keluar sebelum selesai.
+
+---
+
+Lebih baik:
+
+### Magic Link / Token
+
+Alumni menerima link:
+
+```text
+https://tracer.smkn1wonogiri.sch.id/t/ABC123XYZ
+```
+
+Saat dibuka:
+
+```text
+Halo David
+Lulusan 2025
+AKL
+
+Silakan perbarui status Anda.
+```
+
+Tanpa login.
+
+---
+
+# Dashboard Alumni Sangat Sederhana
+
+Ketika alumni membuka link:
+
+## Card 1
+
+Status Saat Ini
+
+```text
+○ Bekerja
+○ Kuliah
+○ Wirausaha
+○ Belum Bekerja
+```
+
+---
+
+# Jika Memilih Bekerja
+
+Muncul pertanyaan lanjutan.
+
+## Pekerjaan
+
+```text
+Nama Perusahaan
+Posisi
+Kota
+Tanggal Mulai
+```
+
+---
+
+## Relevansi Jurusan
+
+```text
+Sangat Relevan
+Relevan
+Cukup Relevan
+Tidak Relevan
+```
+
+---
+
+## Rentang Gaji
+
+Opsional
+
+```text
+< 2 juta
+2–4 juta
+4–6 juta
+> 6 juta
+```
+
+---
+
+# Jika Kuliah
+
+```text
+Universitas
+Program Studi
+Jalur Masuk
+```
+
+---
+
+# Jika Wirausaha
+
+```text
+Nama Usaha
+Bidang Usaha
+Tahun Berdiri
+```
+
+---
+
+# Jika Belum Bekerja
+
+```text
+Sedang Mencari Kerja
+Sedang Pelatihan
+Menikah
+Lainnya
+```
+
+---
+
+# Progress Maksimal 2 Menit
+
+Target:
+
+```text
+Selesai < 2 Menit
+```
+
+Bukan 20 menit.
+
+---
+
+# Gamification
+
+Setelah mengisi:
+
+```text
+✓ Data Berhasil Diperbarui
+
+Terima kasih telah berkontribusi
+untuk pengembangan SMKN 1 Wonogiri.
+```
+
+Muncul badge:
+
+```text
+Alumni Terverifikasi
+```
+
+---
+
+# Dashboard Alumni Setelah Isi
+
+Jangan kosong.
+
+Tampilkan:
+
+## Statistik Alumni
+
+```text
+85%
+Sudah Bekerja
+
+10%
+Kuliah
+
+5%
+Wirausaha
+```
+
+Alumni suka melihat dirinya bagian dari data.
+
+---
+
+# Profil Alumni
+
+Data dasar:
+
+```text
+Nama
+Jurusan
+Tahun Lulus
+Foto
+```
+
+---
+
+# Riwayat Pengisian
+
+```text
+Tracer 2026
+Tracer 2027
+Tracer 2028
+```
+
+---
+
+# Mobile First
+
+Ini sangat penting.
+
+Target:
+
+```text
+95% pengisian dari HP
+```
+
+Jadi desain harus:
+
+* Mirip aplikasi mobile
+* Tombol besar
+* Form pendek
+* Progress bar
+
+---
+
+# Fitur yang Wajib Ada
+
+## Update Data Kontak
+
+```text
+WhatsApp
+Email
+Alamat
+```
+
+Karena ini aset paling penting.
+
+---
+
+## Upload Bukti
+
+Opsional:
+
+```text
+Surat Kerja
+KTM
+Foto Usaha
+```
+
+Untuk validasi.
+
+---
+
+# Reminder Otomatis
+
+Yang paling efektif:
+
+Urutan:
+
+```text
+WA
+↓
+Email
+↓
+SMS (opsional)
+```
+
+---
+
+Pesan:
+
+```text
+Halo David,
+
+SMKN 1 Wonogiri sedang melakukan
+Tracer Study Alumni.
+
+Mohon meluangkan waktu sekitar
+2 menit untuk memperbarui data Anda.
+
+[Isi Tracer Sekarang]
+```
+
+---
+
+# Yang Jangan Dibuat Dulu
+
+Fase awal jangan membuat:
+
+❌ Forum Alumni
+❌ Chat Alumni
+❌ Social Media Alumni
+❌ Marketplace Alumni
+❌ AI Career Coach
+❌ Job Portal Besar
+
+Karena itu tidak membantu meningkatkan response rate.
+
+---
+
+# MVP Profesional untuk SMKN 1 Wonogiri
+
+Menu Alumni hanya 5:
+
+```text
+Dashboard
+Profil
+Tracer Study
+Riwayat Tracer
+Bantuan
+```
+
+Form tracer maksimal:
+
+```text
+10–15 pertanyaan
+```
+
+Waktu isi:
+
+```text
+1–2 menit
+```
+
+Target response rate:
+
+```text
+>70%
+```
+
+Jika fase ini berhasil dan data alumni sudah terkumpul banyak, baru naik ke fase berikutnya: **Portal Alumni + BKK + Career Center + Employer Survey**. Itu urutan yang paling efisien, profesional, dan realistis untuk sekolah.

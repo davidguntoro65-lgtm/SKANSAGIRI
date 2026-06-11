@@ -1,1 +1,2 @@
 - [Visual Enhancement System](visual-enhancement-system.md) — BackgroundSystem.tsx holds all premium bg components; logo stored as base64 in data/branding.json via /api/branding GET+POST.
+- [Sub-page z-index rule](subpage-zindex.md) — All sub-page sections must use `relative z-10` to appear above GlobalPageBg (fixed inset-0 z-0).

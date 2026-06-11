@@ -13,16 +13,20 @@ function navigate(path: string) {
   window.dispatchEvent(new Event("popstate"));
 }
 
-function navigateToAnchor(anchor: string) {
+function navigateToAnchor(href: string) {
+  if (!href.startsWith("#")) {
+    navigate(href);
+    return;
+  }
   const isOnHomepage = window.location.pathname === "/";
   if (isOnHomepage) {
-    const el = document.querySelector(anchor);
+    const el = document.querySelector(href);
     if (el) el.scrollIntoView({ behavior: "smooth" });
   } else {
     window.history.pushState({}, "", "/");
     window.dispatchEvent(new Event("popstate"));
     setTimeout(() => {
-      const el = document.querySelector(anchor);
+      const el = document.querySelector(href);
       if (el) el.scrollIntoView({ behavior: "smooth" });
     }, 120);
   }
@@ -68,6 +72,7 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
     { name: "Kompetensi", href: "#kompetensi" },
     { name: "Kemitraan", href: "#kemitraan" },
     { name: "Alumni", href: "#testimoni" },
+    { name: "Tracer Studi", href: "/tracer-studi" },
   ];
 
   const tentangLinks = [
@@ -105,9 +110,9 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
   return (
     <>
       <motion.nav
-        initial={{ y: -100, opacity: 0 }}
+        initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.8, ease: "easeOut" }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
           isScrolled ? `py-3 ${navScrolledBg}` : "py-6 bg-transparent"
         }`}
