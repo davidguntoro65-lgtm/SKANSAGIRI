@@ -24,9 +24,15 @@ import { DataStore } from "./dataStore";
 export default function App() {
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window !== "undefined") {
-      return (localStorage.getItem("theme") as "light" | "dark") || "dark";
+      // v2: default changed to light — reset old dark preference once
+      if (localStorage.getItem("theme_default_v") !== "2") {
+        localStorage.setItem("theme_default_v", "2");
+        localStorage.setItem("theme", "light");
+        return "light";
+      }
+      return (localStorage.getItem("theme") as "light" | "dark") || "light";
     }
-    return "dark";
+    return "light";
   });
 
   useEffect(() => {
