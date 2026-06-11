@@ -328,6 +328,20 @@ app.post("/api/tracer", (req, res) => {
   }
 });
 
+app.delete("/api/tracer/:id", (req, res) => {
+  try {
+    const existing: any[] = JSON.parse(fs.readFileSync(tracerPath, "utf-8"));
+    const updated = existing.filter((e: any) => e.id !== req.params.id);
+    if (updated.length === existing.length) {
+      return res.status(404).json({ error: "Entry not found" });
+    }
+    fs.writeFileSync(tracerPath, JSON.stringify(updated, null, 2), "utf-8");
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: "Failed to delete tracer entry: " + e.message });
+  }
+});
+
 app.post("/api/reset", (req, res) => {
   try {
     fs.writeFileSync(filePaths.competencies, JSON.stringify(COMPETENCY_DATA, null, 2), "utf-8");

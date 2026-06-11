@@ -1,1 +1,15 @@
-[]
+[
+  {
+    "id": "mq94n1sxtw00a",
+    "nama": "david guntoro",
+    "jurusan": "Akuntansi & Keuangan Lembaga (AKL)",
+    "tahunLulus": "2025",
+    "status": "bekerja",
+    "namaPerusahaan": "pt kias",
+    "posisi": "staff",
+    "kota": "surabaya",
+    "relevansiJurusan": "sangat_relevan",
+    "rentangGaji": "4-6",
+    "createdAt": "2026-06-11T06:39:00.321Z"
+  }
+]

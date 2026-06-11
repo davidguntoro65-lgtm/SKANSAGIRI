@@ -22,9 +22,10 @@ import KepalaSokolah from "./pages/KepalaSokolah";
 import ManajemenSekolah from "./pages/ManajemenSekolah";
 import VisiMisi from "./pages/VisiMisi";
 import TracerStudi from "./pages/TracerStudi";
+import AdminTracerStudi from "./pages/AdminTracerStudi";
 import { DataStore } from "./dataStore";
 
-type AppPath = "/" | "/adm-panel" | "/tentang/kepala-sekolah" | "/tentang/manajemen-sekolah" | "/tentang/visi-misi" | "/tracer-studi";
+type AppPath = "/" | "/adm-panel" | "/tentang/kepala-sekolah" | "/tentang/manajemen-sekolah" | "/tentang/visi-misi" | "/tracer-studi" | "/admin/tracer-studi";
 
 function getPath(): AppPath {
   const p = window.location.pathname;
@@ -33,6 +34,7 @@ function getPath(): AppPath {
   if (p === "/tentang/manajemen-sekolah") return "/tentang/manajemen-sekolah";
   if (p === "/tentang/visi-misi") return "/tentang/visi-misi";
   if (p === "/tracer-studi") return "/tracer-studi";
+  if (p === "/admin/tracer-studi") return "/admin/tracer-studi";
   const h = window.location.hash;
   if (h === "#/adm-panel" || h === "#adm-panel") return "/adm-panel";
   return "/";
@@ -142,6 +144,21 @@ export default function App() {
         <Navbar theme={theme} toggleTheme={toggleTheme} />
         <TracerStudi theme={theme} />
         <Footer theme={theme} />
+      </div>
+    );
+  }
+
+  if (currentPath === "/admin/tracer-studi") {
+    return (
+      <div className={containerClass} id="application-container">
+        <GlobalPageBg theme={theme} />
+        <AdminTracerStudi
+          theme={theme}
+          onBack={() => {
+            window.history.pushState({}, "", "/");
+            window.dispatchEvent(new Event("popstate"));
+          }}
+        />
       </div>
     );
   }
