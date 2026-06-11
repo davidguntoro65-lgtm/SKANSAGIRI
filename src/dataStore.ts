@@ -3,7 +3,8 @@ import {
   TIMELINE_ACHIEVEMENTS, Milestone,
   CAMPUS_LIFE_GALLERY, GalleryItem,
   ALUMNI_TESTIMONIALS, Alumnus,
-  NEWS_COMPILATION, NewsArticle
+  NEWS_COMPILATION, NewsArticle,
+  INDUSTRI_PARTNERS, IndustriPartner
 } from "./data";
 
 // Type definitions with strict parity to schema
@@ -13,6 +14,7 @@ export interface AppData {
   gallery: GalleryItem[];
   alumni: Alumnus[];
   news: NewsArticle[];
+  partners: IndustriPartner[];
 }
 
 const STORAGE_KEYS = {
@@ -20,7 +22,8 @@ const STORAGE_KEYS = {
   MILESTONES: "smkn1_milestones",
   GALLERY: "smkn1_gallery",
   ALUMNI: "smkn1_alumni",
-  NEWS: "smkn1_news"
+  NEWS: "smkn1_news",
+  PARTNERS: "smkn1_partners"
 };
 
 export function getStoredData<T>(key: string, defaultValue: T): T {
@@ -75,7 +78,8 @@ export const DataStore = {
         { key: STORAGE_KEYS.MILESTONES, url: "/api/milestones" },
         { key: STORAGE_KEYS.GALLERY, url: "/api/gallery" },
         { key: STORAGE_KEYS.ALUMNI, url: "/api/alumni" },
-        { key: STORAGE_KEYS.NEWS, url: "/api/news" }
+        { key: STORAGE_KEYS.NEWS, url: "/api/news" },
+        { key: STORAGE_KEYS.PARTNERS, url: "/api/partners" }
       ];
 
       await Promise.all(
@@ -115,6 +119,9 @@ export const DataStore = {
   getNews: (): NewsArticle[] => getStoredData(STORAGE_KEYS.NEWS, NEWS_COMPILATION),
   saveNews: (data: NewsArticle[]) => saveStoredData(STORAGE_KEYS.NEWS, data, "/api/news"),
 
+  getPartners: (): IndustriPartner[] => getStoredData(STORAGE_KEYS.PARTNERS, INDUSTRI_PARTNERS),
+  savePartners: (data: IndustriPartner[]) => saveStoredData(STORAGE_KEYS.PARTNERS, data, "/api/partners"),
+
   resetAll: async () => {
     try {
       const res = await fetch("/api/reset", { method: "POST" });
@@ -124,6 +131,7 @@ export const DataStore = {
         localStorage.removeItem(STORAGE_KEYS.GALLERY);
         localStorage.removeItem(STORAGE_KEYS.ALUMNI);
         localStorage.removeItem(STORAGE_KEYS.NEWS);
+        localStorage.removeItem(STORAGE_KEYS.PARTNERS);
         window.dispatchEvent(new Event("data-store-updated"));
       } else {
         console.error("Pengaturan ulang backend gagal.");

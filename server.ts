@@ -7,7 +7,8 @@ import {
   TIMELINE_ACHIEVEMENTS, 
   CAMPUS_LIFE_GALLERY, 
   ALUMNI_TESTIMONIALS, 
-  NEWS_COMPILATION 
+  NEWS_COMPILATION,
+  INDUSTRI_PARTNERS
 } from "./src/data";
 
 const app = express();
@@ -24,7 +25,8 @@ const filePaths = {
   milestones: path.join(DATA_DIR, "milestones.json"),
   gallery: path.join(DATA_DIR, "gallery.json"),
   alumni: path.join(DATA_DIR, "alumni.json"),
-  news: path.join(DATA_DIR, "news.json")
+  news: path.join(DATA_DIR, "news.json"),
+  partners: path.join(DATA_DIR, "partners.json")
 };
 
 // Helper to initialize files with initial data if they don't exist
@@ -48,6 +50,7 @@ initJsonFile(filePaths.milestones, TIMELINE_ACHIEVEMENTS);
 initJsonFile(filePaths.gallery, CAMPUS_LIFE_GALLERY);
 initJsonFile(filePaths.alumni, ALUMNI_TESTIMONIALS);
 initJsonFile(filePaths.news, NEWS_COMPILATION);
+initJsonFile(filePaths.partners, INDUSTRI_PARTNERS);
 
 // Parsing Middlewares
 app.use(express.json({ limit: "25mb" }));
@@ -170,7 +173,30 @@ app.post("/api/news", (req, res) => {
   }
 });
 
-// 6. Reset API
+// 6. Partners API
+app.get("/api/partners", (req, res) => {
+  try {
+    const data = fs.readFileSync(filePaths.partners, "utf-8");
+    res.json(JSON.parse(data));
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to read partners: " + error.message });
+  }
+});
+
+app.post("/api/partners", (req, res) => {
+  try {
+    const { data } = req.body;
+    if (!Array.isArray(data)) {
+      return res.status(400).json({ error: "Data must be an array of partners" });
+    }
+    fs.writeFileSync(filePaths.partners, JSON.stringify(data, null, 2), "utf-8");
+    res.json({ success: true, count: data.length });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to save partners: " + error.message });
+  }
+});
+
+// 7. Reset API
 app.post("/api/reset", (req, res) => {
   try {
     fs.writeFileSync(filePaths.competencies, JSON.stringify(COMPETENCY_DATA, null, 2), "utf-8");
@@ -178,6 +204,7 @@ app.post("/api/reset", (req, res) => {
     fs.writeFileSync(filePaths.gallery, JSON.stringify(CAMPUS_LIFE_GALLERY, null, 2), "utf-8");
     fs.writeFileSync(filePaths.alumni, JSON.stringify(ALUMNI_TESTIMONIALS, null, 2), "utf-8");
     fs.writeFileSync(filePaths.news, JSON.stringify(NEWS_COMPILATION, null, 2), "utf-8");
+    fs.writeFileSync(filePaths.partners, JSON.stringify(INDUSTRI_PARTNERS, null, 2), "utf-8");
     res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ error: "Failed to reset data: " + error.message });

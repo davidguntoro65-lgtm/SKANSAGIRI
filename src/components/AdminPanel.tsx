@@ -4,9 +4,9 @@ import {
   LayoutDashboard, LogOut, KeyRound, User, Lock, Save, Trash2, Edit2, Plus, X, Globe, 
   Trophy, Camera, Users, Newspaper, CheckCircle2, RefreshCw, ArrowLeft, Image, Link, 
   Compass, ChevronRight, AlertCircle, BookOpen, GraduationCap, HardDrive,
-  Upload, SlidersHorizontal, Sparkles, Crop, Check, Eye
+  Upload, SlidersHorizontal, Sparkles, Crop, Check, Eye, Handshake
 } from "lucide-react";
-import { Competency, Milestone, GalleryItem, Alumnus, NewsArticle } from "../data";
+import { Competency, Milestone, GalleryItem, Alumnus, NewsArticle, IndustriPartner } from "../data";
 import { DataStore } from "../dataStore";
 
 export default function AdminPanel({ 
@@ -29,7 +29,7 @@ export default function AdminPanel({
   const [loginLoading, setLoginLoading] = useState(false);
 
   // Active Admin Sidebar Tab
-  const [activeTab, setActiveTab] = useState<"competencies" | "milestones" | "gallery" | "alumni" | "news">("competencies");
+  const [activeTab, setActiveTab] = useState<"competencies" | "milestones" | "gallery" | "alumni" | "news" | "partners">("competencies");
 
   // Loaded Datasets
   const [competencies, setCompetencies] = useState<Competency[]>([]);
@@ -37,6 +37,7 @@ export default function AdminPanel({
   const [gallery, setGallery] = useState<GalleryItem[]>([]);
   const [alumni, setAlumni] = useState<Alumnus[]>([]);
   const [news, setNews] = useState<NewsArticle[]>([]);
+  const [partners, setPartners] = useState<IndustriPartner[]>([]);
 
   // Editing state
   const [editingItem, setEditingItem] = useState<any>(null);
@@ -226,6 +227,7 @@ export default function AdminPanel({
       setGallery(DataStore.getGallery());
       setAlumni(DataStore.getAlumni());
       setNews(DataStore.getNews());
+      setPartners(DataStore.getPartners());
     }
   }, [isLoggedIn]);
 
@@ -265,6 +267,7 @@ export default function AdminPanel({
       setGallery(DataStore.getGallery());
       setAlumni(DataStore.getAlumni());
       setNews(DataStore.getNews());
+      setPartners(DataStore.getPartners());
       showFeedback("Seluruh modul front-end berhasil diatur ulang ke bentuk bawaan pabrik!", "success");
       setEditingItem(null);
       setIsAddingNew(false);
@@ -430,6 +433,35 @@ export default function AdminPanel({
       DataStore.saveNews(updated);
       setNews(updated);
       showFeedback("Artikel berhasil dihapus.", "success");
+    }
+  };
+
+  // 6. Industri Partners CRUD
+  const savePartnerItem = (item: IndustriPartner, isNew: boolean) => {
+    if (!item.name || !item.type) {
+      showFeedback("Nama Mitra dan Bidang Industri wajib diisi!", "error");
+      return;
+    }
+    let updated: IndustriPartner[];
+    if (isNew) {
+      const newItem = { ...item, id: "p-" + Date.now() };
+      updated = [...partners, newItem];
+    } else {
+      updated = partners.map(p => p.id === item.id ? item : p);
+    }
+    DataStore.savePartners(updated);
+    setPartners(updated);
+    setIsAddingNew(false);
+    setEditingItem(null);
+    showFeedback("Mitra industri '" + item.name + "' berhasil disimpan!", "success");
+  };
+
+  const deletePartnerItem = (id: string, name: string) => {
+    if (window.confirm("Hapus mitra industri '" + name + "'?")) {
+      const updated = partners.filter(p => p.id !== id);
+      DataStore.savePartners(updated);
+      setPartners(updated);
+      showFeedback("Mitra '" + name + "' berhasil dihapus.", "success");
     }
   };
 
@@ -669,7 +701,8 @@ export default function AdminPanel({
                     { id: "milestones", label: "Milestones / Sejarah", icon: Trophy, count: milestones.length },
                     { id: "gallery", label: "Galeri Campus Life", icon: Camera, count: gallery.length },
                     { id: "alumni", label: "Testimoni Alumni", icon: Users, count: alumni.length },
-                    { id: "news", label: "Warta & Agenda", icon: Newspaper, count: news.length }
+                    { id: "news", label: "Warta & Agenda", icon: Newspaper, count: news.length },
+                    { id: "partners", label: "Mitra Dunia Industri", icon: Handshake, count: partners.length }
                   ].map((tab) => {
                     const TabIcon = tab.icon;
                     const isActive = activeTab === tab.id;
@@ -740,6 +773,7 @@ export default function AdminPanel({
                     {activeTab === "gallery" && "Kelola Galeri Campus Life"}
                     {activeTab === "alumni" && "Kelola Testimoni Sukses Alumni"}
                     {activeTab === "news" && "Kelola Warta & Agenda Utama"}
+                    {activeTab === "partners" && "Kelola Mitra Dunia Industri"}
                   </h2>
                   <p className={`text-xs ${isDarkTheme ? "text-slate-400" : "text-slate-500"} font-light mt-0.5`}>
                     {activeTab === "competencies" && "Perbarui deskripsi, kurikulum, bidang karir, and detail program keahlian sekolah."}
@@ -747,6 +781,7 @@ export default function AdminPanel({
                     {activeTab === "gallery" && "Tambahkan foto, saring berdasarkan kategori kriya kuliner, kelas, praktik industri, dsb."}
                     {activeTab === "alumni" && "Peroleh ulasan dan motivasi langsung dari alumni SMKN 1 Wonogiri berkarir global."}
                     {activeTab === "news" && "Atur artikel warta, rilis berita baru, edit pencapaian murid terdepan di media cetak."}
+                    {activeTab === "partners" && "Tambah, edit, atau hapus mitra industri yang tampil di bagian Dunia Industri halaman utama."}
                   </p>
                 </div>
 
@@ -788,6 +823,8 @@ export default function AdminPanel({
                           image: "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=800&q=80",
                           author: "Superadmin Humas", authorRole: "Koordinator Publikasi"
                         });
+                      } else if (activeTab === "partners") {
+                        setEditingItem({ id: "", name: "", type: "", color: "amber" });
                       }
                     }}
                     className="px-4 py-2.5 cursor-pointer rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold tracking-wider inline-flex items-center gap-1.5 shadow-md active:scale-95 duration-150"
@@ -1761,6 +1798,88 @@ export default function AdminPanel({
                     </div>
                   )}
 
+                  {/* FORM RENDER: PARTNERS */}
+                  {activeTab === "partners" && editingItem && (
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                          <label className="block text-xs font-mono uppercase tracking-wider text-slate-400 mb-2">Nama Mitra Industri</label>
+                          <input
+                            type="text"
+                            value={editingItem.name}
+                            onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
+                            placeholder="E.g., Astra International"
+                            className={`w-full text-xs p-3 rounded-lg border outline-none ${
+                              isDarkTheme ? "bg-slate-950 border-white/5 text-white focus:border-amber-500" : "bg-slate-50 border-slate-200 focus:border-amber-600"
+                            }`}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-mono uppercase tracking-wider text-slate-400 mb-2">Bidang / Sektor Industri</label>
+                          <input
+                            type="text"
+                            value={editingItem.type}
+                            onChange={(e) => setEditingItem({ ...editingItem, type: e.target.value })}
+                            placeholder="E.g., Digital & Automotive"
+                            className={`w-full text-xs p-3 rounded-lg border outline-none ${
+                              isDarkTheme ? "bg-slate-950 border-white/5 text-white focus:border-amber-500" : "bg-slate-50 border-slate-200 focus:border-amber-600"
+                            }`}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-mono uppercase tracking-wider text-slate-400 mb-3">Warna Kartu (Tampil di Halaman Utama)</label>
+                        <div className="flex flex-wrap gap-3">
+                          {[
+                            { key: "amber",   label: "Amber",   cls: "bg-amber-400" },
+                            { key: "blue",    label: "Biru",    cls: "bg-blue-400" },
+                            { key: "emerald", label: "Hijau",   cls: "bg-emerald-400" },
+                            { key: "rose",    label: "Merah",   cls: "bg-rose-400" },
+                            { key: "violet",  label: "Ungu",    cls: "bg-violet-400" },
+                            { key: "cyan",    label: "Cyan",    cls: "bg-cyan-400" },
+                            { key: "orange",  label: "Oranye",  cls: "bg-orange-400" },
+                            { key: "indigo",  label: "Indigo",  cls: "bg-indigo-400" },
+                            { key: "teal",    label: "Teal",    cls: "bg-teal-400" },
+                          ].map(({ key, label, cls }) => (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => setEditingItem({ ...editingItem, color: key })}
+                              className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-semibold transition-all ${
+                                editingItem.color === key
+                                  ? isDarkTheme ? "border-white/30 bg-white/10 text-white" : "border-slate-400 bg-slate-100 text-slate-900"
+                                  : isDarkTheme ? "border-white/5 text-slate-400 hover:border-white/20" : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                              }`}
+                            >
+                              <span className={`w-3.5 h-3.5 rounded-full ${cls}`} />
+                              {label}
+                              {editingItem.color === key && <Check className="w-3 h-3 ml-1" />}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 pt-4">
+                        <button
+                          onClick={() => savePartnerItem(editingItem, isAddingNew)}
+                          className="px-5 py-2.5 cursor-pointer rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold tracking-wider inline-flex items-center gap-1.5 active:scale-95 duration-100"
+                        >
+                          <Save className="w-4 h-4" />
+                          <span>Simpan Mitra Industri</span>
+                        </button>
+                        <button
+                          onClick={() => { setIsAddingNew(false); setEditingItem(null); }}
+                          className={`px-5 py-2.5 cursor-pointer rounded-xl text-xs font-semibold border transition-colors ${
+                            isDarkTheme ? "border-white/10 hover:bg-white/5 text-slate-300" : "border-slate-300 text-slate-700 hover:bg-slate-100"
+                          }`}
+                        >
+                          Batalkan
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                 </motion.div>
               )}
 
@@ -1981,12 +2100,54 @@ export default function AdminPanel({
                     </div>
                   )}
 
+                  {/* PARTNERS LIST */}
+                  {activeTab === "partners" && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 text-left">
+                      {partners.map((p) => {
+                        const colorDotMap: Record<string, string> = {
+                          amber: "bg-amber-400", blue: "bg-blue-400", emerald: "bg-emerald-400",
+                          rose: "bg-rose-400", violet: "bg-violet-400", cyan: "bg-cyan-400",
+                          orange: "bg-orange-400", indigo: "bg-indigo-400", teal: "bg-teal-400",
+                        };
+                        const dot = colorDotMap[p.color] ?? "bg-amber-400";
+                        return (
+                          <div key={p.id} className={`border rounded-xl p-5 flex justify-between items-center gap-4 ${isDarkTheme ? "bg-slate-900 border-white/5" : "bg-white border-slate-200"}`}>
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className={`w-3 h-3 rounded-full shrink-0 ${dot}`} />
+                              <div className="min-w-0">
+                                <h4 className={`text-sm font-bold truncate ${isDarkTheme ? "text-white" : "text-slate-900"}`}>{p.name}</h4>
+                                <span className={`text-[10px] font-mono uppercase tracking-wider ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>{p.type}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                onClick={() => { setEditingItem({ ...p }); setIsAddingNew(false); }}
+                                className={`p-2 rounded-lg border transition-all ${isDarkTheme ? "border-white/5 text-slate-400 hover:bg-white/5 hover:text-white" : "border-slate-300 text-slate-700 hover:bg-slate-100"}`}
+                                title="Edit"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => deletePartnerItem(p.id, p.name)}
+                                className="p-2 rounded-lg border border-red-500/10 text-red-500 hover:bg-red-500/5 transition-colors"
+                                title="Hapus"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   {/* Empty Alert Checker if superadmin deletes everything */}
                   {((activeTab === "competencies" && competencies.length === 0) ||
                     (activeTab === "milestones" && milestones.length === 0) ||
                     (activeTab === "gallery" && gallery.length === 0) ||
                     (activeTab === "alumni" && alumni.length === 0) ||
-                    (activeTab === "news" && news.length === 0)) && (
+                    (activeTab === "news" && news.length === 0) ||
+                    (activeTab === "partners" && partners.length === 0)) && (
                     <div className={`p-10 text-center rounded-2xl border ${isDarkTheme ? "border-dashed border-white/5" : "border-dashed border-slate-200"}`}>
                       <AlertCircle className="w-8 h-8 mx-auto text-amber-500/50 mb-3" />
                       <h4 className="text-sm font-bold mb-1">Koleksi Modul ini Kosong</h4>

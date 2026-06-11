@@ -39,6 +39,25 @@ export interface Alumnus {
   avatar: string;
 }
 
+export interface IndustriPartner {
+  id: string;
+  name: string;
+  type: string;
+  color: string;
+}
+
+export const INDUSTRI_PARTNERS: IndustriPartner[] = [
+  { id: "p-1", name: "Astra International", type: "Digital & Automotive", color: "blue" },
+  { id: "p-2", name: "Bank Mandiri Corp", type: "Accounting & Finance", color: "indigo" },
+  { id: "p-3", name: "Shopee Southeast Asia", type: "Digital Commerce", color: "orange" },
+  { id: "p-4", name: "Marriott International", type: "Modern Gastronomy", color: "amber" },
+  { id: "p-5", name: "Uniqlo Asia Pac", type: "Apparel Design", color: "violet" },
+  { id: "p-6", name: "Sun Premium Hotels", type: "Culinary & Guest", color: "teal" },
+  { id: "p-7", name: "Toyota Astra Motor", type: "Digital Solutions", color: "emerald" },
+  { id: "p-8", name: "Sritex Tex Tech", type: "Apparel Production", color: "rose" },
+  { id: "p-9", name: "Akurat Indonesia", type: "Computerized Account", color: "cyan" },
+];
+
 export interface NewsArticle {
   id: string;
   category: string;
