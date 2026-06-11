@@ -184,6 +184,31 @@ export default function AdminTracerStudi({ theme = "dark", onBack }: {
     };
   }, [entries]);
 
+  const chartData = useMemo(() => {
+    const statusRows = [
+      { label: "Bekerja",       value: entries.filter((e) => e.status === "bekerja").length,       hex: "#10b981" },
+      { label: "Kuliah",        value: entries.filter((e) => e.status === "kuliah").length,        hex: "#3b82f6" },
+      { label: "Wirausaha",     value: entries.filter((e) => e.status === "wirausaha").length,     hex: "#8b5cf6" },
+      { label: "Belum Bekerja", value: entries.filter((e) => e.status === "belum_bekerja").length, hex: "#94a3b8" },
+    ].filter((r) => r.value > 0);
+
+    const jurusanMap: Record<string, number> = {};
+    entries.forEach((e) => { jurusanMap[e.jurusan] = (jurusanMap[e.jurusan] ?? 0) + 1; });
+    const jurusanRows = Object.entries(jurusanMap)
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value);
+
+    const tahunMap: Record<string, number> = {};
+    entries.forEach((e) => { tahunMap[e.tahunLulus] = (tahunMap[e.tahunLulus] ?? 0) + 1; });
+    const tahunRows = Object.entries(tahunMap)
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => Number(a.label) - Number(b.label));
+
+    return { statusRows, jurusanRows, tahunRows };
+  }, [entries]);
+
+  const [showCharts, setShowCharts] = useState(true);
+
   const exportCSV = () => {
     const headers = [
       "ID", "Nama", "Jurusan", "Tahun Lulus", "Status",
@@ -358,6 +383,77 @@ export default function AdminTracerStudi({ theme = "dark", onBack }: {
             </div>
           ))}
         </div>
+
+        {/* Charts Section */}
+        {entries.length > 0 && (
+          <div className={`rounded-2xl border mb-6 overflow-hidden ${card}`}>
+            <button
+              onClick={() => setShowCharts((v) => !v)}
+              className={`w-full flex items-center justify-between px-5 py-4 transition-colors ${isDark ? "hover:bg-white/4" : "hover:bg-slate-50"}`}
+            >
+              <div className="flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-amber-500" />
+                <span className={`text-xs font-bold uppercase tracking-widest ${isDark ? "text-white" : "text-slate-900"}`}>Visualisasi Data</span>
+                <span className={`text-[10px] font-mono ${muted}`}>— {entries.length} responden</span>
+              </div>
+              <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${muted} ${showCharts ? "rotate-180" : ""}`} />
+            </button>
+
+            <AnimatePresence initial={false}>
+              {showCharts && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.25 }}
+                  className="overflow-hidden"
+                >
+                  <div className={`border-t ${isDark ? "border-white/5" : "border-slate-100"}`}>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-0 divide-y md:divide-y-0 md:divide-x ${isDark ? 'divide-white/5' : 'divide-slate-100'}">
+
+                      {/* ── Donut: Status ── */}
+                      <div className="p-5">
+                        <div className={`text-[10px] font-mono uppercase tracking-widest mb-4 ${muted}`}>Status Alumni</div>
+                        <div className="flex items-center gap-5">
+                          <DonutChart data={chartData.statusRows} total={stats.total} isDark={isDark} />
+                          <div className="space-y-2 flex-1">
+                            {chartData.statusRows.map((r) => (
+                              <div key={r.label} className="flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: r.hex }} />
+                                <span className={`text-[10px] font-mono flex-1 ${muted}`}>{r.label}</span>
+                                <span className={`text-[11px] font-bold tabular-nums ${isDark ? "text-white" : "text-slate-900"}`}>{r.value}</span>
+                                <span className={`text-[10px] font-mono w-8 text-right ${muted}`}>{pct(r.value, stats.total)}%</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* ── H-Bar: By Jurusan ── */}
+                      <div className="p-5">
+                        <div className={`text-[10px] font-mono uppercase tracking-widest mb-4 ${muted}`}>Sebaran per Jurusan</div>
+                        {chartData.jurusanRows.length === 0
+                          ? <EmptyChart muted={muted} />
+                          : <HBarChart rows={chartData.jurusanRows} isDark={isDark} muted={muted} />
+                        }
+                      </div>
+
+                      {/* ── V-Bar: By Year ── */}
+                      <div className="p-5">
+                        <div className={`text-[10px] font-mono uppercase tracking-widest mb-4 ${muted}`}>Sebaran per Tahun Lulus</div>
+                        {chartData.tahunRows.length === 0
+                          ? <EmptyChart muted={muted} />
+                          : <VBarChart rows={chartData.tahunRows} isDark={isDark} muted={muted} />
+                        }
+                      </div>
+
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
 
         {/* Filters + Actions Bar */}
         <div className={`rounded-2xl border p-4 mb-5 ${card}`}>
@@ -581,6 +677,123 @@ function DetailField({ label, value, icon: Icon, isDark, muted }: {
         <Icon className="w-2.5 h-2.5" /> {label}
       </div>
       <div className={`text-xs font-medium ${isDark ? "text-slate-200" : "text-slate-700"}`}>{value}</div>
+    </div>
+  );
+}
+
+function EmptyChart({ muted }: { muted: string }) {
+  return (
+    <div className={`flex items-center justify-center h-24 text-[10px] font-mono ${muted}`}>
+      Belum ada data
+    </div>
+  );
+}
+
+function DonutChart({ data, total, isDark }: {
+  data: { label: string; value: number; hex: string }[];
+  total: number;
+  isDark: boolean;
+}) {
+  if (total === 0 || data.length === 0) return <EmptyChart muted={isDark ? "text-slate-500" : "text-slate-400"} />;
+
+  const cx = 56, cy = 56, outerR = 48, innerR = 30;
+  let cumulative = 0;
+
+  function arc(startAng: number, endAng: number): string {
+    const toRad = (a: number) => (a - 90) * (Math.PI / 180);
+    const s = toRad(startAng), e = toRad(endAng);
+    const x1 = cx + outerR * Math.cos(s), y1 = cy + outerR * Math.sin(s);
+    const x2 = cx + outerR * Math.cos(e), y2 = cy + outerR * Math.sin(e);
+    const x3 = cx + innerR * Math.cos(e), y3 = cy + innerR * Math.sin(e);
+    const x4 = cx + innerR * Math.cos(s), y4 = cy + innerR * Math.sin(s);
+    const large = endAng - startAng > 180 ? 1 : 0;
+    return `M${x1},${y1} A${outerR},${outerR} 0 ${large} 1 ${x2},${y2} L${x3},${y3} A${innerR},${innerR} 0 ${large} 0 ${x4},${y4} Z`;
+  }
+
+  const slices = data.map((d) => {
+    const startDeg = (cumulative / total) * 360;
+    cumulative += d.value;
+    const endDeg = (cumulative / total) * 360;
+    return { ...d, startDeg, endDeg };
+  });
+
+  return (
+    <svg viewBox="0 0 112 112" width={90} height={90} className="shrink-0">
+      {slices.map((s) => (
+        <path key={s.label} d={arc(s.startDeg, s.endDeg)} fill={s.hex} opacity={0.9} />
+      ))}
+      <text x={cx} y={cy - 5} textAnchor="middle" fontSize="13" fontWeight="700"
+        fill={isDark ? "#f1f5f9" : "#0f172a"} fontFamily="Georgia, serif">
+        {total}
+      </text>
+      <text x={cx} y={cy + 10} textAnchor="middle" fontSize="7" fontWeight="500"
+        fill={isDark ? "#64748b" : "#94a3b8"} fontFamily="monospace" letterSpacing="0.05em">
+        TOTAL
+      </text>
+    </svg>
+  );
+}
+
+function HBarChart({ rows, isDark, muted }: {
+  rows: { label: string; value: number }[];
+  isDark: boolean;
+  muted: string;
+}) {
+  const max = Math.max(...rows.map((r) => r.value), 1);
+  return (
+    <div className="space-y-2.5">
+      {rows.map((r) => (
+        <div key={r.label}>
+          <div className="flex items-center justify-between mb-1">
+            <span className={`text-[10px] font-mono leading-tight truncate max-w-[150px] ${muted}`} title={r.label}>
+              {r.label}
+            </span>
+            <span className={`text-[10px] font-bold tabular-nums ml-2 shrink-0 ${isDark ? "text-white" : "text-slate-900"}`}>
+              {r.value}
+            </span>
+          </div>
+          <div className={`h-2 rounded-full overflow-hidden ${isDark ? "bg-slate-800" : "bg-slate-100"}`}>
+            <div
+              className="h-full rounded-full bg-amber-500 transition-all duration-700"
+              style={{ width: `${(r.value / max) * 100}%` }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function VBarChart({ rows, isDark, muted }: {
+  rows: { label: string; value: number }[];
+  isDark: boolean;
+  muted: string;
+}) {
+  const max = Math.max(...rows.map((r) => r.value), 1);
+  const barH = 100;
+
+  return (
+    <div className="w-full overflow-x-auto">
+      <div className="flex items-end gap-2 min-w-0" style={{ height: barH + 28 }}>
+        {rows.map((r) => {
+          const h = Math.max(4, Math.round((r.value / max) * barH));
+          return (
+            <div key={r.label} className="flex flex-col items-center flex-1 min-w-[28px] max-w-[48px]">
+              <span className={`text-[9px] font-bold tabular-nums mb-1 ${isDark ? "text-white" : "text-slate-900"}`}>
+                {r.value}
+              </span>
+              <div
+                className="w-full rounded-t-md bg-amber-500 transition-all duration-700"
+                style={{ height: h }}
+              />
+              <span className={`text-[9px] font-mono mt-1.5 text-center leading-tight ${muted}`}
+                style={{ writingMode: rows.length > 5 ? "vertical-rl" : "horizontal-tb", transform: rows.length > 5 ? "rotate(180deg)" : undefined }}>
+                {r.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
