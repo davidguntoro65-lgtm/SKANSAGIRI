@@ -1,0 +1,50 @@
+[
+  {
+    "id": "g1",
+    "title": "Seni Plating Gastronomi Tingkat Tinggi",
+    "category": "Kuliner",
+    "image": "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=800&q=80",
+    "aspect": "landscape",
+    "caption": "Kelas praktik Kuliner melatih siswa menata hidangan berkelas bintang 5 demi memenuhi estetika gastronomi dunia."
+  },
+  {
+    "id": "g2",
+    "title": "Produksi Busana Eksklusif - Wonogiri Runway",
+    "category": "Fashion",
+    "image": "https://images.unsplash.com/photo-1441984969893-c5a710c48ef7?auto=format&fit=crop&w=800&q=80",
+    "aspect": "portrait",
+    "caption": "Para siswa Tata Busana di atelier konveksi sedang melakukan fitting model untuk karya tahunan Wonogiri Runway."
+  },
+  {
+    "id": "g3",
+    "title": "Studio Kolaborasi Bisnis & Pemasaran Digital",
+    "category": "Kelas",
+    "image": "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=800&q=80",
+    "aspect": "landscape",
+    "caption": "Berbagi ide promosi global dan manajemen marketplace di dalam lab ruang kreatif modern interaktif."
+  },
+  {
+    "id": "g4",
+    "title": "Penyerahan Sertifikat Kompetensi Akurat",
+    "category": "Prestasi",
+    "image": "https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=800&q=80",
+    "aspect": "landscape",
+    "caption": "Siswa akuntansi yang lulus ujian profesional merayakan sertifikasi industri bergengsi berlabel nasional."
+  },
+  {
+    "id": "g5",
+    "title": "Kunjungan Industri & Magang Kerja Asing",
+    "category": "Praktik Industri",
+    "image": "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=800&q=80",
+    "aspect": "portrait",
+    "caption": "Uji lapangan keprotokolan dan asisten administrasi bisnis langsung di kantor pusat mitra korporat Jakarta."
+  },
+  {
+    "id": "g6",
+    "title": "Grand Champion Desain Kreatif Nasional",
+    "category": "Prestasi",
+    "image": "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&w=800&q=80",
+    "aspect": "landscape",
+    "caption": "Trofi bergengsi Kejuaraan Desain Modis diletakkan di lemari display lobi kehormatan sekolah."
+  }
+]

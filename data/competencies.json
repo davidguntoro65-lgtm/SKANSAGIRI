@@ -1,0 +1,177 @@
+[
+  {
+    "code": "AKL",
+    "name": "Akuntansi & Keuangan Lembaga",
+    "englishName": "Accounting & Institutional Finance",
+    "description": "Program elite yang berorientasi pada ketelitian finansial tingkat tinggi. Mempersiapkan analis keuangan masa depan kompeten dalam teknologi perpajakan digital, audit finansial korporat, dan akuntansi modern berbasis Cloud.",
+    "themeClass": "from-[#0d1e3d] to-[#040e21] border-[#1e2f54]/60 bg-gradient-to-br",
+    "badgeColor": "bg-[#1e2f54] text-[#8ea7e9] border-[#2e4375]",
+    "stats": [
+      {
+        "label": "Lab Komputer Finansial",
+        "value": "3 Unit"
+      },
+      {
+        "label": "Sertifikasi Industri",
+        "value": "Akurat Premier"
+      },
+      {
+        "label": "Mitra Perbankan Tetap",
+        "value": "7 Bank"
+      }
+    ],
+    "careers": [
+      "Corporate Accountant",
+      "Tax Consultant Specialist",
+      "Financial Analyst Apprentice",
+      "Bank Administrator"
+    ],
+    "image": "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=700&q=80",
+    "curriculum": [
+      "Sistem Akuntansi Pajak",
+      "Auditing Korporat",
+      "Spreadsheet Advanced Professional",
+      "Digital Ledger Technology"
+    ]
+  },
+  {
+    "code": "MPLB",
+    "name": "Manajemen Perkantoran & Layanan Bisnis",
+    "englishName": "Office Management & Business Services",
+    "description": "Pusat inkubasi sekretaris profesional, asisten eksekutif, serta manajer layanan perkantoran modern. Menghasilkan lulusan terampil dalam keprotokolan bisnis Internasional, administrasi digital, dan human relations.",
+    "themeClass": "from-[#0c2447] to-[#031024] border-[#173e73]/60 bg-gradient-to-br",
+    "badgeColor": "bg-[#173e73] text-[#7eb3fa] border-[#205295]",
+    "stats": [
+      {
+        "label": "Office Simulator",
+        "value": "Mewah & Komplet"
+      },
+      {
+        "label": "Kurikulum Khusus",
+        "value": "Standar Internasional"
+      },
+      {
+        "label": "Mitra Kemitraan",
+        "value": "BUMN & Kemenkeu"
+      }
+    ],
+    "careers": [
+      "Executive Administrative Assistant",
+      "Corporate Protocol Specialist",
+      "Human Resource Administrator",
+      "Front Office Leader"
+    ],
+    "image": "https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&w=700&q=80",
+    "curriculum": [
+      "Manajemen Arsip Digital",
+      "Komunikasi Publik & Keprotokolan",
+      "Aplikasi Otomatisasi Kantor",
+      "English for Business"
+    ]
+  },
+  {
+    "code": "Pemasaran",
+    "name": "Bisnis Digital & Pemasaran",
+    "englishName": "Digital Business & Marketing",
+    "description": "Pelopor akselerasi ekonomi digital di Wonogiri. Fokus pada riset pasar modern, manajemen konten kreatif, search engine optimization (SEO), digital advertising, serta tata kelola platform online store nasional.",
+    "themeClass": "from-[#112240] to-[#051121] border-[#1b3a60]/60 bg-gradient-to-br",
+    "badgeColor": "bg-[#1b3a60] text-[#6cbbe8] border-[#254d7e]",
+    "stats": [
+      {
+        "label": "Digital Studio Center",
+        "value": "4K Ready"
+      },
+      {
+        "label": "Omset Unit Bisnis",
+        "value": "120M+/Thn"
+      },
+      {
+        "label": "Sertifikat Google",
+        "value": "Ads & Commerce"
+      }
+    ],
+    "careers": [
+      "Social Media Specialist",
+      "E-commerce Manager",
+      "Digital Performance Marketer",
+      "Creative Entrepreneur"
+    ],
+    "image": "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=700&q=80",
+    "curriculum": [
+      "Strategi SEO & SEM",
+      "Social Media Advertising",
+      "E-commerce Operations",
+      "Videografi & Content Creation"
+    ]
+  },
+  {
+    "code": "Kuliner",
+    "name": "Seni Kuliner & Gastronomi",
+    "englishName": "Culinary Arts & Gastronomy",
+    "description": "Membawa warisan kuliner lokal ke kancah kuliner global. Mempelajari resep warisan, haute cuisine kontinental, seni penyajian makanan premium, layanan perhotelan bintang lima, dan tata kelola food beverage komersial.",
+    "themeClass": "from-[#2f2010] to-[#120a03] border-[#7d5a2d]/40 bg-gradient-to-br",
+    "badgeColor": "bg-[#4e361b] text-[#fcd34d] border-[#704f26]",
+    "stats": [
+      {
+        "label": "Kitchen Suite Standard",
+        "value": "Bintang 5"
+      },
+      {
+        "label": "Restoran Praktik",
+        "value": "The Wonogiri Suite"
+      },
+      {
+        "label": "Sertifikasi BNSP",
+        "value": "Garuda Emas"
+      }
+    ],
+    "careers": [
+      "Chef de Partie",
+      "Professional Pastry Artist",
+      "Restaurant Operations Manager",
+      "Culinary Business Owner"
+    ],
+    "image": "https://images.unsplash.com/photo-1556910103-1c02745aae4d?auto=format&fit=crop&w=700&q=80",
+    "curriculum": [
+      "Seni Pastry & Bakery",
+      "Continental Cooking Methods",
+      "Garnish & Food Plating",
+      "Sanitasi & Keamanan Pangan"
+    ]
+  },
+  {
+    "code": "Busana",
+    "name": "Desain Mode & Tata Busana",
+    "englishName": "Fashion Design & Apparel Construction",
+    "description": "Ruang kreasi bagi para desainer mode profesional masa depan. Mempelajari teknik pembuatan pola tingkat tinggi (drapping), rancang busana haute couture, ilustrasi mode digital, manajemen butik independen, dan pameran catwalk.",
+    "themeClass": "from-[#2c1328] to-[#140512] border-[#703063]/40 bg-gradient-to-br",
+    "badgeColor": "bg-[#4d2044] text-[#f472b6] border-[#6b2c5f]",
+    "stats": [
+      {
+        "label": "Fashion Atelier",
+        "value": "Industrial"
+      },
+      {
+        "label": "Eksibisi Tahunan",
+        "value": "Wonogiri Runway"
+      },
+      {
+        "label": "Software Ilustrasi",
+        "value": "CAD Marvelous"
+      }
+    ],
+    "careers": [
+      "Fashion Designer Executive",
+      "Fashion Illustrator Consultant",
+      "High-End Pattern Maker",
+      "Boutique Owner & Fashion Curator"
+    ],
+    "image": "https://images.unsplash.com/photo-1541099649105-f69ad21f3246?auto=format&fit=crop&w=700&q=80",
+    "curriculum": [
+      "Konstruksi Pola Tingkat Lanjut",
+      "Desain Busana 3D Digital",
+      "Sejarah Mode & Tekstil",
+      "Pemasaran Butik Mewah"
+    ]
+  }
+]

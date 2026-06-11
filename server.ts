@@ -11,7 +11,7 @@ import {
 } from "./src/data";
 
 const app = express();
-const PORT = 3000;
+const PORT = 5000;
 const DATA_DIR = path.join(process.cwd(), "data");
 
 // Ensure data directory exists
