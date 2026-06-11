@@ -42,8 +42,8 @@ type Step = "data-diri" | "status" | "detail" | "kontak" | "success";
 const JURUSAN = [
   "Akuntansi & Keuangan Lembaga (AKL)",
   "Manajemen Perkantoran & Layanan Bisnis (MPLB)",
-  "Bisnis Digital & Pemasaran",
-  "Seni Kuliner & Gastronomi",
+  "Bisnis Daring dan Pemasaran",
+  "Kuliner",
   "Desain Mode & Tata Busana",
 ];
 

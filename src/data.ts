@@ -105,7 +105,7 @@ export const COMPETENCY_DATA: Competency[] = [
   },
   {
     code: "Pemasaran",
-    name: "Bisnis Digital & Pemasaran",
+    name: "Bisnis Daring dan Pemasaran",
     englishName: "Digital Business & Marketing",
     description: "Pelopor akselerasi ekonomi digital di Wonogiri. Fokus pada riset pasar modern, manajemen konten kreatif, search engine optimization (SEO), digital advertising, serta tata kelola platform online store nasional.",
     themeClass: "from-[#112240] to-[#051121] border-[#1b3a60]/60 bg-gradient-to-br",
@@ -121,7 +121,7 @@ export const COMPETENCY_DATA: Competency[] = [
   },
   {
     code: "Kuliner",
-    name: "Seni Kuliner & Gastronomi",
+    name: "Kuliner",
     englishName: "Culinary Arts & Gastronomy",
     description: "Membawa warisan kuliner lokal ke kancah kuliner global. Mempelajari resep warisan, haute cuisine kontinental, seni penyajian makanan premium, layanan perhotelan bintang lima, dan tata kelola food beverage komersial.",
     themeClass: "from-[#2f2010] to-[#120a03] border-[#7d5a2d]/40 bg-gradient-to-br",
