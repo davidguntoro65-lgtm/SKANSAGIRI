@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { BookOpen, Award, CheckCircle2, ChevronRight, X, ArrowUpRight, GraduationCap } from "lucide-react";
 import { Competency } from "../data";
 import { DataStore } from "../dataStore";
+import { SectionPattern, GradientMesh } from "./BackgroundSystem";
 
 export default function Competencies({ theme }: { theme: "light" | "dark" }) {
   const [activeItem, setActiveItem] = useState<Competency | null>(null);
@@ -23,10 +24,8 @@ export default function Competencies({ theme }: { theme: "light" | "dark" }) {
       }`} 
       id="kompetensi"
     >
-      {/* Background radial highlight */}
-      <div className={`absolute top-1/2 left-1/4 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[160px] pointer-events-none transition-opacity duration-500 ${
-        theme === "dark" ? "bg-amber-500/[0.02]" : "bg-amber-500/[0.04]"
-      }`} />
+      <SectionPattern type="network" theme={theme} />
+      <GradientMesh theme={theme} variant="warm" />
 
       <div className="max-w-7xl mx-auto px-6 md:px-12 relative z-10">
         

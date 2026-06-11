@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Camera, Eye, X, Compass, ChevronRight } from "lucide-react";
 import { GalleryItem } from "../data";
 import { DataStore } from "../dataStore";
+import { SectionPattern, GradientMesh } from "./BackgroundSystem";
 
 export default function CampusLife({ theme = "dark" }: { theme?: "light" | "dark" }) {
   const [selectedPhoto, setSelectedPhoto] = useState<GalleryItem | null>(null);
@@ -26,7 +27,8 @@ export default function CampusLife({ theme = "dark" }: { theme?: "light" | "dark
       }`}
       id="gallery"
     >
-      <div className="absolute top-1/2 right-0 w-[500px] h-[500px] bg-amber-500/[0.01] rounded-full blur-[140px] pointer-events-none" />
+      <SectionPattern type="grid" theme={theme} />
+      <GradientMesh theme={theme} />
 
       <div className="max-w-7xl mx-auto px-6 md:px-12 relative z-10">
 

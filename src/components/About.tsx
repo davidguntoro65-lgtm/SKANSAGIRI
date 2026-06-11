@@ -1,5 +1,6 @@
 import { motion } from "motion/react";
 import { Landmark, ArrowRight, ShieldCheck, Award } from "lucide-react";
+import { GradientMesh, BusinessIllustration, FloatingShapes } from "./BackgroundSystem";
 
 export default function About({ theme = "dark" }: { theme?: "light" | "dark" }) {
   const isDark = theme === "dark";
@@ -11,7 +12,9 @@ export default function About({ theme = "dark" }: { theme?: "light" | "dark" }) 
       }`}
       id="about"
     >
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-amber-500/5 rounded-full blur-[140px] pointer-events-none" />
+      <GradientMesh theme={theme} variant="warm" />
+      <FloatingShapes theme={theme} />
+      <BusinessIllustration theme={theme} position="right" />
 
       <div className="max-w-7xl mx-auto px-6 md:px-12 relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-24 items-center">

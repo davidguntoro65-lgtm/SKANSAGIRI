@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, useScroll, useSpring, AnimatePresence } from "motion/react";
 import { Menu, X, Landmark, GraduationCap, ArrowUpRight, Sun, Moon, ChevronDown, Award, Newspaper, Camera } from "lucide-react";
+import { useBranding } from "../hooks/useBranding";
 
 interface NavbarProps {
   theme: "light" | "dark";
@@ -14,6 +15,9 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
   const [mobileAktifitasOpen, setMobileAktifitasOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const isDark = theme === "dark";
+
+  const { getLogo } = useBranding();
+  const logoUrl = getLogo(theme);
 
   const { scrollYProgress } = useScroll();
   const scaleX = useSpring(scrollYProgress, { stiffness: 100, damping: 30, restDelta: 0.001 });
@@ -70,18 +74,28 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
         <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between">
           {/* Logo */}
           <a href="#" className="flex items-center gap-3 group" id="brand-logo">
-            <div className="relative w-10 h-10 rounded-lg bg-gradient-to-tr from-amber-500 to-yellow-600 flex items-center justify-center shadow-lg shadow-amber-500/10 group-hover:scale-110 transition-transform duration-300">
-              <Landmark className="w-5.5 h-5.5 text-slate-950 stroke-[2]" />
-              <div className="absolute inset-0 rounded-lg border border-white/30" />
-            </div>
-            <div className="flex flex-col">
-              <span className={`font-serif tracking-widest text-sm font-bold md:text-base transition-colors duration-300 ${isDark || !isScrolled ? "text-white" : "text-slate-950"}`}>
-                SMKN 1 WONOGIRI
-              </span>
-              <span className="text-[10px] text-amber-500 tracking-widest font-mono font-medium uppercase">
-                Center of Excellence
-              </span>
-            </div>
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt="SMKN 1 Wonogiri"
+                className="h-10 md:h-12 w-auto object-contain group-hover:scale-105 transition-transform duration-300"
+              />
+            ) : (
+              <>
+                <div className="relative w-10 h-10 rounded-lg bg-gradient-to-tr from-amber-500 to-yellow-600 flex items-center justify-center shadow-lg shadow-amber-500/10 group-hover:scale-110 transition-transform duration-300">
+                  <Landmark className="w-5.5 h-5.5 text-slate-950 stroke-[2]" />
+                  <div className="absolute inset-0 rounded-lg border border-white/30" />
+                </div>
+                <div className="flex flex-col">
+                  <span className={`font-serif tracking-widest text-sm font-bold md:text-base transition-colors duration-300 ${isDark || !isScrolled ? "text-white" : "text-slate-950"}`}>
+                    SMKN 1 WONOGIRI
+                  </span>
+                  <span className="text-[10px] text-amber-500 tracking-widest font-mono font-medium uppercase">
+                    Center of Excellence
+                  </span>
+                </div>
+              </>
+            )}
           </a>
 
           {/* Desktop Nav Links */}

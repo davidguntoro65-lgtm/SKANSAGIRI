@@ -1,7 +1,10 @@
 import { Landmark, ArrowUp, Mail, Phone, MapPin, Instagram, Youtube, Globe, Award } from "lucide-react";
+import { useBranding } from "../hooks/useBranding";
 
 export default function Footer({ theme = "dark" }: { theme?: "light" | "dark" }) {
   const isDark = theme === "dark";
+  const { getLogo } = useBranding();
+  const logoUrl = getLogo(theme);
 
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
 
@@ -25,17 +28,27 @@ export default function Footer({ theme = "dark" }: { theme?: "light" | "dark" })
           <div className="lg:col-span-4 text-left flex flex-col justify-between" id="footer-col-profile">
             <div>
               <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-600 flex items-center justify-center">
-                  <Landmark className="w-5.5 h-5.5 text-slate-950 stroke-[2]" />
-                </div>
-                <div>
-                  <h3 className={`font-serif tracking-widest text-base font-bold uppercase ${isDark ? "text-white" : "text-slate-900"}`}>
-                    SMKN 1 WONOGIRI
-                  </h3>
-                  <span className="text-[9px] text-amber-500 tracking-widest font-mono font-medium uppercase block">
-                    Center of Excellence
-                  </span>
-                </div>
+                {logoUrl ? (
+                  <img
+                    src={logoUrl}
+                    alt="SMKN 1 Wonogiri"
+                    className="h-16 w-auto object-contain"
+                  />
+                ) : (
+                  <>
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-600 flex items-center justify-center">
+                      <Landmark className="w-5.5 h-5.5 text-slate-950 stroke-[2]" />
+                    </div>
+                    <div>
+                      <h3 className={`font-serif tracking-widest text-base font-bold uppercase ${isDark ? "text-white" : "text-slate-900"}`}>
+                        SMKN 1 WONOGIRI
+                      </h3>
+                      <span className="text-[9px] text-amber-500 tracking-widest font-mono font-medium uppercase block">
+                        Center of Excellence
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
 
               <p className={`text-xs font-sans tracking-wide leading-relaxed mb-6 ${

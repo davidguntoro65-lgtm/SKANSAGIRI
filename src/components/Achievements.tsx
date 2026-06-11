@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 import { ChevronLeft, ChevronRight, Trophy, Sparkles, Milestone as MilestoneIcon, Star } from "lucide-react";
 import { Milestone } from "../data";
 import { DataStore } from "../dataStore";
+import { SectionPattern, GradientMesh } from "./BackgroundSystem";
 
 export default function Achievements({ theme = "dark" }: { theme?: "light" | "dark" }) {
   const [milestones, setMilestones] = useState(() => DataStore.getMilestones());
@@ -43,6 +44,8 @@ export default function Achievements({ theme = "dark" }: { theme?: "light" | "da
     <section className={`py-24 md:py-32 border-b transition-colors duration-500 relative overflow-hidden ${
       isDark ? "bg-slate-900 border-white/5" : "bg-white border-slate-250 border-slate-200/50"
     }`} id="prestasi">
+      <SectionPattern type="achievement" theme={theme} />
+      <GradientMesh theme={theme} variant="warm" />
       {/* Decorative vertical lines representing academic timeline structure */}
       <div className={`absolute top-0 bottom-0 left-1/4 w-px pointer-events-none transition-colors duration-500 ${isDark ? "bg-white/[0.02]" : "bg-slate-900/[0.02]"}`} />
       <div className={`absolute top-0 bottom-0 left-2/4 w-px pointer-events-none transition-colors duration-500 ${isDark ? "bg-white/[0.02]" : "bg-slate-900/[0.02]"}`} />

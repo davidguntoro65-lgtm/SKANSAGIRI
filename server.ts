@@ -26,7 +26,8 @@ const filePaths = {
   gallery: path.join(DATA_DIR, "gallery.json"),
   alumni: path.join(DATA_DIR, "alumni.json"),
   news: path.join(DATA_DIR, "news.json"),
-  partners: path.join(DATA_DIR, "partners.json")
+  partners: path.join(DATA_DIR, "partners.json"),
+  branding: path.join(DATA_DIR, "branding.json")
 };
 
 // Helper to initialize files with initial data if they don't exist
@@ -51,6 +52,13 @@ initJsonFile(filePaths.gallery, CAMPUS_LIFE_GALLERY);
 initJsonFile(filePaths.alumni, ALUMNI_TESTIMONIALS);
 initJsonFile(filePaths.news, NEWS_COMPILATION);
 initJsonFile(filePaths.partners, INDUSTRI_PARTNERS);
+initJsonFile(filePaths.branding, {
+  schoolLogo: null,
+  schoolLogoDark: null,
+  schoolLogoLight: null,
+  schoolFavicon: null,
+  schoolAppIcon: null
+});
 
 // Parsing Middlewares
 app.use(express.json({ limit: "25mb" }));
@@ -197,6 +205,25 @@ app.post("/api/partners", (req, res) => {
 });
 
 // 7. Reset API
+// --- BRANDING LOGO MANAGEMENT API ---
+app.get("/api/branding", (req, res) => {
+  try {
+    res.json(JSON.parse(fs.readFileSync(filePaths.branding, "utf-8")));
+  } catch (e: any) {
+    res.status(500).json({ error: "Failed to read branding: " + e.message });
+  }
+});
+
+app.post("/api/branding", (req, res) => {
+  try {
+    const data = req.body;
+    fs.writeFileSync(filePaths.branding, JSON.stringify(data, null, 2), "utf-8");
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: "Failed to save branding: " + e.message });
+  }
+});
+
 app.post("/api/reset", (req, res) => {
   try {
     fs.writeFileSync(filePaths.competencies, JSON.stringify(COMPETENCY_DATA, null, 2), "utf-8");

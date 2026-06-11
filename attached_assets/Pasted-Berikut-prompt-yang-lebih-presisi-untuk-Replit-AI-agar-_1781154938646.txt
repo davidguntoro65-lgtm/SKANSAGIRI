@@ -1,0 +1,623 @@
+Berikut prompt yang lebih presisi untuk Replit AI agar fokus pada **peningkatan visual enterprise-grade** dan tidak berhalusinasi membuat fitur lain.
+
+---
+
+# PROMPT REPLIT AI
+
+# ENHANCEMENT: BRANDING SYSTEM, LOGO ENGINE, PREMIUM BACKGROUND SYSTEM
+
+## CONTEXT
+
+Aplikasi School Digital Experience Platform (DXP) sudah berjalan.
+
+JANGAN mengubah:
+
+* Database existing
+* Authentication
+* RBAC
+* News Module
+* Menu Module
+* Page Builder Module
+
+Fokus hanya pada:
+
+1. Logo Management Enhancement
+2. Premium Background System
+3. Enterprise Visual Branding
+4. Dark Mode & Light Mode Experience
+5. Homepage Luxury Experience
+
+---
+
+# FEATURE 1
+
+# ENTERPRISE LOGO MANAGEMENT
+
+## OBJECTIVE
+
+Admin dapat mengunggah logo sekolah dari backend.
+
+Logo harus otomatis tampil di seluruh frontend.
+
+Logo harus tetap tajam, proporsional, dan profesional pada semua ukuran layar.
+
+---
+
+## Backend
+
+Tambahkan menu:
+
+```text
+CMS
+ └── Branding
+      └── Logo Management
+```
+
+Fields:
+
+```text
+School Logo
+School Logo Dark Version
+School Logo Light Version
+School Favicon
+School App Icon
+```
+
+---
+
+## Upload Requirements
+
+Support:
+
+```text
+PNG
+SVG
+WEBP
+```
+
+Maximum:
+
+```text
+10 MB
+```
+
+---
+
+## Automatic Processing
+
+Saat upload:
+
+### Auto Trim
+
+Hapus area kosong berlebih.
+
+---
+
+### Auto Center
+
+Posisi logo otomatis berada di tengah canvas.
+
+---
+
+### Auto Resize
+
+Generate:
+
+```text
+64x64
+128x128
+256x256
+512x512
+1024x1024
+```
+
+---
+
+### Auto Optimize
+
+Gunakan:
+
+```text
+Sharp
+```
+
+untuk:
+
+* Compress
+* Preserve Quality
+* Retina Ready
+
+---
+
+### Transparency Detection
+
+Jika logo memiliki background putih:
+
+Sistem dapat:
+
+```text
+Detect Background
+Remove Background
+Preserve Transparency
+```
+
+opsional melalui tombol:
+
+```text
+Remove Background
+```
+
+---
+
+## Frontend Requirements
+
+Logo harus:
+
+### Navbar
+
+Desktop
+
+```text
+Height 48px
+```
+
+Mobile
+
+```text
+Height 40px
+```
+
+---
+
+### Footer
+
+```text
+Height 72px
+```
+
+---
+
+### Hero
+
+Gunakan versi resolusi tertinggi.
+
+---
+
+### Retina Display
+
+Logo tetap tajam pada:
+
+```text
+Macbook Retina
+4K Monitor
+Mobile Retina
+```
+
+---
+
+# FEATURE 2
+
+# PREMIUM BACKGROUND SYSTEM
+
+## OBJECTIVE
+
+Tidak boleh ada background polos.
+
+Tidak boleh ada section yang hanya:
+
+```css
+background: white;
+background: black;
+```
+
+karena terlihat murah.
+
+---
+
+## DESIGN PRINCIPLE
+
+Tampilan harus terasa:
+
+```text
+Luxury
+Corporate
+Academic Excellence
+Business School
+Digital Innovation
+Future Ready
+```
+
+---
+
+# LIGHT MODE BACKGROUND
+
+## Global Background
+
+Gunakan:
+
+```css
+linear-gradient(
+180deg,
+#ffffff,
+#f8fafc,
+#eef4ff
+);
+```
+
+---
+
+Tambahkan:
+
+### Soft Gradient Mesh
+
+Background blur elegan.
+
+Posisi:
+
+```text
+Top Left
+Center Right
+Bottom Left
+```
+
+Opacity:
+
+```text
+5%-10%
+```
+
+---
+
+### Educational Illustration
+
+Tambahkan elemen transparan:
+
+Tema:
+
+```text
+Business
+Management
+Accounting
+Office
+Digital Marketing
+Education
+Technology
+```
+
+---
+
+Style:
+
+```text
+Monoline
+Glass
+Wireframe
+Blueprint
+```
+
+---
+
+Opacity:
+
+```text
+2%-5%
+```
+
+---
+
+Jangan mengganggu readability.
+
+---
+
+# DARK MODE BACKGROUND
+
+## Global Background
+
+Gunakan:
+
+```css
+linear-gradient(
+180deg,
+#020617,
+#0f172a,
+#111827
+);
+```
+
+---
+
+Tambahkan:
+
+### Aurora Gradient
+
+Glow bergerak sangat halus.
+
+Warna:
+
+```text
+Blue
+Indigo
+Cyan
+```
+
+---
+
+Opacity:
+
+```text
+5%-8%
+```
+
+---
+
+### Abstract School Illustration
+
+Tema:
+
+```text
+Digital Classroom
+Business Analytics
+Accounting Dashboard
+Education Technology
+Innovation
+```
+
+---
+
+Style:
+
+```text
+Wireframe
+Blueprint
+Glass
+Neon Outline
+```
+
+---
+
+Opacity:
+
+```text
+3%-5%
+```
+
+---
+
+# FEATURE 3
+
+# SECTION BACKGROUND INTELLIGENCE
+
+Setiap section harus memiliki identitas visual.
+
+---
+
+## Hero
+
+Background:
+
+```text
+Video Sekolah
++
+Gradient Overlay
++
+Floating Shapes
++
+Light Glow
+```
+
+---
+
+## Program Keahlian
+
+Background:
+
+```text
+Business Network Pattern
+```
+
+Opacity:
+
+```text
+3%
+```
+
+---
+
+## Berita
+
+Background:
+
+```text
+Modern Editorial Texture
+```
+
+Opacity:
+
+```text
+2%
+```
+
+---
+
+## Prestasi
+
+Background:
+
+```text
+Achievement Lines
+```
+
+Opacity:
+
+```text
+4%
+```
+
+---
+
+## Galeri
+
+Background:
+
+```text
+Subtle Grid Pattern
+```
+
+Opacity:
+
+```text
+2%
+```
+
+---
+
+## CTA
+
+Background:
+
+```text
+Animated Aurora
+```
+
+---
+
+# FEATURE 4
+
+# ENTERPRISE VISUAL DECORATION
+
+Tambahkan visual assets transparan.
+
+---
+
+## Business Theme
+
+Illustration Categories:
+
+```text
+Business Meeting
+Management
+Accounting
+Digital Marketing
+Office Work
+Technology
+Innovation
+Education
+```
+
+---
+
+Style:
+
+```text
+Luxury Line Art
+Glassmorphism
+Corporate Illustration
+```
+
+---
+
+Rules:
+
+```text
+Never distract content
+Never reduce readability
+Never become dominant visual
+```
+
+---
+
+Opacity:
+
+```text
+2%-8%
+```
+
+---
+
+# FEATURE 5
+
+# PREMIUM MOTION SYSTEM
+
+Gunakan:
+
+```text
+Framer Motion
+GSAP
+```
+
+---
+
+Background Elements:
+
+### Floating Shapes
+
+Durasi:
+
+```text
+10s-20s
+```
+
+Infinite.
+
+---
+
+### Gradient Animation
+
+Sangat lambat.
+
+Durasi:
+
+```text
+20s-30s
+```
+
+---
+
+### Mouse Parallax
+
+Hero section.
+
+---
+
+# PERFORMANCE REQUIREMENTS
+
+Background system wajib:
+
+```text
+Lazy Loaded
+GPU Accelerated
+Optimized
+No FPS Drop
+```
+
+---
+
+Target:
+
+```text
+Lighthouse Performance > 95
+```
+
+---
+
+# FINAL EXPECTATION
+
+Frontend harus memberikan kesan:
+
+> "Institusi pendidikan bisnis dan vokasi yang modern, premium, elegan, dan berkelas nasional."
+
+Light mode terasa:
+
+* Bersih
+* Mewah
+* Corporate
+* Akademik
+
+Dark mode terasa:
+
+* Futuristik
+* Elegan
+* Teknologis
+* Profesional
+
+Tidak boleh ada section yang terlihat kosong, polos, atau seperti template sekolah biasa. Setiap halaman harus memiliki depth visual, gradasi elegan, ilustrasi transparan bertema bisnis/manajemen, dan branding yang konsisten dengan identitas SMKN 1 Wonogiri.

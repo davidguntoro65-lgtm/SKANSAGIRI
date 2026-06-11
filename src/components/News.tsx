@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { Newspaper, Calendar, Clock, Star } from "lucide-react";
 import { DataStore } from "../dataStore";
+import { SectionPattern, GradientMesh } from "./BackgroundSystem";
 
 export default function News({ theme = "dark" }: { theme?: "light" | "dark" }) {
   const [news, setNews] = useState(() => DataStore.getNews());
@@ -25,7 +26,8 @@ export default function News({ theme = "dark" }: { theme?: "light" | "dark" }) {
       }`}
       id="news"
     >
-      <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-[700px] h-[700px] bg-amber-500/[0.01] rounded-full blur-[180px] pointer-events-none" />
+      <SectionPattern type="editorial" theme={theme} />
+      <GradientMesh theme={theme} />
 
       <div className="max-w-7xl mx-auto px-6 md:px-12 relative z-10">
 

@@ -1,0 +1,1 @@
+- [Visual Enhancement System](visual-enhancement-system.md) — BackgroundSystem.tsx holds all premium bg components; logo stored as base64 in data/branding.json via /api/branding GET+POST.

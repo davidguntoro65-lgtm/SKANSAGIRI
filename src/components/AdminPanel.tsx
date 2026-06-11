@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { Competency, Milestone, GalleryItem, Alumnus, NewsArticle, IndustriPartner } from "../data";
 import { DataStore } from "../dataStore";
+import { useBranding, Branding } from "../hooks/useBranding";
 
 export default function AdminPanel({ 
   theme = "dark", 
@@ -29,7 +30,10 @@ export default function AdminPanel({
   const [loginLoading, setLoginLoading] = useState(false);
 
   // Active Admin Sidebar Tab
-  const [activeTab, setActiveTab] = useState<"competencies" | "milestones" | "gallery" | "alumni" | "news" | "partners">("competencies");
+  const [activeTab, setActiveTab] = useState<"competencies" | "milestones" | "gallery" | "alumni" | "news" | "partners" | "branding">("competencies");
+  const { branding, saveBranding, getLogo } = useBranding();
+  const [brandingDraft, setBrandingDraft] = useState<Branding | null>(null);
+  const [brandingLoading, setBrandingLoading] = useState(false);
 
   // Loaded Datasets
   const [competencies, setCompetencies] = useState<Competency[]>([]);
@@ -702,7 +706,8 @@ export default function AdminPanel({
                     { id: "gallery", label: "Galeri Campus Life", icon: Camera, count: gallery.length },
                     { id: "alumni", label: "Testimoni Alumni", icon: Users, count: alumni.length },
                     { id: "news", label: "Warta & Agenda", icon: Newspaper, count: news.length },
-                    { id: "partners", label: "Mitra Dunia Industri", icon: Handshake, count: partners.length }
+                    { id: "partners", label: "Mitra Dunia Industri", icon: Handshake, count: partners.length },
+                    { id: "branding", label: "Identitas & Logo", icon: Image, count: null }
                   ].map((tab) => {
                     const TabIcon = tab.icon;
                     const isActive = activeTab === tab.id;
@@ -727,13 +732,15 @@ export default function AdminPanel({
                           <TabIcon className="w-4 h-4 shrink-0" />
                           <span>{tab.label}</span>
                         </div>
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
-                          isActive 
-                            ? "bg-slate-950/20 text-slate-950" 
-                            : isDarkTheme ? "bg-slate-950 border border-white/5 text-slate-300" : "bg-slate-200 text-slate-700"
-                        }`}>
-                          {tab.count}
-                        </span>
+                        {tab.count !== null && (
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                            isActive 
+                              ? "bg-slate-950/20 text-slate-950" 
+                              : isDarkTheme ? "bg-slate-950 border border-white/5 text-slate-300" : "bg-slate-200 text-slate-700"
+                          }`}>
+                            {tab.count}
+                          </span>
+                        )}
                       </button>
                     );
                   })}
@@ -774,6 +781,7 @@ export default function AdminPanel({
                     {activeTab === "alumni" && "Kelola Testimoni Sukses Alumni"}
                     {activeTab === "news" && "Kelola Warta & Agenda Utama"}
                     {activeTab === "partners" && "Kelola Mitra Dunia Industri"}
+                    {activeTab === "branding" && "Identitas Visual & Logo Sekolah"}
                   </h2>
                   <p className={`text-xs ${isDarkTheme ? "text-slate-400" : "text-slate-500"} font-light mt-0.5`}>
                     {activeTab === "competencies" && "Perbarui deskripsi, kurikulum, bidang karir, and detail program keahlian sekolah."}
@@ -782,10 +790,11 @@ export default function AdminPanel({
                     {activeTab === "alumni" && "Peroleh ulasan dan motivasi langsung dari alumni SMKN 1 Wonogiri berkarir global."}
                     {activeTab === "news" && "Atur artikel warta, rilis berita baru, edit pencapaian murid terdepan di media cetak."}
                     {activeTab === "partners" && "Tambah, edit, atau hapus mitra industri yang tampil di bagian Dunia Industri halaman utama."}
+                    {activeTab === "branding" && "Upload logo sekolah untuk Navbar, Footer, dan seluruh komponen branding portal."}
                   </p>
                 </div>
 
-                {!isAddingNew && !editingItem && (
+                {!isAddingNew && !editingItem && activeTab !== "branding" && (
                   <button
                     onClick={() => {
                       setIsAddingNew(true);
@@ -2099,6 +2108,131 @@ export default function AdminPanel({
                       ))}
                     </div>
                   )}
+
+                  {/* BRANDING PANEL */}
+                  {activeTab === "branding" && (() => {
+                    const draft = brandingDraft ?? branding;
+                    const handleFileInput = (field: keyof Branding) => (e: React.ChangeEvent<HTMLInputElement>) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        setBrandingDraft(prev => ({ ...(prev ?? branding), [field]: ev.target?.result as string }));
+                      };
+                      reader.readAsDataURL(file);
+                    };
+                    const handleRemove = (field: keyof Branding) => {
+                      setBrandingDraft(prev => ({ ...(prev ?? branding), [field]: null }));
+                    };
+                    const handleSave = async () => {
+                      if (!draft) return;
+                      setBrandingLoading(true);
+                      const ok = await saveBranding(draft);
+                      setBrandingLoading(false);
+                      if (ok) {
+                        setBrandingDraft(null);
+                        showFeedback("Identitas visual berhasil disimpan!", "success");
+                      } else {
+                        showFeedback("Gagal menyimpan identitas visual.", "error");
+                      }
+                    };
+                    const logoFields: { key: keyof Branding; label: string; desc: string }[] = [
+                      { key: "schoolLogo", label: "Logo Utama (Universal)", desc: "Digunakan sebagai fallback di semua mode" },
+                      { key: "schoolLogoDark", label: "Logo Mode Gelap", desc: "Tampil di Navbar & Footer saat dark mode aktif" },
+                      { key: "schoolLogoLight", label: "Logo Mode Terang", desc: "Tampil di Navbar & Footer saat light mode aktif" },
+                      { key: "schoolFavicon", label: "Favicon (32×32 px)", desc: "Ikon tab browser, format PNG/ICO disarankan" },
+                      { key: "schoolAppIcon", label: "App Icon (512×512 px)", desc: "Ikon aplikasi PWA resolusi tinggi" },
+                    ];
+                    return (
+                      <div className="space-y-8 text-left">
+                        {/* Current logo preview */}
+                        {(draft.schoolLogo || draft.schoolLogoDark || draft.schoolLogoLight) && (
+                          <div className={`p-6 rounded-2xl border ${isDarkTheme ? "bg-slate-900 border-white/5" : "bg-white border-slate-200"}`}>
+                            <h4 className={`text-[10px] font-mono uppercase tracking-widest font-bold mb-4 ${isDarkTheme ? "text-slate-400" : "text-slate-500"}`}>
+                              Pratinjau Logo Sekarang
+                            </h4>
+                            <div className="flex flex-wrap gap-6 items-center">
+                              {[draft.schoolLogoDark ?? draft.schoolLogo, draft.schoolLogoLight ?? draft.schoolLogo].map((url, i) => url && (
+                                <div key={i} className={`p-4 rounded-xl border flex items-center justify-center ${i === 0 ? "bg-slate-950 border-white/10" : "bg-white border-slate-200"}`}>
+                                  <img src={url} alt="Logo preview" className="h-14 w-auto object-contain" />
+                                  <span className={`ml-3 text-[10px] font-mono ${i === 0 ? "text-slate-400" : "text-slate-500"}`}>{i === 0 ? "Dark Mode" : "Light Mode"}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Logo upload fields */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {logoFields.map(({ key, label, desc }) => (
+                            <div key={key} className={`p-5 rounded-2xl border ${isDarkTheme ? "bg-slate-900 border-white/5" : "bg-white border-slate-200"}`}>
+                              <div className="flex items-start justify-between mb-3">
+                                <div>
+                                  <h4 className={`text-xs font-bold ${isDarkTheme ? "text-white" : "text-slate-900"}`}>{label}</h4>
+                                  <p className={`text-[10px] font-mono mt-0.5 ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>{desc}</p>
+                                </div>
+                                {draft[key] && (
+                                  <button
+                                    onClick={() => handleRemove(key)}
+                                    className="p-1 rounded-lg text-red-500 hover:bg-red-500/10 transition-colors text-[10px] font-mono"
+                                    title="Hapus"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                              {draft[key] ? (
+                                <div className={`rounded-xl border overflow-hidden p-3 flex items-center justify-center mb-3 ${isDarkTheme ? "bg-slate-800 border-white/5" : "bg-slate-100 border-slate-200"}`}>
+                                  <img src={draft[key] as string} alt={label} className="h-12 w-auto object-contain max-w-full" />
+                                </div>
+                              ) : (
+                                <div className={`rounded-xl border border-dashed h-16 flex items-center justify-center mb-3 ${isDarkTheme ? "border-white/10 bg-slate-800/30" : "border-slate-300 bg-slate-50"}`}>
+                                  <span className={`text-[10px] font-mono ${isDarkTheme ? "text-slate-600" : "text-slate-400"}`}>Belum ada logo</span>
+                                </div>
+                              )}
+                              <label className={`w-full flex items-center justify-center gap-2 py-2 rounded-lg border cursor-pointer transition-all text-[10px] font-mono uppercase tracking-widest font-bold ${
+                                isDarkTheme
+                                  ? "border-white/10 text-slate-300 hover:bg-white/5 hover:border-white/20"
+                                  : "border-slate-300 text-slate-700 hover:bg-slate-100"
+                              }`}>
+                                <Upload className="w-3.5 h-3.5" />
+                                <span>{draft[key] ? "Ganti File" : "Upload File"}</span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={handleFileInput(key)}
+                                />
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Save button */}
+                        <div className="flex items-center gap-4">
+                          <button
+                            onClick={handleSave}
+                            disabled={brandingLoading}
+                            className="px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 text-xs font-bold tracking-wider flex items-center gap-2 shadow-md active:scale-95 duration-150"
+                          >
+                            {brandingLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                            <span>Simpan Identitas Visual</span>
+                          </button>
+                          {brandingDraft && (
+                            <button
+                              onClick={() => setBrandingDraft(null)}
+                              className={`px-4 py-3 rounded-xl text-xs font-mono border transition-all ${isDarkTheme ? "border-white/10 text-slate-400 hover:border-white/20" : "border-slate-200 text-slate-500 hover:bg-slate-100"}`}
+                            >
+                              Batal
+                            </button>
+                          )}
+                          {brandingDraft && (
+                            <span className="text-[10px] font-mono text-amber-500">● Perubahan belum disimpan</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* PARTNERS LIST */}
                   {activeTab === "partners" && (

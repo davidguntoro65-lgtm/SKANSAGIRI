@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from "react";
 import Navbar from "./components/Navbar";
+import { GlobalPageBg } from "./components/BackgroundSystem";
 import Hero from "./components/Hero";
 import Stats from "./components/Stats";
 import About from "./components/About";
@@ -93,6 +94,7 @@ export default function App() {
       className={`relative min-h-screen ${theme === "dark" ? "bg-slate-950 text-slate-100" : "bg-white text-slate-900"} font-sans antialiased overflow-x-hidden selection:bg-amber-500 selection:text-slate-950 transition-colors duration-500`}
       id="application-container"
     >
+      <GlobalPageBg theme={theme} />
       <Navbar theme={theme} toggleTheme={toggleTheme} />
 
       <main className="relative" id="main-content-flow">
