@@ -1,0 +1,6 @@
+{
+  "name": "SMKN 1 Wonogiri",
+  "description": "Website Institusi Premium SMKN 1 Wonogiri - Center of Excellence for Business, Culinary, Fashion & Digital Innovation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

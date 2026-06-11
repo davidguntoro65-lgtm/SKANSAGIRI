@@ -1,0 +1,373 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-serif: "Playfair Display", Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-mono: "JetBrains Mono", monospace;
+  
+  --color-luxury-gold: #D4AF37;
+  --color-navy-dark: #0A192F;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+  
+  body {
+    background-color: #030712;
+    color: #f3f4f6;
+    overflow-x: hidden;
+  }
+}
+
+/* Custom glassmorphism and aurora gradient animations */
+@keyframes aurora {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-aurora {
+  background-size: 200% 200%;
+  animation: aurora 15s ease infinite;
+}
+
+/* Glassmorphism Classes */
+.glass-premium {
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-light {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+/* Hide scrollbars but keep functionality for specific elements */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Custom scrollbar for main page */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #030712;
+}
+::-webkit-scrollbar-thumb {
+  background: #1f2937;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #374151;
+}
+
+/* ==========================================================================
+   PREMIUM DAYTIME (LIGHT) THEME SYSTEM OVERRIDES
+   ========================================================================== */
+.light {
+  color-scheme: light;
+}
+
+.light body {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+/* Base Component Panels Transition */
+.light .bg-slate-950 {
+  background-color: #f8fafc !important;
+}
+
+.light .bg-slate-900 {
+  background-color: #ffffff !important;
+}
+
+/* Glassmorphism elements for Daytime */
+.light .glass-premium {
+  background: rgba(255, 255, 255, 0.75) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(15, 23, 42, 0.08) !important;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Text Element Color Systems */
+.light .text-white,
+.light .text-slate-100,
+.light .text-slate-200,
+.light .text-slate-50 {
+  color: #0f172a !important;
+}
+
+/* Safely convert core headers/texts to rich slate dark */
+.light h1, .light h2, .light h3, .light h4, .light h5, .light h6,
+.light p.text-slate-300, .light p.text-slate-400, .light p.text-slate-200,
+.light span.text-slate-300, .light span.text-slate-400 {
+  color: #334155;
+}
+
+.light h1, .light h2, .light h3, .light h4, .light h5, .light h6 {
+  color: #0f172a !important;
+}
+
+.light .text-slate-300 {
+  color: #334155 !important;
+}
+
+.light .text-slate-400 {
+  color: #475569 !important;
+}
+
+.light .text-slate-500 {
+  color: #64748b !important;
+}
+
+/* Card layout borders */
+.light .border-white\/5,
+.light .border-white\/10,
+.light .border-white\/15,
+.light .border-white\/20,
+.light .border-white\/30,
+.light .border-slate-800 {
+  border-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+/* Hover and active subtle backgrounds */
+.light .bg-slate-900\/60 {
+  background-color: rgba(255, 255, 255, 0.6) !important;
+}
+
+.light .bg-slate-950\/40 {
+  background-color: rgba(255, 255, 255, 0.45) !important;
+}
+
+.light .bg-slate-950\/75 {
+  background-color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.light .bg-slate-950\/95 {
+  background-color: rgba(255, 255, 255, 0.96) !important;
+}
+
+.light .bg-slate-950\/50 {
+  background-color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.light .bg-slate-900\/40 {
+  background-color: rgba(255, 255, 255, 0.45) !important;
+}
+
+.light .bg-white\/5 {
+  background-color: rgba(15, 23, 42, 0.03) !important;
+}
+
+.light .bg-white\/10 {
+  background-color: rgba(15, 23, 42, 0.06) !important;
+}
+
+.light .hover\:bg-white\/5:hover {
+  background-color: rgba(15, 23, 42, 0.04) !important;
+}
+
+/* Custom interactive elements inside News and Events */
+.light #news .bg-slate-950 {
+  background-color: #f1f5f9 !important;
+}
+
+/* Grid overlays transition to soft graphite lines */
+.light #hero-grid-overlay {
+  background-image: linear-gradient(to right, rgba(15, 23, 42, 0.04) 1px, transparent 1px), linear-gradient(to bottom, rgba(15, 23, 42, 0.04) 1px, transparent 1px) !important;
+}
+
+/* Parallax slideshow dark overlay adjustment for daylight */
+.light #hero-bg-parallax div div:nth-child(2) {
+  background-image: linear-gradient(to top, #f8fafc, rgba(248, 250, 252, 0.15) 40%, rgba(248, 250, 252, 0.3) 60%) !important;
+}
+.light #hero-bg-parallax div div:nth-child(3) {
+  background-image: linear-gradient(to right, #f8fafc, rgba(248, 250, 252, 0.35) 50%, transparent) !important;
+}
+
+/* Corporate Partner Sliding Banner Ticker */
+.light #ecosystem-ticker-container .absolute.left-0 {
+  background-image: linear-gradient(to right, #f8fafc, transparent) !important;
+}
+.light #ecosystem-ticker-container .absolute.right-0 {
+  background-image: linear-gradient(to left, #f8fafc, transparent) !important;
+}
+
+/* Custom aurora element for PPDB CTA */
+.light #ppdb-cta-aurora {
+  background-image: linear-gradient(to top right, #f8fafc, #efebd8, #f5eef5) !important;
+  opacity: 0.95 !important;
+}
+
+/* Scroll tracks */
+.light ::-webkit-scrollbar-track {
+  background: #f8fafc;
+}
+.light ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+}
+.light ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* ==========================================================================
+   COMPETENCY CARDS LIGHT MODE POLISH
+   ========================================================================== */
+.light #kompetensi {
+  background-color: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.06) !important;
+}
+
+.light #kompetensi .text-amber-500 {
+  color: #b45309 !important; /* Rich amber for daytime accessibility */
+}
+
+/* Light mode override for each card's themeClass gradient */
+.light #comp-card-akl {
+  background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%) !important;
+  border-color: rgba(14, 165, 233, 0.15) !important;
+  box-shadow: 0 10px 30px -10px rgba(14, 165, 233, 0.08) !important;
+}
+.light #comp-card-akl span.tracking-widest {
+  background-color: #e0f2fe !important;
+  color: #0369a1 !important;
+  border-color: #bae6fd !important;
+}
+
+.light #comp-card-mplb {
+  background: linear-gradient(135deg, #ffffff 0%, #f5f3ff 100%) !important;
+  border-color: rgba(99, 102, 241, 0.15) !important;
+  box-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.08) !important;
+}
+.light #comp-card-mplb span.tracking-widest {
+  background-color: #e0e7ff !important;
+  color: #4338ca !important;
+  border-color: #c7d2fe !important;
+}
+
+.light #comp-card-pemasaran {
+  background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%) !important;
+  border-color: rgba(20, 184, 166, 0.15) !important;
+  box-shadow: 0 10px 30px -10px rgba(20, 184, 166, 0.08) !important;
+}
+.light #comp-card-pemasaran span.tracking-widest {
+  background-color: #ccfbf1 !important;
+  color: #0f766e !important;
+  border-color: #99f6e4 !important;
+}
+
+.light #comp-card-kuliner {
+  background: linear-gradient(135deg, #ffffff 0%, #fffbeb 100%) !important;
+  border-color: rgba(217, 119, 6, 0.15) !important;
+  box-shadow: 0 10px 30px -10px rgba(217, 119, 6, 0.08) !important;
+}
+.light #comp-card-kuliner span.tracking-widest {
+  background-color: #fef3c7 !important;
+  color: #b45309 !important;
+  border-color: #fde68a !important;
+}
+
+.light #comp-card-busana {
+  background: linear-gradient(135deg, #ffffff 0%, #fff1f2 100%) !important;
+  border-color: rgba(219, 39, 119, 0.15) !important;
+  box-shadow: 0 10px 30px -10px rgba(219, 39, 119, 0.08) !important;
+}
+.light #comp-card-busana span.tracking-widest {
+  background-color: #fce7f3 !important;
+  color: #be185d !important;
+  border-color: #fbcfe8 !important;
+}
+
+/* Hover shadow effects for light mode */
+.light #competency-cards-grid .group:hover {
+  box-shadow: 0 20px 40px -15px rgba(15, 23, 42, 0.12) !important;
+}
+
+/* Override inner container borders and buttons */
+.light #competency-cards-grid .border-t {
+  border-color: rgba(15, 23, 42, 0.06) !important;
+}
+
+.light #competency-cards-grid button {
+  background-color: rgba(15, 23, 42, 0.03) !important;
+  border-color: rgba(15, 23, 42, 0.08) !important;
+  color: #1e293b !important;
+  box-shadow: none !important;
+}
+
+.light #competency-cards-grid button:hover {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+  border-color: #0f172a !important;
+}
+
+/* Lower background image opacity for text readability */
+.light #competency-cards-grid .absolute.-z-10 {
+  opacity: 0.05 !important;
+}
+.light #competency-cards-grid .group:hover .absolute.-z-10 {
+  opacity: 0.08 !important;
+}
+
+/* Heading hover translation color for light mode */
+.light #competency-cards-grid h3 {
+  color: #0f172a !important;
+}
+.light #competency-cards-grid .group:hover h3 {
+  color: #b45309 !important;
+}
+
+/* Modal details */
+.light #curriculum-modal-backdrop > div:first-child {
+  background-color: rgba(15, 23, 42, 0.3) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+.light #curr-modal-container {
+  background-color: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.08) !important;
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.15) !important;
+}
+
+.light #curr-modal-container button#btn-close-curr-modal {
+  background-color: rgba(15, 23, 42, 0.04) !important;
+  border-color: rgba(15, 23, 42, 0.08) !important;
+  color: #0f172a !important;
+}
+
+.light #curr-modal-container button#btn-close-curr-modal:hover {
+  background-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+.light #curr-modal-container h4 {
+  color: #b45309 !important;
+}
+
+.light #curr-modal-container .border-b,
+.light #curr-modal-container .border-t {
+  border-color: rgba(15, 23, 42, 0.06) !important;
+}
+
+
