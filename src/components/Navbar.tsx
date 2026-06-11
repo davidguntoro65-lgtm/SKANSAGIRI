@@ -13,6 +13,21 @@ function navigate(path: string) {
   window.dispatchEvent(new Event("popstate"));
 }
 
+function navigateToAnchor(anchor: string) {
+  const isOnHomepage = window.location.pathname === "/";
+  if (isOnHomepage) {
+    const el = document.querySelector(anchor);
+    if (el) el.scrollIntoView({ behavior: "smooth" });
+  } else {
+    window.history.pushState({}, "", "/");
+    window.dispatchEvent(new Event("popstate"));
+    setTimeout(() => {
+      const el = document.querySelector(anchor);
+      if (el) el.scrollIntoView({ behavior: "smooth" });
+    }, 120);
+  }
+}
+
 export default function Navbar({ theme, toggleTheme }: NavbarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
@@ -194,6 +209,7 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
               <a
                 key={link.name}
                 href={link.href}
+                onClick={(e) => { e.preventDefault(); navigateToAnchor(link.href); }}
                 className={linkClass}
                 id={`link-desk-${link.name.toLowerCase()}`}
               >
@@ -231,7 +247,7 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
                           <a
                             key={item.name}
                             href={item.href}
-                            onClick={() => setAktifitasOpen(false)}
+                            onClick={(e) => { e.preventDefault(); navigateToAnchor(item.href); setAktifitasOpen(false); }}
                             className={dropdownItem(isDark)}
                             id={`link-aktifitas-${item.name.toLowerCase()}`}
                           >
@@ -393,7 +409,7 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
             <a
               key={link.name}
               href={link.href}
-              onClick={() => setIsOpen(false)}
+              onClick={(e) => { e.preventDefault(); navigateToAnchor(link.href); setIsOpen(false); }}
               className="text-base text-slate-300 hover:text-white font-serif tracking-widest hover:scale-105 transition-all py-1"
               id={`link-mob-${link.name.toLowerCase()}`}
             >
@@ -428,7 +444,7 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
                         <a
                           key={item.name}
                           href={item.href}
-                          onClick={() => { setIsOpen(false); setMobileAktifitasOpen(false); }}
+                          onClick={(e) => { e.preventDefault(); navigateToAnchor(item.href); setIsOpen(false); setMobileAktifitasOpen(false); }}
                           className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/5 transition-colors"
                           id={`link-aktifitas-mob-${item.name.toLowerCase()}`}
                         >
