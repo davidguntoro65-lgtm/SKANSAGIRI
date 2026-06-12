@@ -31,7 +31,7 @@ export default function ManajemenSekolah({ theme = "light" }: { theme?: "light" 
 
   return (
     <section
-      className={`min-h-screen pt-32 pb-24 transition-colors duration-500 ${
+      className={`relative z-10 min-h-screen pt-32 pb-24 transition-colors duration-500 ${
         isDark ? "bg-slate-950 text-slate-100" : "bg-white text-slate-900"
       }`}
       id="manajemen-sekolah-page"
@@ -62,18 +62,28 @@ export default function ManajemenSekolah({ theme = "light" }: { theme?: "light" 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="mb-16 text-left"
+          className="mb-16"
         >
-          <span className={`text-xs font-mono tracking-[0.3em] uppercase block mb-3 font-semibold ${isDark ? "text-amber-500" : "text-amber-600"}`}>
-            SCHOOL LEADERSHIP
-          </span>
-          <h1 className={`text-3xl md:text-5xl font-serif font-bold tracking-tight ${isDark ? "text-white" : "text-slate-950"}`}>
-            Manajemen <span className={`italic font-light ${isDark ? "text-amber-400" : "text-amber-600"}`}>Sekolah</span>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="h-px flex-1 max-w-[40px] bg-amber-500" />
+            <span className={`text-[10px] font-mono tracking-[0.35em] uppercase font-semibold ${isDark ? "text-amber-500" : "text-amber-600"}`}>
+              SCHOOL LEADERSHIP
+            </span>
+          </div>
+
+          <h1 className={`text-3xl md:text-5xl font-serif font-bold tracking-tight leading-tight mb-2 ${isDark ? "text-white" : "text-slate-950"}`}>
+            Jajaran Pimpinan
           </h1>
-          <p className={`mt-4 text-sm md:text-base font-light leading-relaxed max-w-2xl ${isDark ? "text-slate-400" : "text-slate-600"}`}>
-            Pimpinan dan pengelola SMKN 1 Wonogiri yang berdedikasi dalam mewujudkan lembaga pendidikan berkelas dunia.
-          </p>
-          <div className={`h-[1.5px] w-16 mt-6 bg-amber-500`} />
+          <h2 className={`text-xl md:text-3xl font-serif font-light tracking-wide italic mb-5 ${isDark ? "text-amber-400" : "text-amber-600"}`}>
+            Manajemen SMKN 1 Wonogiri
+          </h2>
+
+          <div className="flex items-start gap-6">
+            <div className="h-[1.5px] w-16 mt-3 bg-amber-500 shrink-0" />
+            <p className={`text-sm md:text-base font-light leading-relaxed max-w-2xl ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+              Pimpinan dan pengelola SMKN 1 Wonogiri yang berdedikasi dalam mewujudkan lembaga pendidikan vokasi berkelas dunia dengan standar internasional.
+            </p>
+          </div>
         </motion.div>
 
         {loading ? (
