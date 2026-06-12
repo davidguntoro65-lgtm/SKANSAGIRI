@@ -7,6 +7,15 @@ import {
   INDUSTRI_PARTNERS, IndustriPartner
 } from "./data";
 
+// Helper: read session token from localStorage and build auth headers
+function getAuthHeaders(): HeadersInit {
+  const token = typeof window !== "undefined" ? (localStorage.getItem("smkn1_adm_token") || "") : "";
+  return {
+    "Content-Type": "application/json",
+    ...(token ? { "Authorization": `Bearer ${token}` } : {})
+  };
+}
+
 // Type definitions with strict parity to schema
 export interface AppData {
   competencies: Competency[];
@@ -50,7 +59,7 @@ export function saveStoredData<T>(key: string, data: T, apiEndpoint?: string): v
   if (apiEndpoint && typeof window !== "undefined") {
     fetch(apiEndpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ data })
     })
     .then(async (res) => {
@@ -124,7 +133,7 @@ export const DataStore = {
 
   resetAll: async () => {
     try {
-      const res = await fetch("/api/reset", { method: "POST" });
+      const res = await fetch("/api/reset", { method: "POST", headers: getAuthHeaders() });
       if (res.ok) {
         localStorage.removeItem(STORAGE_KEYS.COMPETENCES);
         localStorage.removeItem(STORAGE_KEYS.MILESTONES);

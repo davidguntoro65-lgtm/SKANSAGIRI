@@ -1,6 +1,8 @@
+import "dotenv/config";
 import express from "express";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 import { createServer as createViteServer } from "vite";
 import { 
   COMPETENCY_DATA, 
@@ -12,8 +14,45 @@ import {
 } from "./src/data";
 
 const app = express();
-const PORT = 5000;
+const PORT = parseInt(process.env.PORT || "5000", 10);
 const DATA_DIR = path.join(process.cwd(), "data");
+
+// In-memory session store (cleared on restart — intended for shared hosting)
+const activeSessions = new Set<string>();
+
+// Login rate limiter: max 5 attempts per IP, then 60s lockout
+const loginAttempts = new Map<string, { count: number; lockUntil: number }>();
+function checkRateLimit(ip: string): { allowed: boolean; secondsLeft?: number } {
+  const now = Date.now();
+  const entry = loginAttempts.get(ip) || { count: 0, lockUntil: 0 };
+  if (now < entry.lockUntil) {
+    return { allowed: false, secondsLeft: Math.ceil((entry.lockUntil - now) / 1000) };
+  }
+  return { allowed: true };
+}
+function recordFailedAttempt(ip: string) {
+  const now = Date.now();
+  const entry = loginAttempts.get(ip) || { count: 0, lockUntil: 0 };
+  entry.count += 1;
+  if (entry.count >= 5) {
+    entry.lockUntil = now + 60_000;
+    entry.count = 0;
+  }
+  loginAttempts.set(ip, entry);
+}
+function clearAttempts(ip: string) {
+  loginAttempts.delete(ip);
+}
+
+// Auth middleware — protects all write endpoints
+function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.replace("Bearer ", "").trim();
+  if (!token || !activeSessions.has(token)) {
+    return res.status(401).json({ error: "Tidak diotorisasi. Silakan login kembali." });
+  }
+  next();
+}
 
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
@@ -102,6 +141,58 @@ initJsonFile(filePaths.visiMisi, {
 // Parsing Middlewares
 app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ extended: true, limit: "25mb" }));
+
+// Security headers — applied to every response
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  res.setHeader("X-XSS-Protection", "1; mode=block");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  next();
+});
+
+// Global write-protection: every POST/DELETE/PUT except public ones requires a valid session token
+app.use((req, res, next) => {
+  const writeMethods = ["POST", "DELETE", "PUT", "PATCH"];
+  if (!writeMethods.includes(req.method)) return next();
+  const publicPosts = ["/api/auth/login", "/api/tracer"];
+  if (publicPosts.includes(req.path)) return next();
+  return requireAuth(req, res, next);
+});
+
+// --- Auth Endpoints ---
+
+app.post("/api/auth/login", (req, res) => {
+  const ip = (req.headers["x-forwarded-for"] as string || req.socket.remoteAddress || "unknown").split(",")[0].trim();
+  const { allowed, secondsLeft } = checkRateLimit(ip);
+  if (!allowed) {
+    return res.status(429).json({ error: `Terlalu banyak percobaan login. Coba lagi dalam ${secondsLeft} detik.` });
+  }
+  const { username, password } = req.body;
+  const validUser = process.env.ADMIN_USERNAME || "jobenenterprise";
+  const validPass = process.env.ADMIN_PASSWORD || "KuraKuraNinja!0!";
+  if (username === validUser && password === validPass) {
+    clearAttempts(ip);
+    const token = crypto.randomBytes(48).toString("hex");
+    activeSessions.add(token);
+    return res.json({ token });
+  }
+  recordFailedAttempt(ip);
+  return res.status(401).json({ error: "Kombinasi User Name atau Sandi salah. Periksa kembali!" });
+});
+
+app.post("/api/auth/logout", (req, res) => {
+  const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
+  if (token) activeSessions.delete(token);
+  return res.json({ success: true });
+});
+
+app.get("/api/auth/verify", (req, res) => {
+  const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
+  if (token && activeSessions.has(token)) return res.json({ valid: true });
+  return res.status(401).json({ valid: false });
+});
 
 // --- Express REST API Routes for High Integrity CRUD ---
 

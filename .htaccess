@@ -1,0 +1,35 @@
+# Apache proxy — route all requests to the Node.js app (Phusion Passenger)
+# Required for cPanel shared hosting with Node.js Selector
+
+# Pass-through for Passenger (cPanel manages this automatically when Node.js App is active)
+# If you need manual proxy mode, uncomment the block below and adjust the port.
+
+# RewriteEngine On
+# RewriteCond %{REQUEST_URI} !^/\.well-known
+# RewriteRule ^(.*)$ http://127.0.0.1:3000/$1 [P,L]
+
+# Security: block direct access to sensitive files
+<FilesMatch "\.(env|json|ts|tsx|md|lock|log)$">
+    Require all denied
+</FilesMatch>
+
+# Allow data directory contents to be served only via API, not directly
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^data/.*$ - [F,L]
+</IfModule>
+
+# Compression
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json
+</IfModule>
+
+# Cache static assets
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/jpeg "access plus 1 month"
+    ExpiresByType image/png "access plus 1 month"
+    ExpiresByType image/webp "access plus 1 month"
+    ExpiresByType text/css "access plus 1 week"
+    ExpiresByType application/javascript "access plus 1 week"
+</IfModule>

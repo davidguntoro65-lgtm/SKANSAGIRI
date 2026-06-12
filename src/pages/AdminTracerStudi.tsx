@@ -110,26 +110,58 @@ export default function AdminTracerStudi({ theme = "dark", onBack }: {
       .catch(() => { showFeedback("Gagal memuat data!", "error"); setLoading(false); });
   };
 
+  // Verify stored token is still valid on mount (handles server restarts)
+  useEffect(() => {
+    const token = localStorage.getItem("smkn1_adm_token");
+    if (!token) return;
+    fetch("/api/auth/verify", { headers: { "Authorization": `Bearer ${token}` } })
+      .then(res => { if (!res.ok) { localStorage.removeItem("smkn1_adm_token"); setIsLoggedIn(false); } })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (isLoggedIn) loadEntries();
   }, [isLoggedIn]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const getAuthHeaders = (): HeadersInit => {
+    const token = localStorage.getItem("smkn1_adm_token") || "";
+    return {
+      "Content-Type": "application/json",
+      ...(token ? { "Authorization": `Bearer ${token}` } : {})
+    };
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError("");
     setLoginLoading(true);
-    setTimeout(() => {
-      if (username === "superadmin" && password === "wonogiri-unggul") {
-        localStorage.setItem("smkn1_adm_token", "superadmin_active_session_token_wonogiri");
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+      if (res.ok && data.token) {
+        localStorage.setItem("smkn1_adm_token", data.token);
         setIsLoggedIn(true);
       } else {
-        setLoginError("Kombinasi User Name atau Sandi salah.");
+        setLoginError(data.error || "Kombinasi User Name atau Sandi salah.");
       }
-      setLoginLoading(false);
-    }, 700);
+    } catch {
+      setLoginError("Gagal menghubungi server. Periksa koneksi Anda.");
+    }
+    setLoginLoading(false);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      const token = localStorage.getItem("smkn1_adm_token") || "";
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }
+      });
+    } catch { /* best-effort */ }
     localStorage.removeItem("smkn1_adm_token");
     setIsLoggedIn(false);
   };
@@ -138,7 +170,7 @@ export default function AdminTracerStudi({ theme = "dark", onBack }: {
     if (!window.confirm(`Hapus data alumni "${nama}"?`)) return;
     setDeletingId(id);
     try {
-      const res = await fetch(`/api/tracer/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/tracer/${id}`, { method: "DELETE", headers: getAuthHeaders() });
       if (res.ok) {
         setEntries((prev) => prev.filter((e) => e.id !== id));
         if (expandedId === id) setExpandedId(null);

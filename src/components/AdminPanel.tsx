@@ -243,6 +243,15 @@ export default function AdminPanel({
     }
   }, [feedback]);
 
+  // Verify stored token is still valid on mount (handles server restarts)
+  useEffect(() => {
+    const token = localStorage.getItem("smkn1_adm_token");
+    if (!token) return;
+    fetch("/api/auth/verify", { headers: { "Authorization": `Bearer ${token}` } })
+      .then(res => { if (!res.ok) { localStorage.removeItem("smkn1_adm_token"); setIsLoggedIn(false); } })
+      .catch(() => {});
+  }, []);
+
   // Load datasets when logged in
   useEffect(() => {
     if (isLoggedIn) {
@@ -260,25 +269,42 @@ export default function AdminPanel({
     }
   }, [isLoggedIn]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const getAuthHeaders = (): HeadersInit => {
+    const token = localStorage.getItem("smkn1_adm_token") || "";
+    return {
+      "Content-Type": "application/json",
+      ...(token ? { "Authorization": `Bearer ${token}` } : {})
+    };
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError("");
     setLoginLoading(true);
-
-    // Simulated network checking for security aesthetic
-    setTimeout(() => {
-      if (username === "jobenenterprise" && password === "KuraKuraNinja!0!") {
-        localStorage.setItem("smkn1_adm_token", "superadmin_active_session_token_wonogiri");
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+      if (res.ok && data.token) {
+        localStorage.setItem("smkn1_adm_token", data.token);
         setIsLoggedIn(true);
         setFeedback({ message: "Berhasil masuk sebagai Superadmin!", type: "success" });
       } else {
-        setLoginError("Kombinasi User Name atau Sandi salah. Periksa kembali!");
+        setLoginError(data.error || "Kombinasi User Name atau Sandi salah. Periksa kembali!");
       }
-      setLoginLoading(false);
-    }, 800);
+    } catch {
+      setLoginError("Gagal menghubungi server. Periksa koneksi Anda.");
+    }
+    setLoginLoading(false);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST", headers: getAuthHeaders() });
+    } catch { /* best-effort */ }
     localStorage.removeItem("smkn1_adm_token");
     setIsLoggedIn(false);
     setFeedback({ message: "Sesi admin telah diakhiri.", type: "success" });
@@ -2276,7 +2302,7 @@ export default function AdminPanel({
                     const handleSaveAbout = async () => {
                       setAboutLoading(true);
                       try {
-                        await fetch("/api/about", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(aboutData) });
+                        await fetch("/api/about", { method: "POST", headers: getAuthHeaders(), body: JSON.stringify(aboutData) });
                         showFeedback("Foto gedung berhasil disimpan!", "success");
                       } catch { showFeedback("Gagal menyimpan!", "error"); }
                       setAboutLoading(false);
@@ -2414,7 +2440,7 @@ export default function AdminPanel({
                     const handleSaveKepala = async () => {
                       setKepalaLoading(true);
                       try {
-                        await fetch("/api/kepala-sekolah", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(kepalaSekolah) });
+                        await fetch("/api/kepala-sekolah", { method: "POST", headers: getAuthHeaders(), body: JSON.stringify(kepalaSekolah) });
                         showFeedback("Data Kepala Sekolah berhasil disimpan!", "success");
                       } catch { showFeedback("Gagal menyimpan data!", "error"); }
                       setKepalaLoading(false);
@@ -2513,7 +2539,7 @@ export default function AdminPanel({
                     const handleSaveManajemen = async () => {
                       setManajemenLoading(true);
                       try {
-                        await fetch("/api/manajemen-sekolah", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(manajemenSekolah) });
+                        await fetch("/api/manajemen-sekolah", { method: "POST", headers: getAuthHeaders(), body: JSON.stringify(manajemenSekolah) });
                         showFeedback("Data Manajemen Sekolah berhasil disimpan!", "success");
                       } catch { showFeedback("Gagal menyimpan data!", "error"); }
                       setManajemenLoading(false);
@@ -2578,7 +2604,7 @@ export default function AdminPanel({
                     const handleSaveVisiMisi = async () => {
                       setVisiMisiLoading(true);
                       try {
-                        await fetch("/api/visi-misi", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(visiMisi) });
+                        await fetch("/api/visi-misi", { method: "POST", headers: getAuthHeaders(), body: JSON.stringify(visiMisi) });
                         showFeedback("Visi & Misi berhasil disimpan!", "success");
                       } catch { showFeedback("Gagal menyimpan data!", "error"); }
                       setVisiMisiLoading(false);
@@ -2735,7 +2761,7 @@ export default function AdminPanel({
                               try {
                                 const res = await fetch("/api/social-media", {
                                   method: "POST",
-                                  headers: { "Content-Type": "application/json" },
+                                  headers: getAuthHeaders(),
                                   body: JSON.stringify(socialMedia)
                                 });
                                 if (res.ok) {
