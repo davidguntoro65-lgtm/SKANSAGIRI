@@ -30,7 +30,8 @@ const filePaths = {
   branding: path.join(DATA_DIR, "branding.json"),
   kepalaSekolah: path.join(DATA_DIR, "kepala-sekolah.json"),
   manajemenSekolah: path.join(DATA_DIR, "manajemen-sekolah.json"),
-  visiMisi: path.join(DATA_DIR, "visi-misi.json")
+  visiMisi: path.join(DATA_DIR, "visi-misi.json"),
+  socialMedia: path.join(DATA_DIR, "social-media.json")
 };
 
 // Helper to initialize files with initial data if they don't exist
@@ -75,6 +76,15 @@ initJsonFile(filePaths.manajemenSekolah, [
   { id: "waka-humas", jabatan: "Waka Humas", nama: "-", foto: null },
   { id: "kepala-tu", jabatan: "Kepala Tata Usaha", nama: "-", foto: null }
 ]);
+initJsonFile(filePaths.socialMedia, {
+  instagram: "https://instagram.com/smkn1wonogiri",
+  youtube: "https://youtube.com/@smkn1wonogiri",
+  website: "https://smkn1wonogiri.sch.id",
+  facebook: "",
+  tiktok: "",
+  twitter: ""
+});
+
 initJsonFile(filePaths.visiMisi, {
   visi: "Terwujudnya SMKN 1 Wonogiri sebagai lembaga pendidikan kejuruan yang unggul, berkarakter, dan berdaya saing global dalam rangka mewujudkan masyarakat yang sejahtera.",
   misi: [
@@ -278,6 +288,23 @@ app.post("/api/visi-misi", (req, res) => {
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: "Failed to save visi misi: " + e.message });
+  }
+});
+
+// --- SOCIAL MEDIA API ---
+app.get("/api/social-media", (req, res) => {
+  try {
+    res.json(JSON.parse(fs.readFileSync(filePaths.socialMedia, "utf-8")));
+  } catch (e: any) {
+    res.status(500).json({ error: "Failed to read social media: " + e.message });
+  }
+});
+app.post("/api/social-media", (req, res) => {
+  try {
+    fs.writeFileSync(filePaths.socialMedia, JSON.stringify(req.body, null, 2), "utf-8");
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: "Failed to save social media: " + e.message });
   }
 });
 

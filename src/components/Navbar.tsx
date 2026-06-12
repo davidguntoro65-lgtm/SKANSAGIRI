@@ -39,6 +39,7 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
   const [tentangOpen, setTentangOpen] = useState(false);
   const [mobileAktifitasOpen, setMobileAktifitasOpen] = useState(false);
   const [mobileTentangOpen, setMobileTentangOpen] = useState(false);
+  const [currentPath, setCurrentPath] = useState(() => window.location.pathname);
   const aktifitasRef = useRef<HTMLDivElement>(null);
   const tentangRef = useRef<HTMLDivElement>(null);
   const isDark = theme === "dark";
@@ -53,6 +54,16 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
     const handleScroll = () => setIsScrolled(window.scrollY > 40);
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => {
+    const handleLocation = () => setCurrentPath(window.location.pathname);
+    window.addEventListener("popstate", handleLocation);
+    window.addEventListener("hashchange", handleLocation);
+    return () => {
+      window.removeEventListener("popstate", handleLocation);
+      window.removeEventListener("hashchange", handleLocation);
+    };
   }, []);
 
   useEffect(() => {
@@ -87,13 +98,23 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
     { name: "Kehidupan Kampus", href: "#gallery", icon: Camera, desc: "Galeri & Kegiatan Siswa" }
   ];
 
+  // Check active states
+  const isTentangActive = tentangLinks.some(l => currentPath.startsWith(l.href));
+  const isTracerActive = currentPath === "/tracer-studi";
+  const isBeritaActive = currentPath === "/berita";
+
   const navScrolledBg = isDark
     ? "bg-slate-950/80 backdrop-blur-xl border-b border-white/5 shadow-2xl shadow-black/40"
     : "bg-white/90 backdrop-blur-xl border-b border-slate-200/80 shadow-lg shadow-slate-200/60";
 
-  const linkClass = isDark
-    ? "text-xs text-slate-300 hover:text-white font-sans uppercase tracking-widest font-medium transition-colors relative group py-2"
-    : "text-xs text-slate-600 hover:text-slate-950 font-sans uppercase tracking-widest font-medium transition-colors relative group py-2";
+  const baseLinkClass = `text-xs font-sans uppercase tracking-widest font-medium transition-colors relative group py-2`;
+
+  function linkClass(isActive: boolean) {
+    if (isActive) {
+      return `${baseLinkClass} ${isDark ? "text-amber-400" : "text-amber-600"}`;
+    }
+    return `${baseLinkClass} ${isDark ? "text-slate-300 hover:text-white" : "text-slate-600 hover:text-slate-950"}`;
+  }
 
   const dropdownPanel = (isDark: boolean) =>
     `absolute top-full left-1/2 -translate-x-1/2 mt-3 w-64 rounded-2xl shadow-2xl overflow-hidden border backdrop-blur-xl ${
@@ -152,12 +173,12 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
             <div className="relative" ref={tentangRef}>
               <button
                 onClick={() => setTentangOpen((v) => !v)}
-                className={`${linkClass} flex items-center gap-1 cursor-pointer bg-transparent border-0 outline-none`}
+                className={`${linkClass(isTentangActive)} flex items-center gap-1 cursor-pointer bg-transparent border-0 outline-none`}
                 id="btn-tentang-dropdown"
               >
                 Tentang
-                <ChevronDown className={`w-3.5 h-3.5 text-amber-500 transition-transform duration-200 ${tentangOpen ? "rotate-180" : ""}`} />
-                <span className="absolute bottom-0 left-0 w-0 h-[1.5px] bg-amber-500 transition-all duration-300 group-hover:w-full" />
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isTentangActive ? "text-amber-400" : "text-amber-500"} ${tentangOpen ? "rotate-180" : ""}`} />
+                <span className={`absolute bottom-0 left-0 h-[1.5px] bg-amber-500 transition-all duration-300 ${isTentangActive ? "w-full" : "w-0 group-hover:w-full"}`} />
               </button>
 
               <AnimatePresence>
@@ -173,24 +194,27 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
                     <div className="p-2">
                       {tentangLinks.map((item) => {
                         const Icon = item.icon;
+                        const isItemActive = currentPath === item.href;
                         return (
                           <a
                             key={item.name}
                             href={item.href}
                             onClick={(e) => { e.preventDefault(); navigate(item.href); setTentangOpen(false); }}
-                            className={dropdownItem(isDark)}
+                            className={`${dropdownItem(isDark)} ${isItemActive ? (isDark ? "bg-amber-500/10" : "bg-amber-50") : ""}`}
                             id={`link-tentang-${item.name.toLowerCase().replace(/\s/g, "-")}`}
                           >
                             <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-                              isDark
-                                ? "bg-amber-500/10 group-hover/item:bg-amber-500/20"
-                                : "bg-amber-50 group-hover/item:bg-amber-100"
+                              isItemActive
+                                ? isDark ? "bg-amber-500/30" : "bg-amber-100"
+                                : isDark ? "bg-amber-500/10 group-hover/item:bg-amber-500/20" : "bg-amber-50 group-hover/item:bg-amber-100"
                             }`}>
-                              <Icon className="w-4 h-4 text-amber-500" />
+                              <Icon className={`w-4 h-4 ${isItemActive ? "text-amber-400" : "text-amber-500"}`} />
                             </div>
                             <div>
                               <span className={`text-xs font-semibold uppercase tracking-widest block ${
-                                isDark ? "text-white" : "text-slate-900"
+                                isItemActive
+                                  ? isDark ? "text-amber-300" : "text-amber-700"
+                                  : isDark ? "text-white" : "text-slate-900"
                               }`}>
                                 {item.name}
                               </span>
@@ -210,24 +234,27 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
               </AnimatePresence>
             </div>
 
-            {navLinks.map((link) => (
-              <a
-                key={link.name}
-                href={link.href}
-                onClick={(e) => { e.preventDefault(); navigateToAnchor(link.href); }}
-                className={linkClass}
-                id={`link-desk-${link.name.toLowerCase()}`}
-              >
-                {link.name}
-                <span className="absolute bottom-0 left-0 w-0 h-[1.5px] bg-amber-500 transition-all duration-300 group-hover:w-full" />
-              </a>
-            ))}
+            {navLinks.map((link) => {
+              const isActive = link.href === "/tracer-studi" ? isTracerActive : false;
+              return (
+                <a
+                  key={link.name}
+                  href={link.href}
+                  onClick={(e) => { e.preventDefault(); navigateToAnchor(link.href); }}
+                  className={linkClass(isActive)}
+                  id={`link-desk-${link.name.toLowerCase()}`}
+                >
+                  {link.name}
+                  <span className={`absolute bottom-0 left-0 h-[1.5px] bg-amber-500 transition-all duration-300 ${isActive ? "w-full" : "w-0 group-hover:w-full"}`} />
+                </a>
+              );
+            })}
 
             {/* AKTIFITAS Dropdown */}
             <div className="relative" ref={aktifitasRef}>
               <button
                 onClick={() => setAktifitasOpen((v) => !v)}
-                className={`${linkClass} flex items-center gap-1 cursor-pointer bg-transparent border-0 outline-none`}
+                className={`${linkClass(false)} flex items-center gap-1 cursor-pointer bg-transparent border-0 outline-none`}
                 id="btn-aktifitas-dropdown"
               >
                 Aktifitas
@@ -368,7 +395,9 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
           <div className="w-full">
             <button
               onClick={() => setMobileTentangOpen((v) => !v)}
-              className="w-full flex items-center justify-center gap-2 text-base text-slate-300 hover:text-white font-serif tracking-widest hover:scale-105 transition-all py-1 cursor-pointer bg-transparent border-0 outline-none"
+              className={`w-full flex items-center justify-center gap-2 text-base font-serif tracking-widest hover:scale-105 transition-all py-1 cursor-pointer bg-transparent border-0 outline-none ${
+                isTentangActive ? "text-amber-400" : "text-slate-300 hover:text-white"
+              }`}
               id="btn-tentang-mobile"
             >
               Tentang
@@ -387,18 +416,21 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
                   <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-1">
                     {tentangLinks.map((item) => {
                       const Icon = item.icon;
+                      const isItemActive = currentPath === item.href;
                       return (
                         <a
                           key={item.name}
                           href={item.href}
                           onClick={(e) => { e.preventDefault(); navigate(item.href); setIsOpen(false); setMobileTentangOpen(false); }}
-                          className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/5 transition-colors"
+                          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${
+                            isItemActive ? "bg-amber-500/10" : "hover:bg-white/5"
+                          }`}
                           id={`link-tentang-mob-${item.name.toLowerCase().replace(/\s/g, "-")}`}
                         >
                           <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
-                            <Icon className="w-3.5 h-3.5 text-amber-400" />
+                            <Icon className={`w-3.5 h-3.5 ${isItemActive ? "text-amber-400" : "text-amber-500"}`} />
                           </div>
-                          <span className="text-sm text-slate-300 font-serif tracking-widest">
+                          <span className={`text-sm font-serif tracking-widest ${isItemActive ? "text-amber-300" : "text-slate-300"}`}>
                             {item.name}
                           </span>
                         </a>
@@ -410,17 +442,22 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
             </AnimatePresence>
           </div>
 
-          {navLinks.map((link) => (
-            <a
-              key={link.name}
-              href={link.href}
-              onClick={(e) => { e.preventDefault(); navigateToAnchor(link.href); setIsOpen(false); }}
-              className="text-base text-slate-300 hover:text-white font-serif tracking-widest hover:scale-105 transition-all py-1"
-              id={`link-mob-${link.name.toLowerCase()}`}
-            >
-              {link.name}
-            </a>
-          ))}
+          {navLinks.map((link) => {
+            const isActive = link.href === "/tracer-studi" ? isTracerActive : false;
+            return (
+              <a
+                key={link.name}
+                href={link.href}
+                onClick={(e) => { e.preventDefault(); navigateToAnchor(link.href); setIsOpen(false); }}
+                className={`text-base font-serif tracking-widest hover:scale-105 transition-all py-1 ${
+                  isActive ? "text-amber-400" : "text-slate-300 hover:text-white"
+                }`}
+                id={`link-mob-${link.name.toLowerCase()}`}
+              >
+                {link.name}
+              </a>
+            );
+          })}
 
           {/* Mobile AKTIFITAS Accordion */}
           <div className="w-full">

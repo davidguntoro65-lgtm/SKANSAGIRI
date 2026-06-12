@@ -1,12 +1,46 @@
-import { Landmark, ArrowUp, Mail, Phone, MapPin, Instagram, Youtube, Globe, Award } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Landmark, ArrowUp, Mail, Phone, MapPin, Instagram, Youtube, Globe, Award, Facebook } from "lucide-react";
 import { useBranding } from "../hooks/useBranding";
+
+interface SocialMedia {
+  instagram: string;
+  youtube: string;
+  website: string;
+  facebook: string;
+  tiktok: string;
+  twitter: string;
+}
+
+const DEFAULT_SOCIAL: SocialMedia = {
+  instagram: "https://instagram.com/smkn1wonogiri",
+  youtube: "https://youtube.com/@smkn1wonogiri",
+  website: "https://smkn1wonogiri.sch.id",
+  facebook: "",
+  tiktok: "",
+  twitter: ""
+};
 
 export default function Footer({ theme = "dark" }: { theme?: "light" | "dark" }) {
   const isDark = theme === "dark";
   const { getLogo } = useBranding();
   const logoUrl = getLogo(theme);
+  const [social, setSocial] = useState<SocialMedia>(DEFAULT_SOCIAL);
+
+  useEffect(() => {
+    fetch("/api/social-media")
+      .then(r => r.json())
+      .then(d => setSocial({ ...DEFAULT_SOCIAL, ...d }))
+      .catch(() => {});
+  }, []);
 
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
+  const socialLinks = [
+    { key: "instagram", icon: Instagram, label: "Instagram", href: social.instagram },
+    { key: "youtube", icon: Youtube, label: "YouTube", href: social.youtube },
+    { key: "facebook", icon: Facebook, label: "Facebook", href: social.facebook },
+    { key: "website", icon: Globe, label: "Website", href: social.website },
+  ].filter(s => !!s.href);
 
   return (
     <footer
@@ -143,12 +177,12 @@ export default function Footer({ theme = "dark" }: { theme?: "light" | "dark" })
                   rel="noopener noreferrer"
                   className="hover:text-amber-500 duration-300"
                 >
-                  Jl. Jenderal Gatot Subroto No. 34, Wonogiri, Jawa Tengah, Indonesia 57612
+                  Jalan Arjuna VI Wonokarto, Wonogiri, Jawa Tengah
                 </a>
               </div>
               <div className="flex items-center gap-2.5">
                 <Phone className="w-4 h-4 text-amber-500 shrink-0" />
-                <span>+62 (273) 321045</span>
+                <span>No. Telp/Fax: 0273-321322</span>
               </div>
               <div className="flex items-center gap-2.5">
                 <Mail className="w-4 h-4 text-amber-500 shrink-0" />
@@ -158,14 +192,11 @@ export default function Footer({ theme = "dark" }: { theme?: "light" | "dark" })
               </div>
             </div>
 
-            <div className="flex items-center gap-3" id="socmed-deck">
-              {[
-                { href: "https://instagram.com", icon: Instagram, label: "Instagram", id: "btn-instagram" },
-                { href: "https://youtube.com", icon: Youtube, label: "Youtube", id: "btn-youtube" },
-                { href: "https://smkn1wonogiri.sch.id", icon: Globe, label: "Website", id: "btn-global-web" }
-              ].map(({ href, icon: Icon, label, id }) => (
+            {/* Dynamic Social Media Links */}
+            <div className="flex items-center gap-3 flex-wrap" id="socmed-deck">
+              {socialLinks.map(({ key, icon: Icon, label, href }) => (
                 <a
-                  key={id}
+                  key={key}
                   href={href}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -175,7 +206,7 @@ export default function Footer({ theme = "dark" }: { theme?: "light" | "dark" })
                       : "bg-white border-slate-200 text-slate-400"
                   }`}
                   aria-label={label}
-                  id={id}
+                  id={`btn-social-${key}`}
                 >
                   <Icon className="w-4 h-4" />
                 </a>
@@ -188,11 +219,24 @@ export default function Footer({ theme = "dark" }: { theme?: "light" | "dark" })
         <div className={`mt-16 pt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-4 ${
           isDark ? "border-white/5" : "border-slate-200"
         }`} id="footer-bottom-deck">
-          <p className={`text-[10px] font-mono uppercase tracking-widest text-center sm:text-left ${
-            isDark ? "text-slate-500" : "text-slate-400"
-          }`}>
-            © 2026 SMKN 1 Wonogiri. All Rights Reserved. Crafted for National Prestige.
-          </p>
+          <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-6 text-center sm:text-left">
+            <p className={`text-[10px] font-mono uppercase tracking-widest ${
+              isDark ? "text-slate-500" : "text-slate-400"
+            }`}>
+              © 2026 SMKN 1 Wonogiri. All Rights Reserved. Crafted for National Prestige.
+            </p>
+            <span className={`hidden sm:block h-3 w-px ${isDark ? "bg-slate-800" : "bg-slate-300"}`} />
+            <p className={`text-[10px] font-mono tracking-widest ${
+              isDark ? "text-slate-600" : "text-slate-400"
+            }`}>
+              Powered By:{" "}
+              <span className={`font-bold ${isDark ? "text-amber-500/70" : "text-amber-600/80"}`}>
+                Dave_Exe
+              </span>{" "}
+              <span className={isDark ? "text-slate-700" : "text-slate-300"}>·</span>{" "}
+              <span className={isDark ? "text-slate-500" : "text-slate-400"}>JOBEN ENTERPRISE</span>
+            </p>
+          </div>
 
           <button
             onClick={scrollToTop}

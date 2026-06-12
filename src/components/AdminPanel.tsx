@@ -30,7 +30,7 @@ export default function AdminPanel({
   const [loginLoading, setLoginLoading] = useState(false);
 
   // Active Admin Sidebar Tab
-  const [activeTab, setActiveTab] = useState<"competencies" | "milestones" | "gallery" | "alumni" | "news" | "partners" | "branding" | "kepala-sekolah" | "manajemen-sekolah" | "visi-misi">("competencies");
+  const [activeTab, setActiveTab] = useState<"competencies" | "milestones" | "gallery" | "alumni" | "news" | "partners" | "branding" | "kepala-sekolah" | "manajemen-sekolah" | "visi-misi" | "social-media">("competencies");
   const { branding, saveBranding, getLogo } = useBranding();
   const [brandingDraft, setBrandingDraft] = useState<Branding | null>(null);
   const [brandingLoading, setBrandingLoading] = useState(false);
@@ -54,6 +54,10 @@ export default function AdminPanel({
   const [manajemenLoading, setManajemenLoading] = useState(false);
   const [visiMisi, setVisiMisi] = useState<VisiMisiData>({ visi: "", misi: [] });
   const [visiMisiLoading, setVisiMisiLoading] = useState(false);
+
+  interface SocialMediaData { instagram: string; youtube: string; website: string; facebook: string; tiktok: string; twitter: string; }
+  const [socialMedia, setSocialMedia] = useState<SocialMediaData>({ instagram: "", youtube: "", website: "", facebook: "", tiktok: "", twitter: "" });
+  const [socialMediaLoading, setSocialMediaLoading] = useState(false);
 
   // Editing state
   const [editingItem, setEditingItem] = useState<any>(null);
@@ -247,6 +251,7 @@ export default function AdminPanel({
       fetch("/api/kepala-sekolah").then(r => r.json()).then(d => setKepalaSekolah(d)).catch(() => {});
       fetch("/api/manajemen-sekolah").then(r => r.json()).then(d => setManajemenSekolah(d)).catch(() => {});
       fetch("/api/visi-misi").then(r => r.json()).then(d => setVisiMisi(d)).catch(() => {});
+      fetch("/api/social-media").then(r => r.json()).then(d => setSocialMedia(d)).catch(() => {});
     }
   }, [isLoggedIn]);
 
@@ -725,7 +730,8 @@ export default function AdminPanel({
                     { id: "branding", label: "Identitas & Logo", icon: Image, count: null },
                     { id: "kepala-sekolah", label: "Kepala Sekolah", icon: User, count: null },
                     { id: "manajemen-sekolah", label: "Manajemen Sekolah", icon: Users, count: null },
-                    { id: "visi-misi", label: "Visi & Misi", icon: Target, count: null }
+                    { id: "visi-misi", label: "Visi & Misi", icon: Target, count: null },
+                    { id: "social-media", label: "Media Sosial", icon: Globe, count: null }
                   ].map((tab) => {
                     const TabIcon = tab.icon;
                     const isActive = activeTab === tab.id;
@@ -803,6 +809,7 @@ export default function AdminPanel({
                     {activeTab === "kepala-sekolah" && "Profil & Sambutan Kepala Sekolah"}
                     {activeTab === "manajemen-sekolah" && "Manajemen & Pimpinan Sekolah"}
                     {activeTab === "visi-misi" && "Visi & Misi Sekolah"}
+                    {activeTab === "social-media" && "Kelola Tautan Media Sosial"}
                   </h2>
                   <p className={`text-xs ${isDarkTheme ? "text-slate-400" : "text-slate-500"} font-light mt-0.5`}>
                     {activeTab === "competencies" && "Perbarui deskripsi, kurikulum, bidang karir, and detail program keahlian sekolah."}
@@ -815,10 +822,11 @@ export default function AdminPanel({
                     {activeTab === "kepala-sekolah" && "Edit foto, nama, NIP, dan teks sambutan Kepala Sekolah yang tampil di halaman Kepala Sekolah."}
                     {activeTab === "manajemen-sekolah" && "Perbarui foto dan nama untuk setiap jabatan pimpinan yang tampil di halaman Manajemen Sekolah."}
                     {activeTab === "visi-misi" && "Edit teks Visi dan butir-butir Misi sekolah yang tampil di halaman Visi & Misi."}
+                    {activeTab === "social-media" && "Atur URL akun Instagram, YouTube, Facebook, dan Website resmi yang tampil di footer portal."}
                   </p>
                 </div>
 
-                {!isAddingNew && !editingItem && activeTab !== "branding" && activeTab !== "kepala-sekolah" && activeTab !== "manajemen-sekolah" && activeTab !== "visi-misi" && (
+                {!isAddingNew && !editingItem && activeTab !== "branding" && activeTab !== "kepala-sekolah" && activeTab !== "manajemen-sekolah" && activeTab !== "visi-misi" && activeTab !== "social-media" && (
                   <button
                     onClick={() => {
                       setIsAddingNew(true);
@@ -2544,6 +2552,82 @@ export default function AdminPanel({
                       })}
                     </div>
                   )}
+
+                  {/* SOCIAL MEDIA MANAGER */}
+                  {activeTab === "social-media" && (() => {
+                    const socialFields = [
+                      { key: "instagram" as const, label: "Instagram", placeholder: "https://instagram.com/smkn1wonogiri", icon: "📸" },
+                      { key: "youtube" as const, label: "YouTube", placeholder: "https://youtube.com/@smkn1wonogiri", icon: "▶️" },
+                      { key: "facebook" as const, label: "Facebook", placeholder: "https://facebook.com/smkn1wonogiri", icon: "👥" },
+                      { key: "tiktok" as const, label: "TikTok", placeholder: "https://tiktok.com/@smkn1wonogiri", icon: "🎵" },
+                      { key: "twitter" as const, label: "Twitter / X", placeholder: "https://twitter.com/smkn1wonogiri", icon: "🐦" },
+                      { key: "website" as const, label: "Website Resmi", placeholder: "https://smkn1wonogiri.sch.id", icon: "🌐" },
+                    ];
+                    return (
+                      <div className={`rounded-2xl border p-6 md:p-8 text-left ${isDarkTheme ? "bg-slate-900 border-white/5" : "bg-white border-slate-200"}`}>
+                        <div className="mb-6 flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isDarkTheme ? "bg-amber-500/10" : "bg-amber-50"}`}>
+                            <Globe className="w-5 h-5 text-amber-500" />
+                          </div>
+                          <div>
+                            <h3 className={`text-sm font-bold ${isDarkTheme ? "text-white" : "text-slate-900"}`}>Tautan Media Sosial & Website</h3>
+                            <p className={`text-xs mt-0.5 ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>URL yang diisi akan tampil sebagai ikon di footer halaman utama. Kosongkan jika tidak digunakan.</p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {socialFields.map(({ key, label, placeholder, icon }) => (
+                            <div key={key} className="flex flex-col gap-1.5">
+                              <label className={`text-xs font-semibold font-mono uppercase tracking-wider ${isDarkTheme ? "text-slate-400" : "text-slate-500"}`}>
+                                {icon} {label}
+                              </label>
+                              <input
+                                type="url"
+                                value={socialMedia[key]}
+                                onChange={(e) => setSocialMedia(prev => ({ ...prev, [key]: e.target.value }))}
+                                placeholder={placeholder}
+                                className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-mono transition-colors outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500/50 ${
+                                  isDarkTheme
+                                    ? "bg-slate-800 border-white/5 text-slate-200 placeholder-slate-600"
+                                    : "bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-400"
+                                }`}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-6 flex items-center gap-3">
+                          <button
+                            onClick={async () => {
+                              setSocialMediaLoading(true);
+                              try {
+                                const res = await fetch("/api/social-media", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify(socialMedia)
+                                });
+                                if (res.ok) {
+                                  showFeedback("Tautan media sosial berhasil disimpan!", "success");
+                                } else {
+                                  showFeedback("Gagal menyimpan tautan. Coba lagi!", "error");
+                                }
+                              } catch {
+                                showFeedback("Koneksi gagal. Periksa server!", "error");
+                              } finally {
+                                setSocialMediaLoading(false);
+                              }
+                            }}
+                            disabled={socialMediaLoading}
+                            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs uppercase tracking-widest transition-colors disabled:opacity-60 cursor-pointer"
+                          >
+                            {socialMediaLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                            {socialMediaLoading ? "Menyimpan..." : "Simpan Tautan"}
+                          </button>
+                          <p className={`text-[10px] font-mono ${isDarkTheme ? "text-slate-600" : "text-slate-400"}`}>
+                            Perubahan akan tampil di Footer halaman utama.
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Empty Alert Checker if superadmin deletes everything */}
                   {((activeTab === "competencies" && competencies.length === 0) ||
