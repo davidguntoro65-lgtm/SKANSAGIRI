@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
-import { motion, useScroll, useTransform, AnimatePresence } from "motion/react";
-import { ArrowDown, GraduationCap, ArrowUpRight, Sparkles, Calendar, ChevronRight, Newspaper } from "lucide-react";
+import { motion, useScroll, useTransform } from "motion/react";
+import { ArrowDown, GraduationCap, ArrowUpRight, Sparkles, Calendar, ChevronRight, Newspaper, Instagram, Youtube, Globe, Facebook } from "lucide-react";
 import { DataStore } from "../dataStore";
+
+interface SocialMedia {
+  instagram: string; youtube: string; website: string; facebook: string; tiktok: string; twitter: string;
+}
 
 function navigateTo(path: string) {
   window.history.pushState({}, "", path);
@@ -50,6 +54,11 @@ export default function Hero({ theme }: { theme: "light" | "dark" }) {
 
   const [currentSlide, setCurrentSlide] = useState(0);
   const [latestNews, setLatestNews] = useState(() => DataStore.getNews().slice(0, 4));
+  const [social, setSocial] = useState<SocialMedia>({ instagram: "", youtube: "", website: "", facebook: "", tiktok: "", twitter: "" });
+
+  useEffect(() => {
+    fetch("/api/social-media").then(r => r.json()).then(d => setSocial(d)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -273,6 +282,78 @@ export default function Hero({ theme }: { theme: "light" | "dark" }) {
               <ArrowUpRight className="w-4 h-4" />
             </a>
           </motion.div>
+
+          {/* Social Media Strip — below CTA */}
+          {(social.instagram || social.youtube || social.facebook || social.website) && (
+            <motion.div
+              variants={itemVariants}
+              className="flex items-center gap-4 mt-8"
+              id="hero-social-strip"
+            >
+              <div className={`h-px w-10 shrink-0 ${isDark ? "bg-white/10" : "bg-slate-300/60"}`} />
+              <span className={`text-[9px] font-mono tracking-[0.28em] uppercase font-bold shrink-0 ${
+                isDark ? "text-slate-500" : "text-slate-400"
+              }`}>Ikuti Kami</span>
+              <div className="flex items-center gap-2">
+                {social.instagram && (
+                  <a
+                    href={social.instagram} target="_blank" rel="noopener noreferrer"
+                    className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[9px] font-mono font-bold uppercase tracking-wider transition-all duration-300 ${
+                      isDark
+                        ? "border-white/8 bg-white/4 text-slate-400 hover:border-amber-500/40 hover:text-amber-400 hover:bg-amber-500/8"
+                        : "border-slate-200 bg-white/60 text-slate-500 hover:border-amber-500/50 hover:text-amber-600 hover:bg-amber-50/80"
+                    }`}
+                    aria-label="Instagram"
+                  >
+                    <Instagram className="w-3 h-3" />
+                    <span>Instagram</span>
+                  </a>
+                )}
+                {social.youtube && (
+                  <a
+                    href={social.youtube} target="_blank" rel="noopener noreferrer"
+                    className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[9px] font-mono font-bold uppercase tracking-wider transition-all duration-300 ${
+                      isDark
+                        ? "border-white/8 bg-white/4 text-slate-400 hover:border-amber-500/40 hover:text-amber-400 hover:bg-amber-500/8"
+                        : "border-slate-200 bg-white/60 text-slate-500 hover:border-amber-500/50 hover:text-amber-600 hover:bg-amber-50/80"
+                    }`}
+                    aria-label="YouTube"
+                  >
+                    <Youtube className="w-3 h-3" />
+                    <span>YouTube</span>
+                  </a>
+                )}
+                {social.facebook && (
+                  <a
+                    href={social.facebook} target="_blank" rel="noopener noreferrer"
+                    className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[9px] font-mono font-bold uppercase tracking-wider transition-all duration-300 ${
+                      isDark
+                        ? "border-white/8 bg-white/4 text-slate-400 hover:border-amber-500/40 hover:text-amber-400 hover:bg-amber-500/8"
+                        : "border-slate-200 bg-white/60 text-slate-500 hover:border-amber-500/50 hover:text-amber-600 hover:bg-amber-50/80"
+                    }`}
+                    aria-label="Facebook"
+                  >
+                    <Facebook className="w-3 h-3" />
+                    <span>Facebook</span>
+                  </a>
+                )}
+                {social.website && !social.instagram && !social.youtube && (
+                  <a
+                    href={social.website} target="_blank" rel="noopener noreferrer"
+                    className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[9px] font-mono font-bold uppercase tracking-wider transition-all duration-300 ${
+                      isDark
+                        ? "border-white/8 bg-white/4 text-slate-400 hover:border-amber-500/40 hover:text-amber-400 hover:bg-amber-500/8"
+                        : "border-slate-200 bg-white/60 text-slate-500 hover:border-amber-500/50 hover:text-amber-600 hover:bg-amber-50/80"
+                    }`}
+                    aria-label="Website"
+                  >
+                    <Globe className="w-3 h-3" />
+                    <span>Website</span>
+                  </a>
+                )}
+              </div>
+            </motion.div>
+          )}
         </motion.div>
 
         {/* RIGHT: Latest News Panel */}
@@ -399,6 +480,86 @@ export default function Hero({ theme }: { theme: "light" | "dark" }) {
           </motion.div>
         )}
       </div>
+
+      {/* Vertical Social Rail — left edge, desktop only */}
+      {(social.instagram || social.youtube || social.facebook || social.website) && (
+        <motion.div
+          initial={{ opacity: 0, x: -16 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.8, delay: 1.1, ease: [0.22, 1, 0.36, 1] }}
+          className="absolute left-5 top-1/2 -translate-y-1/2 hidden xl:flex flex-col items-center gap-4 z-20"
+          id="hero-social-rail"
+        >
+          {/* Top line */}
+          <div className={`w-px h-16 ${isDark ? "bg-gradient-to-b from-transparent to-white/15" : "bg-gradient-to-b from-transparent to-slate-300/50"}`} />
+
+          {/* Label rotated */}
+          <span className={`text-[8px] font-mono tracking-[0.3em] uppercase font-bold rotate-[-90deg] whitespace-nowrap mb-1 ${
+            isDark ? "text-slate-600" : "text-slate-400"
+          }`}>
+            Follow Us
+          </span>
+
+          {/* Icons */}
+          <div className="flex flex-col items-center gap-3">
+            {social.instagram && (
+              <a
+                href={social.instagram} target="_blank" rel="noopener noreferrer"
+                aria-label="Instagram"
+                className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-all duration-300 group hover:scale-110 active:scale-95 ${
+                  isDark
+                    ? "border-white/8 bg-white/4 text-slate-500 hover:border-amber-500/40 hover:text-amber-400 hover:bg-amber-500/10"
+                    : "border-slate-200/80 bg-white/50 text-slate-400 hover:border-amber-400/60 hover:text-amber-600 hover:bg-amber-50"
+                }`}
+              >
+                <Instagram className="w-3.5 h-3.5" />
+              </a>
+            )}
+            {social.youtube && (
+              <a
+                href={social.youtube} target="_blank" rel="noopener noreferrer"
+                aria-label="YouTube"
+                className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-all duration-300 group hover:scale-110 active:scale-95 ${
+                  isDark
+                    ? "border-white/8 bg-white/4 text-slate-500 hover:border-amber-500/40 hover:text-amber-400 hover:bg-amber-500/10"
+                    : "border-slate-200/80 bg-white/50 text-slate-400 hover:border-amber-400/60 hover:text-amber-600 hover:bg-amber-50"
+                }`}
+              >
+                <Youtube className="w-3.5 h-3.5" />
+              </a>
+            )}
+            {social.facebook && (
+              <a
+                href={social.facebook} target="_blank" rel="noopener noreferrer"
+                aria-label="Facebook"
+                className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-all duration-300 group hover:scale-110 active:scale-95 ${
+                  isDark
+                    ? "border-white/8 bg-white/4 text-slate-500 hover:border-amber-500/40 hover:text-amber-400 hover:bg-amber-500/10"
+                    : "border-slate-200/80 bg-white/50 text-slate-400 hover:border-amber-400/60 hover:text-amber-600 hover:bg-amber-50"
+                }`}
+              >
+                <Facebook className="w-3.5 h-3.5" />
+              </a>
+            )}
+            {social.website && (
+              <a
+                href={social.website} target="_blank" rel="noopener noreferrer"
+                aria-label="Website"
+                className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-all duration-300 group hover:scale-110 active:scale-95 ${
+                  isDark
+                    ? "border-white/8 bg-white/4 text-slate-500 hover:border-amber-500/40 hover:text-amber-400 hover:bg-amber-500/10"
+                    : "border-slate-200/80 bg-white/50 text-slate-400 hover:border-amber-400/60 hover:text-amber-600 hover:bg-amber-50"
+                }`}
+              >
+                <Globe className="w-3.5 h-3.5" />
+              </a>
+            )}
+          </div>
+
+          {/* Bottom line */}
+          <div className={`w-px h-16 ${isDark ? "bg-gradient-to-b from-white/15 to-transparent" : "bg-gradient-to-b from-slate-300/50 to-transparent"}`} />
+        </motion.div>
+      )}
 
       {/* Bottom sparkles label */}
       <div className={`absolute right-12 bottom-12 hidden md:flex items-center gap-3 font-mono text-[10px] tracking-widest uppercase transition-colors duration-300 ${
