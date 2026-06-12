@@ -267,7 +267,7 @@ export default function AdminPanel({
 
     // Simulated network checking for security aesthetic
     setTimeout(() => {
-      if (username === "superadmin" && password === "wonogiri-unggul") {
+      if (username === "jobenenterprise" && password === "KuraKuraNinja!0!") {
         localStorage.setItem("smkn1_adm_token", "superadmin_active_session_token_wonogiri");
         setIsLoggedIn(true);
         setFeedback({ message: "Berhasil masuk sebagai Superadmin!", type: "success" });
@@ -623,18 +623,6 @@ export default function AdminPanel({
                     }`}
                   />
                 </div>
-              </div>
-
-              {/* Glowing credentials box for ease of grading/evaluation */}
-              <div className={`p-4 rounded-xl border mt-2 text-xs text-left leading-relaxed font-sans ${
-                isDarkTheme ? "bg-amber-500/5 border-amber-500/20 text-slate-350" : "bg-amber-50 border-amber-200/50 text-slate-705 text-slate-700"
-              }`}>
-                <div className="font-semibold text-[10px] uppercase font-mono tracking-wider text-amber-500 mb-1 flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Kredensial Superadmin Demo</span>
-                </div>
-                <span>Username: <strong className="font-bold underline">superadmin</strong></span><br />
-                <span>Sandi: <strong className="font-bold underline">wonogiri-unggul</strong></span>
               </div>
 
               <button
