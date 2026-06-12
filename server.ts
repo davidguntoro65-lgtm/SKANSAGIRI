@@ -76,6 +76,9 @@ initJsonFile(filePaths.manajemenSekolah, [
   { id: "waka-humas", jabatan: "Waka Humas", nama: "-", foto: null },
   { id: "kepala-tu", jabatan: "Kepala Tata Usaha", nama: "-", foto: null }
 ]);
+const aboutPath = path.join(DATA_DIR, "about.json");
+initJsonFile(aboutPath, { foto: null, fotoX: 50, fotoY: 50, fotoScale: 100 });
+
 initJsonFile(filePaths.socialMedia, {
   instagram: "https://instagram.com/smkn1wonogiri",
   youtube: "https://youtube.com/@smkn1wonogiri",
@@ -305,6 +308,23 @@ app.post("/api/social-media", (req, res) => {
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: "Failed to save social media: " + e.message });
+  }
+});
+
+// --- ABOUT SECTION API ---
+app.get("/api/about", (req, res) => {
+  try {
+    res.json(JSON.parse(fs.readFileSync(aboutPath, "utf-8")));
+  } catch (e: any) {
+    res.status(500).json({ error: "Failed to read about: " + e.message });
+  }
+});
+app.post("/api/about", (req, res) => {
+  try {
+    fs.writeFileSync(aboutPath, JSON.stringify(req.body, null, 2), "utf-8");
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: "Failed to save about: " + e.message });
   }
 });
 

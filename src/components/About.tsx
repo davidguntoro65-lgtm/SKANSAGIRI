@@ -1,9 +1,27 @@
+import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { Landmark, ArrowRight, ShieldCheck, Award } from "lucide-react";
 import { GradientMesh, BusinessIllustration, FloatingShapes } from "./BackgroundSystem";
 
+interface AboutData {
+  foto: string | null;
+  fotoX: number;
+  fotoY: number;
+  fotoScale: number;
+}
+
 export default function About({ theme = "dark" }: { theme?: "light" | "dark" }) {
   const isDark = theme === "dark";
+  const [aboutData, setAboutData] = useState<AboutData>({ foto: null, fotoX: 50, fotoY: 50, fotoScale: 100 });
+
+  useEffect(() => {
+    fetch("/api/about")
+      .then(r => r.json())
+      .then(d => setAboutData(d))
+      .catch(() => {});
+  }, []);
+
+  const fallbackSrc = "https://images.unsplash.com/photo-1562774053-701939374585?auto=format&fit=crop&w=1000&q=80";
 
   return (
     <section
@@ -35,16 +53,34 @@ export default function About({ theme = "dark" }: { theme?: "light" | "dark" }) 
             <div className={`relative overflow-hidden rounded-2xl aspect-[4/5] md:aspect-[4/3] lg:aspect-[3/4] shadow-2xl ${
               isDark ? "shadow-black/80" : "shadow-slate-200/80"
             }`}>
+              {/* Photo */}
               <img
-                src="https://images.unsplash.com/photo-1562774053-701939374585?auto=format&fit=crop&w=1000&q=80"
-                alt="SMKN 1 Wonogiri Premium Building"
+                src={aboutData.foto || fallbackSrc}
+                alt="SMKN 1 Wonogiri"
                 referrerPolicy="no-referrer"
-                className="w-full h-full object-cover grayscale-[20%] group-hover:grayscale-0 group-hover:scale-105 duration-700 transition-all"
+                className="w-full h-full object-cover transition-all duration-700 group-hover:scale-105"
+                style={{
+                  objectPosition: `${aboutData.fotoX}% ${aboutData.fotoY}%`,
+                  transform: `scale(${aboutData.fotoScale / 100})`,
+                  transformOrigin: `${aboutData.fotoX}% ${aboutData.fotoY}%`,
+                  filter: "contrast(1.06) saturate(1.08) brightness(1.02)",
+                }}
               />
-              <div className={`absolute inset-0 bg-gradient-to-t ${
-                isDark ? "from-slate-950 via-slate-950/20 to-transparent" : "from-slate-900/60 via-transparent to-transparent"
+
+              {/* Vignette overlay — subtle dark edges */}
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  background: "radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.38) 100%)",
+                }}
+              />
+
+              {/* Bottom gradient for card readability */}
+              <div className={`absolute inset-0 bg-gradient-to-t pointer-events-none ${
+                isDark ? "from-slate-950 via-slate-950/20 to-transparent" : "from-slate-900/55 via-transparent to-transparent"
               }`} />
 
+              {/* Status card */}
               <div className={`absolute bottom-6 left-6 right-6 p-6 rounded-xl border flex items-center justify-between backdrop-blur-md ${
                 isDark ? "bg-slate-950/80 border-white/10" : "bg-white/90 border-slate-200/80"
               }`}>

@@ -30,7 +30,7 @@ export default function AdminPanel({
   const [loginLoading, setLoginLoading] = useState(false);
 
   // Active Admin Sidebar Tab
-  const [activeTab, setActiveTab] = useState<"competencies" | "milestones" | "gallery" | "alumni" | "news" | "partners" | "branding" | "kepala-sekolah" | "manajemen-sekolah" | "visi-misi" | "social-media">("competencies");
+  const [activeTab, setActiveTab] = useState<"competencies" | "milestones" | "gallery" | "alumni" | "news" | "partners" | "branding" | "about" | "kepala-sekolah" | "manajemen-sekolah" | "visi-misi" | "social-media">("competencies");
   const { branding, saveBranding, getLogo } = useBranding();
   const [brandingDraft, setBrandingDraft] = useState<Branding | null>(null);
   const [brandingLoading, setBrandingLoading] = useState(false);
@@ -44,9 +44,13 @@ export default function AdminPanel({
   const [partners, setPartners] = useState<IndustriPartner[]>([]);
 
   // Tentang section datasets
+  interface AboutData { foto: string | null; fotoX: number; fotoY: number; fotoScale: number; }
   interface KepalaSekolahData { nama: string; nip: string; foto: string | null; sambutan: string; }
   interface ManajemenItem { id: string; jabatan: string; nama: string; foto: string | null; }
   interface VisiMisiData { visi: string; misi: string[]; }
+
+  const [aboutData, setAboutData] = useState<AboutData>({ foto: null, fotoX: 50, fotoY: 50, fotoScale: 100 });
+  const [aboutLoading, setAboutLoading] = useState(false);
 
   const [kepalaSekolah, setKepalaSekolah] = useState<KepalaSekolahData>({ nama: "", nip: "", foto: null, sambutan: "" });
   const [kepalaLoading, setKepalaLoading] = useState(false);
@@ -248,6 +252,7 @@ export default function AdminPanel({
       setAlumni(DataStore.getAlumni());
       setNews(DataStore.getNews());
       setPartners(DataStore.getPartners());
+      fetch("/api/about").then(r => r.json()).then(d => setAboutData(d)).catch(() => {});
       fetch("/api/kepala-sekolah").then(r => r.json()).then(d => setKepalaSekolah(d)).catch(() => {});
       fetch("/api/manajemen-sekolah").then(r => r.json()).then(d => setManajemenSekolah(d)).catch(() => {});
       fetch("/api/visi-misi").then(r => r.json()).then(d => setVisiMisi(d)).catch(() => {});
@@ -728,6 +733,7 @@ export default function AdminPanel({
                     { id: "news", label: "Warta & Agenda", icon: Newspaper, count: news.length },
                     { id: "partners", label: "Mitra Dunia Industri", icon: Handshake, count: partners.length },
                     { id: "branding", label: "Identitas & Logo", icon: Image, count: null },
+                    { id: "about", label: "Foto Gedung Sekolah", icon: Camera, count: null },
                     { id: "kepala-sekolah", label: "Kepala Sekolah", icon: User, count: null },
                     { id: "manajemen-sekolah", label: "Manajemen Sekolah", icon: Users, count: null },
                     { id: "visi-misi", label: "Visi & Misi", icon: Target, count: null },
@@ -806,6 +812,7 @@ export default function AdminPanel({
                     {activeTab === "news" && "Kelola Warta & Agenda Utama"}
                     {activeTab === "partners" && "Kelola Mitra Dunia Industri"}
                     {activeTab === "branding" && "Identitas Visual & Logo Sekolah"}
+                    {activeTab === "about" && "Foto Gedung Sekolah (Seksi Tentang)"}
                     {activeTab === "kepala-sekolah" && "Profil & Sambutan Kepala Sekolah"}
                     {activeTab === "manajemen-sekolah" && "Manajemen & Pimpinan Sekolah"}
                     {activeTab === "visi-misi" && "Visi & Misi Sekolah"}
@@ -819,6 +826,7 @@ export default function AdminPanel({
                     {activeTab === "news" && "Atur artikel warta, rilis berita baru, edit pencapaian murid terdepan di media cetak."}
                     {activeTab === "partners" && "Tambah, edit, atau hapus mitra industri yang tampil di bagian Dunia Industri halaman utama."}
                     {activeTab === "branding" && "Upload logo sekolah untuk Navbar, Footer, dan seluruh komponen branding portal."}
+                    {activeTab === "about" && "Upload foto gedung sekolah dan atur posisi serta zoom untuk tampilan terbaik di seksi Tentang halaman utama."}
                     {activeTab === "kepala-sekolah" && "Edit foto, nama, NIP, dan teks sambutan Kepala Sekolah yang tampil di halaman Kepala Sekolah."}
                     {activeTab === "manajemen-sekolah" && "Perbarui foto dan nama untuk setiap jabatan pimpinan yang tampil di halaman Manajemen Sekolah."}
                     {activeTab === "visi-misi" && "Edit teks Visi dan butir-butir Misi sekolah yang tampil di halaman Visi & Misi."}
@@ -826,7 +834,7 @@ export default function AdminPanel({
                   </p>
                 </div>
 
-                {!isAddingNew && !editingItem && activeTab !== "branding" && activeTab !== "kepala-sekolah" && activeTab !== "manajemen-sekolah" && activeTab !== "visi-misi" && activeTab !== "social-media" && (
+                {!isAddingNew && !editingItem && activeTab !== "branding" && activeTab !== "about" && activeTab !== "kepala-sekolah" && activeTab !== "manajemen-sekolah" && activeTab !== "visi-misi" && activeTab !== "social-media" && (
                   <button
                     onClick={() => {
                       setIsAddingNew(true);
@@ -2262,6 +2270,144 @@ export default function AdminPanel({
                             <span className="text-[10px] font-mono text-amber-500">● Perubahan belum disimpan</span>
                           )}
                         </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* ABOUT / FOTO GEDUNG PANEL */}
+                  {activeTab === "about" && (() => {
+                    const handleAboutFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        if (ev.target?.result) setAboutData(prev => ({ ...prev, foto: ev.target!.result as string }));
+                      };
+                      reader.readAsDataURL(file);
+                    };
+                    const handleSaveAbout = async () => {
+                      setAboutLoading(true);
+                      try {
+                        await fetch("/api/about", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(aboutData) });
+                        showFeedback("Foto gedung berhasil disimpan!", "success");
+                      } catch { showFeedback("Gagal menyimpan!", "error"); }
+                      setAboutLoading(false);
+                    };
+                    const fallbackSrc = "https://images.unsplash.com/photo-1562774053-701939374585?auto=format&fit=crop&w=1000&q=80";
+                    return (
+                      <div className="space-y-8 max-w-3xl">
+
+                        {/* Live Preview */}
+                        <div className={`p-6 rounded-2xl border ${isDarkTheme ? "bg-slate-900 border-white/5" : "bg-white border-slate-200"}`}>
+                          <h4 className={`text-xs font-bold mb-4 ${isDarkTheme ? "text-white" : "text-slate-900"}`}>Pratinjau Langsung</h4>
+                          <div className="relative overflow-hidden rounded-xl aspect-[4/3] shadow-xl">
+                            <img
+                              src={aboutData.foto || fallbackSrc}
+                              alt="Preview"
+                              className="w-full h-full object-cover"
+                              style={{
+                                objectPosition: `${aboutData.fotoX}% ${aboutData.fotoY}%`,
+                                transform: `scale(${aboutData.fotoScale / 100})`,
+                                transformOrigin: `${aboutData.fotoX}% ${aboutData.fotoY}%`,
+                                filter: "contrast(1.06) saturate(1.08) brightness(1.02)",
+                              }}
+                            />
+                            <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.38) 100%)" }} />
+                            <div className="absolute inset-0 bg-gradient-to-t from-slate-900/55 via-transparent to-transparent pointer-events-none" />
+                            <span className="absolute top-3 right-3 text-[9px] font-mono bg-black/50 text-white px-2 py-1 rounded-full">PRATINJAU</span>
+                          </div>
+                        </div>
+
+                        {/* Photo Upload */}
+                        <div className={`p-6 rounded-2xl border ${isDarkTheme ? "bg-slate-900 border-white/5" : "bg-white border-slate-200"}`}>
+                          <h4 className={`text-xs font-bold mb-4 ${isDarkTheme ? "text-white" : "text-slate-900"}`}>Upload Foto Gedung</h4>
+                          <div className="flex flex-col sm:flex-row gap-4 items-start">
+                            <div className="flex flex-col gap-3 flex-1">
+                              <label className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl border cursor-pointer transition-all text-[10px] font-mono uppercase tracking-widest font-bold ${isDarkTheme ? "border-white/10 text-slate-300 hover:bg-white/5" : "border-slate-300 text-slate-700 hover:bg-slate-100"}`}>
+                                <Upload className="w-3.5 h-3.5" />
+                                {aboutData.foto ? "Ganti Foto" : "Upload Foto Gedung"}
+                                <input type="file" accept="image/*" className="hidden" onChange={handleAboutFoto} />
+                              </label>
+                              {aboutData.foto && (
+                                <button onClick={() => setAboutData(prev => ({ ...prev, foto: null }))} className="flex items-center justify-center gap-2 py-2 px-4 rounded-xl border border-red-500/20 text-red-500 text-[10px] font-mono hover:bg-red-500/5 transition-colors">
+                                  <Trash2 className="w-3.5 h-3.5" /> Gunakan Foto Default
+                                </button>
+                              )}
+                              <p className={`text-[10px] font-mono ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>
+                                Format: JPG, PNG, WebP. Resolusi tinggi disarankan (min. 1200px). Maks 20MB.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Position & Zoom Controls */}
+                        <div className={`p-6 rounded-2xl border space-y-6 ${isDarkTheme ? "bg-slate-900 border-white/5" : "bg-white border-slate-200"}`}>
+                          <h4 className={`text-xs font-bold ${isDarkTheme ? "text-white" : "text-slate-900"}`}>Posisi & Zoom Foto</h4>
+
+                          {/* X Position */}
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                              <label className={`text-[10px] font-mono uppercase tracking-widest ${isDarkTheme ? "text-slate-400" : "text-slate-500"}`}>Posisi Horizontal</label>
+                              <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${isDarkTheme ? "bg-slate-800 text-amber-400" : "bg-slate-100 text-amber-600"}`}>{aboutData.fotoX}%</span>
+                            </div>
+                            <input
+                              type="range" min={0} max={100} step={1}
+                              value={aboutData.fotoX}
+                              onChange={e => setAboutData(prev => ({ ...prev, fotoX: Number(e.target.value) }))}
+                              className="w-full accent-amber-500 cursor-pointer"
+                            />
+                            <div className={`flex justify-between text-[9px] font-mono ${isDarkTheme ? "text-slate-600" : "text-slate-400"}`}>
+                              <span>Kiri</span><span>Tengah</span><span>Kanan</span>
+                            </div>
+                          </div>
+
+                          {/* Y Position */}
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                              <label className={`text-[10px] font-mono uppercase tracking-widest ${isDarkTheme ? "text-slate-400" : "text-slate-500"}`}>Posisi Vertikal</label>
+                              <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${isDarkTheme ? "bg-slate-800 text-amber-400" : "bg-slate-100 text-amber-600"}`}>{aboutData.fotoY}%</span>
+                            </div>
+                            <input
+                              type="range" min={0} max={100} step={1}
+                              value={aboutData.fotoY}
+                              onChange={e => setAboutData(prev => ({ ...prev, fotoY: Number(e.target.value) }))}
+                              className="w-full accent-amber-500 cursor-pointer"
+                            />
+                            <div className={`flex justify-between text-[9px] font-mono ${isDarkTheme ? "text-slate-600" : "text-slate-400"}`}>
+                              <span>Atas</span><span>Tengah</span><span>Bawah</span>
+                            </div>
+                          </div>
+
+                          {/* Scale / Zoom */}
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                              <label className={`text-[10px] font-mono uppercase tracking-widest ${isDarkTheme ? "text-slate-400" : "text-slate-500"}`}>Zoom</label>
+                              <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${isDarkTheme ? "bg-slate-800 text-amber-400" : "bg-slate-100 text-amber-600"}`}>{aboutData.fotoScale}%</span>
+                            </div>
+                            <input
+                              type="range" min={100} max={200} step={1}
+                              value={aboutData.fotoScale}
+                              onChange={e => setAboutData(prev => ({ ...prev, fotoScale: Number(e.target.value) }))}
+                              className="w-full accent-amber-500 cursor-pointer"
+                            />
+                            <div className={`flex justify-between text-[9px] font-mono ${isDarkTheme ? "text-slate-600" : "text-slate-400"}`}>
+                              <span>Normal (100%)</span><span>2× Zoom</span>
+                            </div>
+                          </div>
+
+                          {/* Reset button */}
+                          <button
+                            onClick={() => setAboutData(prev => ({ ...prev, fotoX: 50, fotoY: 50, fotoScale: 100 }))}
+                            className={`text-[10px] font-mono uppercase tracking-widest px-4 py-2 rounded-lg border transition-colors ${isDarkTheme ? "border-white/10 text-slate-400 hover:bg-white/5" : "border-slate-200 text-slate-500 hover:bg-slate-100"}`}
+                          >
+                            Reset Posisi & Zoom
+                          </button>
+                        </div>
+
+                        <button onClick={handleSaveAbout} disabled={aboutLoading} className="flex items-center gap-2 px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 text-xs font-bold tracking-wider shadow-md active:scale-95 duration-150">
+                          {aboutLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                          Simpan Foto & Posisi
+                        </button>
                       </div>
                     );
                   })()}
