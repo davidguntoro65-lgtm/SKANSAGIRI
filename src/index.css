@@ -370,6 +370,14 @@
   border-color: rgba(15, 23, 42, 0.06) !important;
 }
 
+/* OSDAI button text always stays white — it has its own dark background */
+.light .osdai-btn .text-white,
+.light .osdai-btn .text-slate-100,
+.light .osdai-btn .text-slate-200,
+.light .osdai-btn .text-slate-50 {
+  color: #ffffff !important;
+}
+
 /* OSDAI Button AI Animations */
 @keyframes osdai-scan {
   0% { transform: translateX(-100%) skewX(-15deg); }
