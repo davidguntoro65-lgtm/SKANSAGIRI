@@ -21,7 +21,7 @@ export default function VisiMisi({ theme = "light" }: { theme?: "light" | "dark"
 
   return (
     <section
-      className={`min-h-screen pt-32 pb-24 transition-colors duration-500 ${
+      className={`relative z-10 min-h-screen pt-32 pb-24 transition-colors duration-500 ${
         isDark ? "bg-slate-950 text-slate-100" : "bg-white text-slate-900"
       }`}
       id="visi-misi-page"
