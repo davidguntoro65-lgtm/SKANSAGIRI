@@ -25,7 +25,7 @@ export default function KepalaSokolah({ theme = "light" }: { theme?: "light" | "
 
   return (
     <section
-      className={`min-h-screen pt-32 pb-24 transition-colors duration-500 ${
+      className={`relative z-10 min-h-screen pt-32 pb-24 transition-colors duration-500 ${
         isDark ? "bg-slate-950 text-slate-100" : "bg-white text-slate-900"
       }`}
       id="kepala-sekolah-page"
