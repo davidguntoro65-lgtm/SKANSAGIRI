@@ -23,9 +23,10 @@ import ManajemenSekolah from "./pages/ManajemenSekolah";
 import VisiMisi from "./pages/VisiMisi";
 import TracerStudi from "./pages/TracerStudi";
 import AdminTracerStudi from "./pages/AdminTracerStudi";
+import Berita from "./pages/Berita";
 import { DataStore } from "./dataStore";
 
-type AppPath = "/" | "/adm-panel" | "/tentang/kepala-sekolah" | "/tentang/manajemen-sekolah" | "/tentang/visi-misi" | "/tracer-studi" | "/admin/tracer-studi";
+type AppPath = "/" | "/adm-panel" | "/tentang/kepala-sekolah" | "/tentang/manajemen-sekolah" | "/tentang/visi-misi" | "/tracer-studi" | "/admin/tracer-studi" | "/berita";
 
 function getPath(): AppPath {
   const p = window.location.pathname;
@@ -35,6 +36,7 @@ function getPath(): AppPath {
   if (p === "/tentang/visi-misi") return "/tentang/visi-misi";
   if (p === "/tracer-studi") return "/tracer-studi";
   if (p === "/admin/tracer-studi") return "/admin/tracer-studi";
+  if (p === "/berita") return "/berita";
   const h = window.location.hash;
   if (h === "#/adm-panel" || h === "#adm-panel") return "/adm-panel";
   return "/";
@@ -159,6 +161,17 @@ export default function App() {
             window.dispatchEvent(new Event("popstate"));
           }}
         />
+      </div>
+    );
+  }
+
+  if (currentPath === "/berita") {
+    return (
+      <div className={containerClass} id="application-container">
+        <GlobalPageBg theme={theme} />
+        <Navbar theme={theme} toggleTheme={toggleTheme} />
+        <Berita theme={theme} />
+        <Footer theme={theme} />
       </div>
     );
   }
