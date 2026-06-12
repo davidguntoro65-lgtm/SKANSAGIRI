@@ -370,4 +370,38 @@
   border-color: rgba(15, 23, 42, 0.06) !important;
 }
 
-
+/* OSDAI Button AI Animations */
+@keyframes osdai-scan {
+  0% { transform: translateX(-100%) skewX(-15deg); }
+  100% { transform: translateX(300%) skewX(-15deg); }
+}
+@keyframes osdai-border-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes osdai-glow-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(99,102,241,0.5), 0 0 20px rgba(14,165,233,0.3), 0 0 40px rgba(139,92,246,0.15); }
+  50% { box-shadow: 0 0 15px rgba(99,102,241,0.8), 0 0 35px rgba(14,165,233,0.5), 0 0 60px rgba(139,92,246,0.3); }
+}
+@keyframes osdai-text-flicker {
+  0%, 95%, 100% { opacity: 1; }
+  96% { opacity: 0.7; }
+  97% { opacity: 1; }
+  98% { opacity: 0.8; }
+}
+@keyframes osdai-dot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.6); opacity: 0.6; }
+}
+.osdai-btn {
+  animation: osdai-glow-pulse 2.5s ease-in-out infinite;
+}
+.osdai-btn .osdai-scan-line {
+  animation: osdai-scan 2.2s linear infinite;
+}
+.osdai-btn .osdai-label {
+  animation: osdai-text-flicker 5s ease-in-out infinite;
+}
+.osdai-dot-1 { animation: osdai-dot 1.4s ease-in-out infinite 0s; }
+.osdai-dot-2 { animation: osdai-dot 1.4s ease-in-out infinite 0.2s; }
+.osdai-dot-3 { animation: osdai-dot 1.4s ease-in-out infinite 0.4s; }

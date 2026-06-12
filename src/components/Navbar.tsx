@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, useScroll, useSpring, AnimatePresence } from "motion/react";
-import { Menu, X, Landmark, GraduationCap, ArrowUpRight, Sun, Moon, ChevronDown, Award, Newspaper, Camera, User, Users, Target } from "lucide-react";
+import { Menu, X, Landmark, GraduationCap, ArrowUpRight, Sun, Moon, ChevronDown, Award, Newspaper, Camera, User, Users, Target, Brain } from "lucide-react";
 import { useBranding } from "../hooks/useBranding";
 
 interface NavbarProps {
@@ -325,6 +325,43 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
               </span>
               PPDB 2026 Aktif
             </div>
+
+            {/* OSDAI Intelligent Class Button */}
+            <a
+              href="https://osdai.smkn1wonogiri.sch.id"
+              target="_blank"
+              rel="noopener noreferrer"
+              id="btn-osdai-desktop"
+              className="osdai-btn relative overflow-hidden group flex items-center gap-2 px-4 py-2.5 rounded-full font-sans text-xs uppercase tracking-widest font-bold text-white transition-all duration-300 hover:scale-105 active:scale-95"
+              style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #0c1445 70%, #0f172a 100%)", border: "1px solid rgba(99,102,241,0.5)" }}
+            >
+              {/* Animated conic border ring */}
+              <span className="pointer-events-none absolute inset-0 rounded-full opacity-60 group-hover:opacity-100 transition-opacity duration-500"
+                style={{ background: "linear-gradient(135deg, rgba(14,165,233,0.15), rgba(99,102,241,0.15), rgba(139,92,246,0.15))" }} />
+
+              {/* Scan line sweep */}
+              <span className="osdai-scan-line pointer-events-none absolute top-0 left-0 h-full w-1/3"
+                style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent)" }} />
+
+              {/* Brain icon with pulse ring */}
+              <span className="relative flex items-center justify-center shrink-0">
+                <span className="absolute w-5 h-5 rounded-full bg-cyan-400/20 animate-ping" />
+                <Brain className="w-3.5 h-3.5 text-cyan-300 relative z-10" />
+              </span>
+
+              {/* Label */}
+              <span className="osdai-label flex flex-col leading-none">
+                <span className="text-[10px] font-black tracking-[0.2em] text-white">OSDAI</span>
+                <span className="text-[7px] font-light tracking-[0.15em] text-cyan-300/80 normal-case">Intelligent class</span>
+              </span>
+
+              {/* Animated dots indicator */}
+              <span className="flex items-center gap-[3px] ml-0.5">
+                <span className="osdai-dot-1 w-1 h-1 rounded-full bg-cyan-400" />
+                <span className="osdai-dot-2 w-1 h-1 rounded-full bg-indigo-400" />
+                <span className="osdai-dot-3 w-1 h-1 rounded-full bg-violet-400" />
+              </span>
+            </a>
 
             <a
               href="#ppdb-cta"
