@@ -201,7 +201,11 @@ export default function App() {
       <main className="relative" id="main-content-flow">
         <Hero theme={theme} />
         <Stats theme={theme} />
-        <About theme={theme} />
+        <About theme={theme} onNavigate={(page) => {
+          window.history.pushState({}, "", `/tentang/${page}`);
+          window.dispatchEvent(new Event("popstate"));
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }} />
         <Competencies theme={theme} />
         <Ecosystem theme={theme} />
         <Achievements theme={theme} />
