@@ -352,7 +352,7 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
             </a>
 
             <a
-              href="#ppdb-cta"
+              href="/#ppdb-cta"
               className="relative overflow-hidden group px-6 py-2.5 rounded-full font-sans text-xs uppercase tracking-widest font-bold text-slate-950 bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-500 hover:shadow-[0_0_20px_rgba(245,158,11,0.35)] transition-all duration-300 flex items-center gap-2"
               id="btn-ppdb-desktop"
             >
@@ -570,7 +570,7 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
           </a>
 
           <a
-            href="#ppdb-cta"
+            href="/#ppdb-cta"
             onClick={() => setIsOpen(false)}
             className="mt-3 w-full py-3.5 rounded-full text-slate-950 font-sans font-extrabold uppercase tracking-widest text-xs bg-gradient-to-r from-amber-400 to-yellow-500 text-center"
             id="btn-ppdb-mobile"
