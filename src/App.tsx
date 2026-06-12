@@ -76,6 +76,22 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (currentPath !== "/") return;
+    const hash = window.location.hash;
+    if (!hash) return;
+    const id = hash.replace("#", "");
+    const tryScroll = (attempts = 0) => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      } else if (attempts < 10) {
+        setTimeout(() => tryScroll(attempts + 1), 100);
+      }
+    };
+    tryScroll();
+  }, [currentPath]);
+
+  useEffect(() => {
     const root = window.document.documentElement;
     if (theme === "light") {
       root.classList.add("light");
