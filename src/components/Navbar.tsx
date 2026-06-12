@@ -314,18 +314,6 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
 
           {/* CTA Actions */}
           <div className="hidden lg:flex items-center gap-4" id="nav-actions-desktop">
-            <div className={`flex items-center gap-2 border text-emerald-600 text-[10px] font-mono tracking-wider uppercase py-1.5 px-3 rounded-full ${
-              isDark
-                ? "bg-slate-900 border-emerald-500/30 text-emerald-400"
-                : "bg-emerald-50 border-emerald-200 text-emerald-700"
-            }`}>
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              PPDB 2026 Aktif
-            </div>
-
             {/* OSDAI Intelligent Class Button */}
             <a
               href="https://osdai.smkn1wonogiri.sch.id"
