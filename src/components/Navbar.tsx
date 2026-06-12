@@ -82,7 +82,6 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
   const navLinks = [
     { name: "Kompetensi", href: "#kompetensi" },
     { name: "Kemitraan", href: "#kemitraan" },
-    { name: "Alumni", href: "#testimoni" },
     { name: "Tracer Studi", href: "/tracer-studi" },
   ];
 
