@@ -554,10 +554,37 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
             )}
           </button>
 
+          {/* OSDAI Mobile Button */}
+          <a
+            href="https://osdai.smkn1wonogiri.sch.id"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setIsOpen(false)}
+            id="btn-osdai-mobile"
+            className="osdai-btn relative overflow-hidden mt-3 w-full flex items-center justify-center gap-3 py-3.5 rounded-full font-sans font-extrabold uppercase tracking-widest text-xs text-white"
+            style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #0c1445 70%, #0f172a 100%)", border: "1px solid rgba(99,102,241,0.5)" }}
+          >
+            <span className="osdai-scan-line pointer-events-none absolute top-0 left-0 h-full w-1/3"
+              style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent)" }} />
+            <span className="relative flex items-center justify-center shrink-0">
+              <span className="absolute w-5 h-5 rounded-full bg-cyan-400/20 animate-ping" />
+              <Brain className="w-4 h-4 text-cyan-300 relative z-10" />
+            </span>
+            <span className="osdai-label flex flex-col leading-none items-start">
+              <span className="text-[11px] font-black tracking-[0.2em] text-white">OSDAI</span>
+              <span className="text-[8px] font-light tracking-[0.12em] text-cyan-300/80 normal-case">Intelligent class</span>
+            </span>
+            <span className="flex items-center gap-[3px]">
+              <span className="osdai-dot-1 w-1.5 h-1.5 rounded-full bg-cyan-400" />
+              <span className="osdai-dot-2 w-1.5 h-1.5 rounded-full bg-indigo-400" />
+              <span className="osdai-dot-3 w-1.5 h-1.5 rounded-full bg-violet-400" />
+            </span>
+          </a>
+
           <a
             href="#ppdb-cta"
             onClick={() => setIsOpen(false)}
-            className="mt-4 w-full py-3.5 rounded-full text-slate-950 font-sans font-extrabold uppercase tracking-widest text-xs bg-gradient-to-r from-amber-400 to-yellow-500 text-center"
+            className="mt-3 w-full py-3.5 rounded-full text-slate-950 font-sans font-extrabold uppercase tracking-widest text-xs bg-gradient-to-r from-amber-400 to-yellow-500 text-center"
             id="btn-ppdb-mobile"
           >
             Admisi PPDB Online 2026
