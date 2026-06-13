@@ -70,7 +70,8 @@ const filePaths = {
   kepalaSekolah: path.join(DATA_DIR, "kepala-sekolah.json"),
   manajemenSekolah: path.join(DATA_DIR, "manajemen-sekolah.json"),
   visiMisi: path.join(DATA_DIR, "visi-misi.json"),
-  socialMedia: path.join(DATA_DIR, "social-media.json")
+  socialMedia: path.join(DATA_DIR, "social-media.json"),
+  adminCredentials: path.join(DATA_DIR, "admin-credentials.json")
 };
 
 // Helper to initialize files with initial data if they don't exist
@@ -163,6 +164,19 @@ app.use((req, res, next) => {
 
 // --- Auth Endpoints ---
 
+function getAdminCredentials(): { username: string; password: string } {
+  try {
+    if (fs.existsSync(filePaths.adminCredentials)) {
+      const saved = JSON.parse(fs.readFileSync(filePaths.adminCredentials, "utf-8"));
+      if (saved.username && saved.password) return saved;
+    }
+  } catch { /* fall through */ }
+  return {
+    username: process.env.ADMIN_USERNAME || "jobenenterprise",
+    password: process.env.ADMIN_PASSWORD || "KuraKuraNinja!0!",
+  };
+}
+
 app.post("/api/auth/login", (req, res) => {
   const ip = (req.headers["x-forwarded-for"] as string || req.socket.remoteAddress || "unknown").split(",")[0].trim();
   const { allowed, secondsLeft } = checkRateLimit(ip);
@@ -170,9 +184,8 @@ app.post("/api/auth/login", (req, res) => {
     return res.status(429).json({ error: `Terlalu banyak percobaan login. Coba lagi dalam ${secondsLeft} detik.` });
   }
   const { username, password } = req.body;
-  const validUser = process.env.ADMIN_USERNAME || "jobenenterprise";
-  const validPass = process.env.ADMIN_PASSWORD || "KuraKuraNinja!0!";
-  if (username === validUser && password === validPass) {
+  const creds = getAdminCredentials();
+  if (username === creds.username && password === creds.password) {
     clearAttempts(ip);
     const token = crypto.randomBytes(48).toString("hex");
     activeSessions.add(token);
@@ -180,6 +193,32 @@ app.post("/api/auth/login", (req, res) => {
   }
   recordFailedAttempt(ip);
   return res.status(401).json({ error: "Kombinasi User Name atau Sandi salah. Periksa kembali!" });
+});
+
+app.post("/api/auth/change-password", (req, res) => {
+  const { currentPassword, newUsername, newPassword } = req.body;
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: "Password lama dan password baru wajib diisi." });
+  }
+  if (newPassword.length < 8) {
+    return res.status(400).json({ error: "Password baru minimal 8 karakter." });
+  }
+  const creds = getAdminCredentials();
+  if (currentPassword !== creds.password) {
+    return res.status(401).json({ error: "Password saat ini salah." });
+  }
+  const updated = {
+    username: (newUsername || "").trim() || creds.username,
+    password: newPassword,
+  };
+  try {
+    fs.writeFileSync(filePaths.adminCredentials, JSON.stringify(updated, null, 2), "utf-8");
+    // Invalidate all active sessions so user must re-login with new credentials
+    activeSessions.clear();
+    return res.json({ success: true, username: updated.username });
+  } catch (err: any) {
+    return res.status(500).json({ error: "Gagal menyimpan perubahan: " + err.message });
+  }
 });
 
 app.post("/api/auth/logout", (req, res) => {
