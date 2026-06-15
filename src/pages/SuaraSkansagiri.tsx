@@ -3,8 +3,8 @@ import { motion, AnimatePresence } from "motion/react";
 import {
   PenLine, Heart, Eye, BookOpen, Lightbulb, Feather, MessageCircle,
   ArrowLeft, X, Send, CheckCircle2, AlertCircle, Loader2, Search,
-  Tag, Clock, User, GraduationCap, Filter, ChevronRight, Sparkles,
-  TrendingUp, Users, FileText, Star
+  Clock, ChevronRight, Sparkles, TrendingUp, Users, FileText, Star,
+  Trophy, Crown, Medal, Award, Zap, BarChart2
 } from "lucide-react";
 
 interface KaryaSiswa {
@@ -13,6 +13,12 @@ interface KaryaSiswa {
   status: string; feedback: string | null; views: number; likes: number;
   authorName: string; authorClass: string; authorJurusan: string;
   tags: string[]; createdAt: string; updatedAt: string; publishedAt: string | null;
+}
+
+interface TopWriter {
+  authorName: string; authorClass: string; authorJurusan: string;
+  points: number; publishedCount: number; totalLikes: number; totalViews: number;
+  latestTitle: string; latestDate: string; categories: string[];
 }
 
 interface SuaraSkansagiriProps { theme: "light" | "dark"; }
@@ -91,9 +97,25 @@ export default function SuaraSkansagiri({ theme }: SuaraSkansagiriProps) {
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formSuccess, setFormSuccess] = useState(false);
   const [charCount, setCharCount] = useState(0);
+  const [mainView, setMainView] = useState<"feed" | "leaderboard">("feed");
+  const [leaderboard, setLeaderboard] = useState<TopWriter[]>([]);
+  const [lbLoading, setLbLoading] = useState(false);
   const detailRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { loadArticles(); }, [activeCategory, search]);
+
+  async function loadLeaderboard() {
+    setLbLoading(true);
+    try {
+      const r = await fetch("/api/suara/leaderboard");
+      if (r.ok) setLeaderboard(await r.json());
+    } finally { setLbLoading(false); }
+  }
+
+  function switchView(v: "feed" | "leaderboard") {
+    setMainView(v);
+    if (v === "leaderboard" && leaderboard.length === 0) loadLeaderboard();
+  }
 
   async function loadArticles() {
     setLoading(true);
@@ -309,6 +331,30 @@ export default function SuaraSkansagiri({ theme }: SuaraSkansagiriProps) {
                   ))}
                 </div>
 
+                {/* View Toggle */}
+                <div className={`inline-flex items-center gap-1 p-1 rounded-full border mb-5 ${isDark ? "bg-white/4 border-white/8" : "bg-slate-100 border-slate-200"}`}>
+                  <button
+                    onClick={() => switchView("feed")}
+                    className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[10px] font-mono tracking-widest uppercase transition-all duration-200 ${
+                      mainView === "feed"
+                        ? "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-md"
+                        : isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-900"
+                    }`}
+                  >
+                    <BookOpen className="w-3 h-3" /> Feed Karya
+                  </button>
+                  <button
+                    onClick={() => switchView("leaderboard")}
+                    className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[10px] font-mono tracking-widest uppercase transition-all duration-200 ${
+                      mainView === "leaderboard"
+                        ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md"
+                        : isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-900"
+                    }`}
+                  >
+                    <Trophy className="w-3 h-3" /> Top Writer
+                  </button>
+                </div>
+
                 {/* Actions row */}
                 <div className="flex items-center gap-3 flex-wrap">
                   <button
@@ -317,25 +363,27 @@ export default function SuaraSkansagiri({ theme }: SuaraSkansagiriProps) {
                   >
                     <PenLine className="w-3.5 h-3.5" /> Tulis Karya
                   </button>
-                  <div className={`flex items-center gap-2 px-4 py-2.5 rounded-full border text-xs ${
-                    isDark ? "bg-white/5 border-white/10 text-slate-300" : "bg-white border-slate-200 text-slate-600"
-                  }`}>
-                    <Search className="w-3.5 h-3.5 shrink-0" />
-                    <input
-                      type="text"
-                      placeholder="Cari karya, penulis, tag..."
-                      value={searchInput}
-                      onChange={e => setSearchInput(e.target.value)}
-                      onKeyDown={e => { if (e.key === "Enter") setSearch(searchInput); }}
-                      className="bg-transparent outline-none w-40 md:w-56 font-mono text-xs placeholder:opacity-50"
-                    />
-                    {searchInput && (
-                      <button onClick={() => { setSearchInput(""); setSearch(""); }} className="opacity-50 hover:opacity-100">
-                        <X className="w-3 h-3" />
-                      </button>
-                    )}
-                  </div>
-                  {search && (
+                  {mainView === "feed" && (
+                    <div className={`flex items-center gap-2 px-4 py-2.5 rounded-full border text-xs ${
+                      isDark ? "bg-white/5 border-white/10 text-slate-300" : "bg-white border-slate-200 text-slate-600"
+                    }`}>
+                      <Search className="w-3.5 h-3.5 shrink-0" />
+                      <input
+                        type="text"
+                        placeholder="Cari karya, penulis, tag..."
+                        value={searchInput}
+                        onChange={e => setSearchInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") setSearch(searchInput); }}
+                        className="bg-transparent outline-none w-40 md:w-56 font-mono text-xs placeholder:opacity-50"
+                      />
+                      {searchInput && (
+                        <button onClick={() => { setSearchInput(""); setSearch(""); }} className="opacity-50 hover:opacity-100">
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {search && mainView === "feed" && (
                     <button onClick={() => { setSearchInput(""); setSearch(""); }} className="text-xs text-amber-500 hover:text-amber-400 font-mono">
                       × Hapus filter
                     </button>
@@ -345,7 +393,198 @@ export default function SuaraSkansagiri({ theme }: SuaraSkansagiriProps) {
             </div>
           </div>
 
-          {/* Category Filter */}
+          {/* ── LEADERBOARD VIEW ──────────────────────────────────── */}
+          <AnimatePresence mode="wait">
+          {mainView === "leaderboard" && (
+            <motion.div
+              key="leaderboard"
+              initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.35 }}
+              className="px-6 md:px-12 pb-24"
+            >
+              <div className="max-w-4xl mx-auto">
+                {/* Section header */}
+                <div className="flex items-center gap-3 mb-8">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/25">
+                    <Trophy className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h2 className={`text-lg font-bold ${isDark ? "text-white" : "text-slate-900"}`}>Top Writer Skansagiri</h2>
+                    <p className={`text-[10px] font-mono tracking-widest uppercase ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                      Semester ini · Berdasarkan Poin Publikasi
+                    </p>
+                  </div>
+                  <button onClick={loadLeaderboard} className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-mono tracking-widest uppercase transition-colors ${isDark ? "border-white/8 text-slate-500 hover:text-white hover:bg-white/5" : "border-slate-200 text-slate-400 hover:text-slate-700"}`}>
+                    <Sparkles className="w-3 h-3" /> Refresh
+                  </button>
+                </div>
+
+                {/* Scoring legend */}
+                <div className={`flex flex-wrap gap-3 mb-8 p-4 rounded-2xl border ${isDark ? "bg-white/3 border-white/6" : "bg-slate-50 border-slate-200"}`}>
+                  <div className="flex items-center gap-2 text-xs">
+                    <div className="w-6 h-6 rounded-lg bg-amber-500/20 flex items-center justify-center"><Zap className="w-3 h-3 text-amber-500" /></div>
+                    <span className={`font-mono ${isDark ? "text-slate-400" : "text-slate-600"}`}><strong className={isDark ? "text-amber-400" : "text-amber-600"}>+10 poin</strong> per karya dipublikasikan</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <div className="w-6 h-6 rounded-lg bg-rose-500/20 flex items-center justify-center"><Heart className="w-3 h-3 text-rose-400" /></div>
+                    <span className={`font-mono ${isDark ? "text-slate-400" : "text-slate-600"}`}><strong className={isDark ? "text-rose-400" : "text-rose-500"}>+1 poin</strong> per 5 apresiasi</span>
+                  </div>
+                  <div className={`ml-auto text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-slate-600" : "text-slate-400"}`}>
+                    Diperbarui otomatis
+                  </div>
+                </div>
+
+                {lbLoading ? (
+                  <div className="flex items-center justify-center py-20">
+                    <Loader2 className="w-7 h-7 animate-spin text-amber-500" />
+                  </div>
+                ) : leaderboard.length === 0 ? (
+                  <div className="text-center py-20">
+                    <Trophy className={`w-12 h-12 mx-auto mb-4 ${isDark ? "text-slate-700" : "text-slate-200"}`} />
+                    <p className={`text-sm font-mono ${isDark ? "text-slate-600" : "text-slate-400"}`}>
+                      Belum ada karya yang dipublikasikan.<br/>Jadilah penulis pertama di Suara Skansagiri!
+                    </p>
+                    <button onClick={() => { setShowSubmit(true); setFormSuccess(false); setFormError(""); }}
+                      className="mt-5 px-5 py-2 rounded-full text-xs font-mono uppercase tracking-widest bg-amber-500/15 text-amber-500 border border-amber-500/25 hover:bg-amber-500/25 transition-colors">
+                      Tulis Karya Sekarang
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {/* Top 3 Podium */}
+                    {leaderboard.length >= 1 && (
+                      <div className="mb-8">
+                        <div className="flex items-end justify-center gap-3 md:gap-5">
+                          {/* 2nd place */}
+                          {leaderboard[1] && (
+                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+                              className={`flex-1 max-w-[220px] rounded-2xl border overflow-hidden ${isDark ? "bg-slate-900/60 border-white/8" : "bg-white border-slate-200"}`}>
+                              <div className="h-1.5 bg-gradient-to-r from-slate-400 to-slate-500" />
+                              <div className="p-5 text-center">
+                                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-black mx-auto mb-3 border-2 ${isDark ? "bg-slate-700 border-slate-500 text-white" : "bg-slate-100 border-slate-300 text-slate-700"}`}>
+                                  {leaderboard[1].authorName.charAt(0).toUpperCase()}
+                                </div>
+                                <div className="flex items-center justify-center gap-1 mb-1">
+                                  <Medal className="w-3.5 h-3.5 text-slate-400" />
+                                  <span className="text-[9px] font-mono text-slate-400 tracking-widest uppercase">2nd Place</span>
+                                </div>
+                                <div className={`text-sm font-bold mb-0.5 ${isDark ? "text-white" : "text-slate-900"}`}>{leaderboard[1].authorName}</div>
+                                <div className={`text-[9px] font-mono mb-3 ${isDark ? "text-slate-500" : "text-slate-400"}`}>{leaderboard[1].authorClass}</div>
+                                <div className={`text-2xl font-black font-mono ${isDark ? "text-slate-300" : "text-slate-700"}`}>{leaderboard[1].points}</div>
+                                <div className={`text-[8px] font-mono uppercase tracking-widest mb-2 ${isDark ? "text-slate-600" : "text-slate-400"}`}>poin</div>
+                                <div className={`flex justify-center gap-3 text-[9px] font-mono ${isDark ? "text-slate-600" : "text-slate-400"}`}>
+                                  <span><FileText className="w-2.5 h-2.5 inline mr-0.5" />{leaderboard[1].publishedCount}</span>
+                                  <span><Heart className="w-2.5 h-2.5 inline mr-0.5" />{leaderboard[1].totalLikes}</span>
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+
+                          {/* 1st place */}
+                          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }}
+                            className={`flex-1 max-w-[260px] rounded-2xl border overflow-hidden shadow-xl ${isDark ? "bg-slate-900/80 border-amber-500/30" : "bg-white border-amber-300"}`}>
+                            <div className="h-2 bg-gradient-to-r from-amber-400 via-yellow-400 to-orange-400" />
+                            <div className="p-6 text-center relative">
+                              <div className="absolute top-3 right-3">
+                                <Crown className="w-5 h-5 text-amber-400" />
+                              </div>
+                              <div className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-black mx-auto mb-3 bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-lg shadow-amber-500/30">
+                                {leaderboard[0].authorName.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="flex items-center justify-center gap-1 mb-1">
+                                <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                                <span className="text-[9px] font-mono text-amber-400 tracking-widest uppercase">Top Writer</span>
+                              </div>
+                              <div className={`text-base font-bold mb-0.5 ${isDark ? "text-white" : "text-slate-900"}`}>{leaderboard[0].authorName}</div>
+                              <div className={`text-[9px] font-mono mb-4 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                                {leaderboard[0].authorClass}
+                                {leaderboard[0].authorJurusan && ` · ${leaderboard[0].authorJurusan.split("(")[0].trim()}`}
+                              </div>
+                              <div className="text-4xl font-black font-mono text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-500 mb-0.5">{leaderboard[0].points}</div>
+                              <div className={`text-[8px] font-mono uppercase tracking-widest mb-3 ${isDark ? "text-slate-600" : "text-slate-400"}`}>poin</div>
+                              <div className={`flex justify-center gap-4 text-[9px] font-mono ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                                <span className="flex items-center gap-1"><FileText className="w-2.5 h-2.5" />{leaderboard[0].publishedCount} karya</span>
+                                <span className="flex items-center gap-1"><Heart className="w-2.5 h-2.5" />{leaderboard[0].totalLikes} apresiasi</span>
+                                <span className="flex items-center gap-1"><Eye className="w-2.5 h-2.5" />{leaderboard[0].totalViews}</span>
+                              </div>
+                            </div>
+                          </motion.div>
+
+                          {/* 3rd place */}
+                          {leaderboard[2] && (
+                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+                              className={`flex-1 max-w-[220px] rounded-2xl border overflow-hidden ${isDark ? "bg-slate-900/60 border-white/8" : "bg-white border-slate-200"}`}>
+                              <div className="h-1.5 bg-gradient-to-r from-amber-700 to-orange-800" />
+                              <div className="p-5 text-center">
+                                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-black mx-auto mb-3 border-2 ${isDark ? "bg-amber-900/40 border-amber-700/40 text-amber-400" : "bg-amber-50 border-amber-200 text-amber-700"}`}>
+                                  {leaderboard[2].authorName.charAt(0).toUpperCase()}
+                                </div>
+                                <div className="flex items-center justify-center gap-1 mb-1">
+                                  <Award className="w-3.5 h-3.5 text-amber-700" />
+                                  <span className={`text-[9px] font-mono tracking-widest uppercase ${isDark ? "text-amber-700" : "text-amber-600"}`}>3rd Place</span>
+                                </div>
+                                <div className={`text-sm font-bold mb-0.5 ${isDark ? "text-white" : "text-slate-900"}`}>{leaderboard[2].authorName}</div>
+                                <div className={`text-[9px] font-mono mb-3 ${isDark ? "text-slate-500" : "text-slate-400"}`}>{leaderboard[2].authorClass}</div>
+                                <div className={`text-2xl font-black font-mono ${isDark ? "text-amber-600" : "text-amber-700"}`}>{leaderboard[2].points}</div>
+                                <div className={`text-[8px] font-mono uppercase tracking-widest mb-2 ${isDark ? "text-slate-600" : "text-slate-400"}`}>poin</div>
+                                <div className={`flex justify-center gap-3 text-[9px] font-mono ${isDark ? "text-slate-600" : "text-slate-400"}`}>
+                                  <span><FileText className="w-2.5 h-2.5 inline mr-0.5" />{leaderboard[2].publishedCount}</span>
+                                  <span><Heart className="w-2.5 h-2.5 inline mr-0.5" />{leaderboard[2].totalLikes}</span>
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Rankings 4+ */}
+                    {leaderboard.length > 3 && (
+                      <div>
+                        <div className={`text-[9px] font-mono tracking-widest uppercase mb-3 flex items-center gap-2 ${isDark ? "text-slate-600" : "text-slate-400"}`}>
+                          <BarChart2 className="w-3 h-3" /> Peringkat Berikutnya
+                        </div>
+                        <div className="space-y-2">
+                          {leaderboard.slice(3).map((w, idx) => (
+                            <motion.div
+                              key={w.authorName}
+                              initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.05 * idx }}
+                              className={`flex items-center gap-4 px-4 py-3 rounded-xl border ${isDark ? "bg-white/3 border-white/6 hover:bg-white/5" : "bg-white border-slate-100 hover:bg-slate-50"} transition-colors`}
+                            >
+                              <span className={`w-7 text-center text-xs font-black font-mono ${isDark ? "text-slate-500" : "text-slate-400"}`}>{idx + 4}</span>
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${isDark ? "bg-slate-700 text-white" : "bg-slate-100 text-slate-700"}`}>
+                                {w.authorName.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className={`text-sm font-semibold truncate ${isDark ? "text-white" : "text-slate-900"}`}>{w.authorName}</div>
+                                <div className={`text-[9px] font-mono truncate ${isDark ? "text-slate-600" : "text-slate-400"}`}>{w.authorClass}</div>
+                              </div>
+                              <div className="hidden sm:flex items-center gap-3 text-[9px] font-mono">
+                                <span className={isDark ? "text-slate-600" : "text-slate-400"}>
+                                  <FileText className="w-2.5 h-2.5 inline mr-0.5" />{w.publishedCount}
+                                </span>
+                                <span className={isDark ? "text-slate-600" : "text-slate-400"}>
+                                  <Heart className="w-2.5 h-2.5 inline mr-0.5" />{w.totalLikes}
+                                </span>
+                              </div>
+                              <div className={`text-right shrink-0`}>
+                                <div className={`text-base font-black font-mono ${isDark ? "text-white" : "text-slate-800"}`}>{w.points}</div>
+                                <div className={`text-[8px] font-mono uppercase tracking-widest ${isDark ? "text-slate-600" : "text-slate-400"}`}>poin</div>
+                              </div>
+                            </motion.div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </motion.div>
+          )}
+          </AnimatePresence>
+
+          {/* Category Filter — feed view only */}
+          {mainView === "feed" && (
           <div className="px-6 md:px-12 mb-8">
             <div className="max-w-7xl mx-auto">
               <div className="flex gap-2 flex-wrap">
@@ -371,9 +610,10 @@ export default function SuaraSkansagiri({ theme }: SuaraSkansagiriProps) {
               </div>
             </div>
           </div>
+          )}
 
-          {/* Articles Grid */}
-          <div className="px-6 md:px-12 pb-24">
+          {/* Articles Grid — feed view only */}
+          {mainView === "feed" && <div className="px-6 md:px-12 pb-24">
             <div className="max-w-7xl mx-auto">
               {loading ? (
                 <div className="flex items-center justify-center py-24">
@@ -472,7 +712,7 @@ export default function SuaraSkansagiri({ theme }: SuaraSkansagiriProps) {
                 </div>
               )}
             </div>
-          </div>
+          </div>}
         </>
       )}
 

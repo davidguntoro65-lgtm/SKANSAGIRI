@@ -664,6 +664,45 @@ app.get("/api/suara/admin", requireAuth, (req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+app.get("/api/suara/leaderboard", (req, res) => {
+  try {
+    const all = readSuara();
+    const published = all.filter(k => k.status === "PUBLISHED");
+    const map = new Map<string, {
+      authorName: string; authorClass: string; authorJurusan: string;
+      points: number; publishedCount: number; totalLikes: number; totalViews: number;
+      latestTitle: string; latestDate: string; categories: Set<string>;
+    }>();
+    for (const k of published) {
+      const key = k.authorName.toLowerCase().trim();
+      if (!map.has(key)) {
+        map.set(key, {
+          authorName: k.authorName, authorClass: k.authorClass,
+          authorJurusan: k.authorJurusan, points: 0, publishedCount: 0,
+          totalLikes: 0, totalViews: 0, latestTitle: "", latestDate: "",
+          categories: new Set(),
+        });
+      }
+      const e = map.get(key)!;
+      e.publishedCount += 1;
+      e.points += 10;
+      e.points += Math.floor(k.likes / 5);
+      e.totalLikes += k.likes;
+      e.totalViews += k.views;
+      e.categories.add(k.category);
+      if (!e.latestDate || k.publishedAt! > e.latestDate) {
+        e.latestDate = k.publishedAt || k.createdAt;
+        e.latestTitle = k.title;
+      }
+    }
+    const board = [...map.values()]
+      .map(e => ({ ...e, categories: [...e.categories] }))
+      .sort((a, b) => b.points - a.points || b.totalLikes - a.totalLikes)
+      .slice(0, 15);
+    res.json(board);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 app.get("/api/suara/:id", (req, res) => {
   try {
     const all = readSuara();
