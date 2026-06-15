@@ -81,7 +81,7 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
 
   const navLinks = [
     { name: "Kompetensi", href: "#kompetensi" },
-    { name: "Kemitraan", href: "#kemitraan" },
+    { name: "Modul Integrasi", href: "/modul-integrasi" },
     { name: "Tracer Studi", href: "/tracer-studi" },
     { name: "Hubungi Kami", href: "/hubungi-kami" },
   ];
@@ -103,6 +103,7 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
   const isTracerActive = currentPath === "/tracer-studi";
   const isBeritaActive = currentPath === "/berita";
   const isHubungiActive = currentPath === "/hubungi-kami";
+  const isModulIntegrasiActive = currentPath === "/modul-integrasi";
 
   const navScrolledBg = isDark
     ? "bg-slate-950/80 backdrop-blur-xl border-b border-white/5 shadow-2xl shadow-black/40"
@@ -238,14 +239,15 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
             {navLinks.map((link) => {
               const isActive =
                 link.href === "/tracer-studi" ? isTracerActive :
-                link.href === "/hubungi-kami" ? isHubungiActive : false;
+                link.href === "/hubungi-kami" ? isHubungiActive :
+                link.href === "/modul-integrasi" ? isModulIntegrasiActive : false;
               return (
                 <a
                   key={link.name}
                   href={link.href}
                   onClick={(e) => { e.preventDefault(); navigateToAnchor(link.href); }}
                   className={linkClass(isActive)}
-                  id={`link-desk-${link.name.toLowerCase()}`}
+                  id={`link-desk-${link.name.toLowerCase().replace(/\s/g, "-")}`}
                 >
                   {link.name}
                   <span className={`absolute bottom-0 left-0 h-[1.5px] bg-amber-500 transition-all duration-300 ${isActive ? "w-full" : "w-0 group-hover:w-full"}`} />
