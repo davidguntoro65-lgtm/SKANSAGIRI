@@ -61,6 +61,22 @@ export default function App() {
     DataStore.initializeFromServer();
   }, []);
 
+  // Dynamic favicon: swap to uploaded school favicon when available
+  useEffect(() => {
+    fetch("/api/branding")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        const faviconUrl = data?.schoolFavicon || data?.schoolLogo;
+        if (!faviconUrl) return;
+        const link = document.getElementById("app-favicon") as HTMLLinkElement | null;
+        if (link) {
+          link.type = faviconUrl.startsWith("data:image/svg") ? "image/svg+xml" : "image/png";
+          link.href = faviconUrl;
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const [currentPath, setCurrentPath] = useState<AppPath>(() => {
     if (typeof window !== "undefined") return getPath();
     return "/";
