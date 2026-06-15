@@ -83,6 +83,7 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
     { name: "Kompetensi", href: "#kompetensi" },
     { name: "Kemitraan", href: "#kemitraan" },
     { name: "Tracer Studi", href: "/tracer-studi" },
+    { name: "Hubungi Kami", href: "/hubungi-kami" },
   ];
 
   const tentangLinks = [
@@ -101,6 +102,7 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
   const isTentangActive = tentangLinks.some(l => currentPath.startsWith(l.href));
   const isTracerActive = currentPath === "/tracer-studi";
   const isBeritaActive = currentPath === "/berita";
+  const isHubungiActive = currentPath === "/hubungi-kami";
 
   const navScrolledBg = isDark
     ? "bg-slate-950/80 backdrop-blur-xl border-b border-white/5 shadow-2xl shadow-black/40"
@@ -234,7 +236,9 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
             </div>
 
             {navLinks.map((link) => {
-              const isActive = link.href === "/tracer-studi" ? isTracerActive : false;
+              const isActive =
+                link.href === "/tracer-studi" ? isTracerActive :
+                link.href === "/hubungi-kami" ? isHubungiActive : false;
               return (
                 <a
                   key={link.name}
@@ -467,7 +471,9 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
           </div>
 
           {navLinks.map((link) => {
-            const isActive = link.href === "/tracer-studi" ? isTracerActive : false;
+            const isActive =
+              link.href === "/tracer-studi" ? isTracerActive :
+              link.href === "/hubungi-kami" ? isHubungiActive : false;
             return (
               <a
                 key={link.name}

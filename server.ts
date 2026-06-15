@@ -533,6 +533,74 @@ app.post("/api/reset", (req, res) => {
   }
 });
 
+// ── Contact Messages ─────────────────────────────────────────────────────────
+const CONTACT_FILE = path.join(DATA_DIR, "contact-messages.json");
+
+function readContactMessages(): any[] {
+  try {
+    if (!fs.existsSync(CONTACT_FILE)) return [];
+    return JSON.parse(fs.readFileSync(CONTACT_FILE, "utf-8"));
+  } catch {
+    return [];
+  }
+}
+
+app.post("/api/contact", (req, res) => {
+  try {
+    const { nama, email, noHp, keperluan, pesan, waktu } = req.body;
+    if (!nama || !email || !keperluan || !pesan) {
+      return res.status(400).json({ error: "Field wajib tidak lengkap." });
+    }
+    if (pesan.trim().length < 20) {
+      return res.status(400).json({ error: "Pesan minimal 20 karakter." });
+    }
+    const messages = readContactMessages();
+    const newMsg = {
+      id: crypto.randomUUID(),
+      nama: String(nama).trim(),
+      email: String(email).trim().toLowerCase(),
+      noHp: String(noHp || "").trim(),
+      keperluan: String(keperluan).trim(),
+      pesan: String(pesan).trim(),
+      waktu: waktu || new Date().toISOString(),
+      dibaca: false,
+    };
+    messages.unshift(newMsg);
+    fs.writeFileSync(CONTACT_FILE, JSON.stringify(messages, null, 2), "utf-8");
+    res.json({ success: true, id: newMsg.id });
+  } catch (error: any) {
+    res.status(500).json({ error: "Gagal menyimpan pesan." });
+  }
+});
+
+app.get("/api/contact", requireAuth, (req, res) => {
+  res.json(readContactMessages());
+});
+
+app.patch("/api/contact/:id/baca", requireAuth, (req, res) => {
+  try {
+    const messages = readContactMessages();
+    const idx = messages.findIndex((m: any) => m.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: "Pesan tidak ditemukan." });
+    messages[idx].dibaca = true;
+    fs.writeFileSync(CONTACT_FILE, JSON.stringify(messages, null, 2), "utf-8");
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: "Gagal memperbarui status pesan." });
+  }
+});
+
+app.delete("/api/contact/:id", requireAuth, (req, res) => {
+  try {
+    const messages = readContactMessages();
+    const filtered = messages.filter((m: any) => m.id !== req.params.id);
+    fs.writeFileSync(CONTACT_FILE, JSON.stringify(filtered, null, 2), "utf-8");
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: "Gagal menghapus pesan." });
+  }
+});
+
 // Initialize Vite and setup listening
 async function main() {
   if (process.env.NODE_ENV !== "production") {
