@@ -21,6 +21,12 @@ interface TopWriter {
   latestTitle: string; latestDate: string; categories: string[];
 }
 
+interface KomentarSuara {
+  id: string; artikelId: string; artikelTitle: string;
+  authorName: string; authorClass: string; content: string;
+  status: "PENDING" | "APPROVED" | "REJECTED"; createdAt: string;
+}
+
 interface SuaraSkansagiriProps { theme: "light" | "dark"; }
 
 const CATEGORIES = {
@@ -102,7 +108,53 @@ export default function SuaraSkansagiri({ theme }: SuaraSkansagiriProps) {
   const [lbLoading, setLbLoading] = useState(false);
   const detailRef = useRef<HTMLDivElement>(null);
 
+  const [comments, setComments] = useState<KomentarSuara[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [commentForm, setCommentForm] = useState({ authorName: "", authorClass: "", content: "" });
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
+  const [commentSuccess, setCommentSuccess] = useState(false);
+  const [commentError, setCommentError] = useState("");
+
   useEffect(() => { loadArticles(); }, [activeCategory, search]);
+
+  useEffect(() => {
+    if (selected) {
+      setComments([]);
+      setCommentSuccess(false);
+      setCommentError("");
+      setCommentForm({ authorName: "", authorClass: "", content: "" });
+      loadComments(selected.id);
+    }
+  }, [selected?.id]);
+
+  async function loadComments(artikelId: string) {
+    setCommentsLoading(true);
+    try {
+      const r = await fetch(`/api/suara/${artikelId}/komentar`);
+      if (r.ok) setComments(await r.json());
+    } finally { setCommentsLoading(false); }
+  }
+
+  async function handleCommentSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setCommentError("");
+    if (!commentForm.authorName.trim()) { setCommentError("Nama wajib diisi."); return; }
+    if (!commentForm.content.trim()) { setCommentError("Isi komentar tidak boleh kosong."); return; }
+    if (commentForm.content.trim().length < 10) { setCommentError("Komentar minimal 10 karakter."); return; }
+    if (!selected) return;
+    setCommentSubmitting(true);
+    try {
+      const r = await fetch(`/api/suara/${selected.id}/komentar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(commentForm),
+      });
+      const d = await r.json();
+      if (!r.ok) { setCommentError(d.error || "Gagal mengirim komentar."); return; }
+      setCommentSuccess(true);
+    } catch { setCommentError("Terjadi kesalahan jaringan."); }
+    finally { setCommentSubmitting(false); }
+  }
 
   async function loadLeaderboard() {
     setLbLoading(true);
@@ -283,6 +335,154 @@ export default function SuaraSkansagiri({ theme }: SuaraSkansagiriProps) {
                 >
                   <ArrowLeft className="w-3.5 h-3.5" /> Kembali
                 </button>
+              </div>
+
+              {/* ── COMMENTS SECTION ─────────────────────────────── */}
+              <div className="mt-12">
+                <div className={`border-t pt-10 ${isDark ? "border-white/6" : "border-slate-100"}`}>
+
+                  {/* Header */}
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className={`text-xs font-mono tracking-widest uppercase font-bold flex items-center gap-2 ${
+                      isDark ? "text-slate-400" : "text-slate-500"
+                    }`}>
+                      <MessageCircle className="w-4 h-4" />
+                      Komentar {comments.length > 0 && `(${comments.length})`}
+                    </h3>
+                  </div>
+
+                  {/* Comments List */}
+                  {commentsLoading ? (
+                    <div className="flex items-center justify-center py-10">
+                      <Loader2 className={`w-5 h-5 animate-spin ${isDark ? "text-slate-600" : "text-slate-300"}`} />
+                    </div>
+                  ) : comments.length > 0 ? (
+                    <div className="space-y-4 mb-10">
+                      {comments.map((c) => (
+                        <motion.div
+                          key={c.id}
+                          initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                          className={`flex gap-3 p-4 rounded-xl border ${
+                            isDark ? "bg-white/3 border-white/6" : "bg-slate-50 border-slate-100"
+                          }`}
+                        >
+                          <div className={`w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-xs font-bold ${
+                            isDark ? "bg-violet-500/20 text-violet-400" : "bg-violet-100 text-violet-700"
+                          }`}>
+                            {c.authorName.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <span className={`text-xs font-semibold ${isDark ? "text-slate-200" : "text-slate-800"}`}>
+                                {c.authorName}
+                              </span>
+                              {c.authorClass && (
+                                <span className={`text-[9px] font-mono ${isDark ? "text-slate-600" : "text-slate-400"}`}>
+                                  {c.authorClass}
+                                </span>
+                              )}
+                              <span className={`text-[9px] font-mono ml-auto ${isDark ? "text-slate-700" : "text-slate-400"}`}>
+                                {new Date(c.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
+                              </span>
+                            </div>
+                            <p className={`text-sm leading-relaxed ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                              {c.content}
+                            </p>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className={`flex items-center gap-3 py-6 mb-8 text-sm ${isDark ? "text-slate-600" : "text-slate-400"}`}>
+                      <MessageCircle className="w-4 h-4" />
+                      <span>Belum ada komentar. Jadilah yang pertama!</span>
+                    </div>
+                  )}
+
+                  {/* Comment Form */}
+                  <div className={`rounded-2xl border p-5 ${isDark ? "bg-white/3 border-white/8" : "bg-slate-50 border-slate-200"}`}>
+                    <h4 className={`text-xs font-mono tracking-widest uppercase font-bold mb-4 ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                      Tulis Komentar
+                    </h4>
+
+                    {commentSuccess ? (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                        className={`flex items-start gap-3 p-4 rounded-xl border ${
+                          isDark ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-400" : "bg-emerald-50 border-emerald-200 text-emerald-700"
+                        }`}
+                      >
+                        <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                        <div>
+                          <div className="text-sm font-semibold mb-0.5">Komentar terkirim!</div>
+                          <div className={`text-xs ${isDark ? "text-emerald-500/80" : "text-emerald-600"}`}>
+                            Komentar kamu sedang direview oleh kurator sebelum ditampilkan.
+                          </div>
+                        </div>
+                      </motion.div>
+                    ) : (
+                      <form onSubmit={handleCommentSubmit} className="space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                          <input
+                            type="text"
+                            placeholder="Nama kamu *"
+                            value={commentForm.authorName}
+                            onChange={e => setCommentForm(p => ({ ...p, authorName: e.target.value }))}
+                            className={`px-3 py-2 rounded-xl border text-sm outline-none transition-colors ${
+                              isDark
+                                ? "bg-white/5 border-white/8 text-white placeholder:text-slate-600 focus:border-violet-500/50"
+                                : "bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-violet-400"
+                            }`}
+                          />
+                          <input
+                            type="text"
+                            placeholder="Kelas (opsional)"
+                            value={commentForm.authorClass}
+                            onChange={e => setCommentForm(p => ({ ...p, authorClass: e.target.value }))}
+                            className={`px-3 py-2 rounded-xl border text-sm outline-none transition-colors ${
+                              isDark
+                                ? "bg-white/5 border-white/8 text-white placeholder:text-slate-600 focus:border-violet-500/50"
+                                : "bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-violet-400"
+                            }`}
+                          />
+                        </div>
+                        <textarea
+                          placeholder="Tulis komentarmu... (min. 10 karakter, maks. 500)"
+                          value={commentForm.content}
+                          onChange={e => setCommentForm(p => ({ ...p, content: e.target.value }))}
+                          rows={3}
+                          maxLength={500}
+                          className={`w-full px-3 py-2 rounded-xl border text-sm outline-none transition-colors resize-none ${
+                            isDark
+                              ? "bg-white/5 border-white/8 text-white placeholder:text-slate-600 focus:border-violet-500/50"
+                              : "bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-violet-400"
+                          }`}
+                        />
+                        <div className="flex items-center justify-between">
+                          <div className="flex flex-col gap-1">
+                            {commentError && (
+                              <div className={`flex items-center gap-1.5 text-xs ${isDark ? "text-rose-400" : "text-rose-600"}`}>
+                                <AlertCircle className="w-3 h-3" />{commentError}
+                              </div>
+                            )}
+                            <span className={`text-[9px] font-mono ${isDark ? "text-slate-700" : "text-slate-400"}`}>
+                              Komentar akan ditampilkan setelah moderasi kurator.
+                            </span>
+                          </div>
+                          <button
+                            type="submit"
+                            disabled={commentSubmitting}
+                            className="flex items-center gap-2 px-5 py-2 rounded-full text-xs font-bold tracking-widest uppercase text-white bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:shadow-[0_0_12px_rgba(139,92,246,0.4)] transition-all disabled:opacity-50"
+                          >
+                            {commentSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                            Kirim
+                          </button>
+                        </div>
+                      </form>
+                    )}
+                  </div>
+
+                </div>
               </div>
             </div>
           </motion.div>

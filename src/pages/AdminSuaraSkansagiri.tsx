@@ -21,6 +21,12 @@ interface AdminSuaraProps {
   onBack: () => void;
 }
 
+interface KomentarSuara {
+  id: string; artikelId: string; artikelTitle: string;
+  authorName: string; authorClass: string; content: string;
+  status: "PENDING" | "APPROVED" | "REJECTED"; createdAt: string;
+}
+
 const STATUS_CFG = {
   REVIEW:    { label: "Perlu Review",  cls: "bg-amber-500/15 text-amber-500 border-amber-500/30" },
   PUBLISHED: { label: "Tayang",        cls: "bg-emerald-500/15 text-emerald-500 border-emerald-500/30" },
@@ -59,6 +65,8 @@ export default function AdminSuaraSkansagiri({ theme, onBack }: AdminSuaraProps)
   const [loginLoading, setLoginLoading] = useState(false);
   const [showPass, setShowPass] = useState(false);
 
+  const [adminView, setAdminView] = useState<"articles" | "komentar">("articles");
+
   const [articles, setArticles] = useState<KaryaSiswa[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState<"ALL" | "REVIEW" | "PUBLISHED" | "REVISION" | "ARCHIVED">("ALL");
@@ -67,6 +75,10 @@ export default function AdminSuaraSkansagiri({ theme, onBack }: AdminSuaraProps)
   const [feedbackText, setFeedbackText] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<{ text: string; type: "ok" | "err" } | null>(null);
+
+  const [komentarList, setKomentarList] = useState<KomentarSuara[]>([]);
+  const [komentarLoading, setKomentarLoading] = useState(false);
+  const [komentarFilter, setKomentarFilter] = useState<"ALL" | "PENDING" | "APPROVED" | "REJECTED">("PENDING");
 
   function toast(text: string, type: "ok" | "err" = "ok") {
     setToastMsg({ text, type });
@@ -83,7 +95,39 @@ export default function AdminSuaraSkansagiri({ theme, onBack }: AdminSuaraProps)
       .catch(() => { setIsAuthed(false); setAuthChecking(false); });
   }, []);
 
-  useEffect(() => { if (isAuthed) loadArticles(); }, [isAuthed]);
+  useEffect(() => {
+    if (isAuthed) { loadArticles(); loadKomentar(); }
+  }, [isAuthed]);
+
+  async function loadKomentar() {
+    setKomentarLoading(true);
+    try {
+      const r = await fetch("/api/suara/komentar/admin", { headers: { Authorization: `Bearer ${getToken()}` } });
+      if (r.ok) setKomentarList(await r.json());
+    } finally { setKomentarLoading(false); }
+  }
+
+  async function approveKomentar(id: string) {
+    setActionLoading(id + "_approve");
+    try {
+      const r = await fetch(`/api/suara/komentar/${id}/approve`, {
+        method: "PATCH", headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      if (r.ok) { toast("Komentar ditampilkan."); await loadKomentar(); }
+      else { const d = await r.json(); toast(d.error || "Gagal approve.", "err"); }
+    } finally { setActionLoading(null); }
+  }
+
+  async function deleteKomentar(id: string) {
+    setActionLoading(id + "_delete");
+    try {
+      const r = await fetch(`/api/suara/komentar/${id}`, {
+        method: "DELETE", headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      if (r.ok) { toast("Komentar dihapus."); await loadKomentar(); }
+      else { const d = await r.json(); toast(d.error || "Gagal hapus.", "err"); }
+    } finally { setActionLoading(null); }
+  }
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -248,7 +292,38 @@ export default function AdminSuaraSkansagiri({ theme, onBack }: AdminSuaraProps)
 
       <div className="max-w-7xl mx-auto px-6 md:px-10 py-8">
 
-        {/* Stats */}
+        {/* View Toggle */}
+        <div className="flex items-center gap-2 mb-8">
+          <button
+            onClick={() => setAdminView("articles")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold tracking-widest uppercase border transition-all ${
+              adminView === "articles"
+                ? "bg-gradient-to-r from-violet-600 to-fuchsia-600 border-transparent text-white shadow-[0_0_12px_rgba(139,92,246,0.3)]"
+                : "bg-white/4 border-white/8 text-slate-400 hover:bg-white/6 hover:text-slate-200"
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5" /> Karya
+          </button>
+          <button
+            onClick={() => setAdminView("komentar")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold tracking-widest uppercase border transition-all relative ${
+              adminView === "komentar"
+                ? "bg-gradient-to-r from-violet-600 to-fuchsia-600 border-transparent text-white shadow-[0_0_12px_rgba(139,92,246,0.3)]"
+                : "bg-white/4 border-white/8 text-slate-400 hover:bg-white/6 hover:text-slate-200"
+            }`}
+          >
+            <MessageSquare className="w-3.5 h-3.5" /> Komentar
+            {komentarList.filter(k => k.status === "PENDING").length > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[9px] font-black flex items-center justify-center">
+                {komentarList.filter(k => k.status === "PENDING").length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {adminView === "articles" && (
+        <div className="articles-section">
+
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-8">
           {(["ALL", "REVIEW", "PUBLISHED", "REVISION", "ARCHIVED"] as const).map(s => (
             <button key={s} onClick={() => setActiveFilter(s)}
@@ -439,6 +514,138 @@ export default function AdminSuaraSkansagiri({ theme, onBack }: AdminSuaraProps)
             )}
           </AnimatePresence>
         </div>
+
+        </div>)}
+
+        {/* ── KOMENTAR VIEW ───────────────────────────────────────── */}
+        {adminView === "komentar" && (
+          <div>
+            {/* Komentar Stats + Filter */}
+            <div className="flex flex-wrap items-center gap-3 mb-6">
+              {(["ALL", "PENDING", "APPROVED", "REJECTED"] as const).map(f => {
+                const cnt = f === "ALL" ? komentarList.length : komentarList.filter(k => k.status === f).length;
+                const active = komentarFilter === f;
+                return (
+                  <button key={f} onClick={() => setKomentarFilter(f)}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-left transition-all ${
+                      active ? "bg-violet-500/15 border-violet-500/40" : "bg-white/4 border-white/6 hover:bg-white/6"
+                    }`}>
+                    <span className={`text-lg font-mono font-black ${active ? "text-violet-300" : "text-white"}`}>{cnt}</span>
+                    <span className={`text-[9px] font-mono tracking-widest uppercase ${active ? "text-violet-400" : "text-slate-500"}`}>
+                      {f === "ALL" ? "Semua" : f === "PENDING" ? "Menunggu" : f === "APPROVED" ? "Ditampilkan" : "Ditolak"}
+                    </span>
+                  </button>
+                );
+              })}
+              <button onClick={loadKomentar} className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/8 text-xs font-mono text-slate-400 hover:text-white hover:bg-white/5 transition-colors">
+                <RefreshCw className="w-3 h-3" /> Refresh
+              </button>
+            </div>
+
+            {/* Komentar List */}
+            {komentarLoading ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="w-7 h-7 animate-spin text-violet-500" />
+              </div>
+            ) : (() => {
+              const filtered = komentarFilter === "ALL"
+                ? komentarList
+                : komentarList.filter(k => k.status === komentarFilter);
+              return filtered.length === 0 ? (
+                <div className="text-center py-16">
+                  <MessageSquare className="w-10 h-10 text-slate-700 mx-auto mb-3" />
+                  <p className="text-sm text-slate-600 font-mono">
+                    {komentarFilter === "PENDING" ? "Tidak ada komentar menunggu moderasi." : "Tidak ada komentar ditemukan."}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3 max-w-3xl">
+                  {filtered.map((k, i) => (
+                    <motion.div
+                      key={k.id}
+                      initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.03 }}
+                      className={`rounded-xl border p-4 ${
+                        k.status === "PENDING"
+                          ? "bg-amber-500/5 border-amber-500/20"
+                          : k.status === "APPROVED"
+                            ? "bg-emerald-500/5 border-emerald-500/15"
+                            : "bg-white/3 border-white/6"
+                      }`}
+                    >
+                      {/* Article context */}
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <FileText className="w-3 h-3 text-slate-600 shrink-0" />
+                        <span className="text-[9px] font-mono text-slate-500 truncate">{k.artikelTitle}</span>
+                        <span className={`ml-auto shrink-0 text-[8px] font-mono tracking-widest uppercase px-2 py-0.5 rounded-full border ${
+                          k.status === "PENDING"
+                            ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                            : k.status === "APPROVED"
+                              ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                              : "bg-slate-500/15 text-slate-400 border-slate-500/30"
+                        }`}>
+                          {k.status === "PENDING" ? "Menunggu" : k.status === "APPROVED" ? "Ditampilkan" : "Ditolak"}
+                        </span>
+                      </div>
+
+                      {/* Author + content */}
+                      <div className="flex gap-3 mb-3">
+                        <div className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-xs font-bold bg-violet-500/20 text-violet-400">
+                          {k.authorName.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs font-semibold text-white">{k.authorName}</span>
+                            {k.authorClass && <span className="text-[9px] font-mono text-slate-600">{k.authorClass}</span>}
+                            <span className="text-[9px] font-mono text-slate-700 ml-auto">
+                              {formatDate(k.createdAt)}
+                            </span>
+                          </div>
+                          <p className="text-sm text-slate-400 leading-relaxed">{k.content}</p>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      {k.status === "PENDING" && (
+                        <div className="flex gap-2 justify-end">
+                          <button
+                            onClick={() => approveKomentar(k.id)}
+                            disabled={!!actionLoading}
+                            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:shadow-[0_0_10px_rgba(16,185,129,0.3)] transition-all disabled:opacity-50"
+                          >
+                            {actionLoading === k.id + "_approve" ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
+                            Tampilkan
+                          </button>
+                          <button
+                            onClick={() => deleteKomentar(k.id)}
+                            disabled={!!actionLoading}
+                            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest text-rose-300 bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 transition-all disabled:opacity-50"
+                          >
+                            {actionLoading === k.id + "_delete" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                            Tolak & Hapus
+                          </button>
+                        </div>
+                      )}
+                      {k.status === "APPROVED" && (
+                        <div className="flex justify-end">
+                          <button
+                            onClick={() => deleteKomentar(k.id)}
+                            disabled={!!actionLoading}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-mono text-slate-500 border border-white/6 hover:text-rose-400 hover:border-rose-500/30 transition-all disabled:opacity-50"
+                          >
+                            {actionLoading === k.id + "_delete" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                            Hapus
+                          </button>
+                        </div>
+                      )}
+                    </motion.div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
       </div>
     </div>
   );

@@ -636,6 +636,27 @@ function slugify(text: string): string {
     .replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "-").replace(/^-+|-+$/g, "").substring(0, 80);
 }
 
+interface KomentarSuara {
+  id: string;
+  artikelId: string;
+  artikelTitle: string;
+  authorName: string;
+  authorClass: string;
+  content: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  createdAt: string;
+}
+
+const KOMENTAR_FILE = path.join(DATA_DIR, "suara-komentar.json");
+initJsonFile(KOMENTAR_FILE, []);
+
+function readKomentar(): KomentarSuara[] {
+  try { return JSON.parse(fs.readFileSync(KOMENTAR_FILE, "utf-8")); } catch { return []; }
+}
+function writeKomentar(data: KomentarSuara[]) {
+  fs.writeFileSync(KOMENTAR_FILE, JSON.stringify(data, null, 2), "utf-8");
+}
+
 app.get("/api/suara", (req, res) => {
   try {
     const all = readSuara();
@@ -700,6 +721,14 @@ app.get("/api/suara/leaderboard", (req, res) => {
       .sort((a, b) => b.points - a.points || b.totalLikes - a.totalLikes)
       .slice(0, 15);
     res.json(board);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.get("/api/suara/komentar/admin", requireAuth, (req, res) => {
+  try {
+    const all = readKomentar();
+    all.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    res.json(all);
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
@@ -803,6 +832,67 @@ app.delete("/api/suara/:id", requireAuth, (req, res) => {
     const filtered = all.filter(k => k.id !== req.params.id);
     if (filtered.length === all.length) return res.status(404).json({ error: "Karya tidak ditemukan" });
     writeSuara(filtered);
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.get("/api/suara/:id/komentar", (req, res) => {
+  try {
+    const all = readKomentar();
+    const approved = all
+      .filter(k => k.artikelId === req.params.id && k.status === "APPROVED")
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    res.json(approved);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.post("/api/suara/:id/komentar", (req, res) => {
+  try {
+    const all = readSuara();
+    const karya = all.find(k => k.id === req.params.id);
+    if (!karya || karya.status !== "PUBLISHED")
+      return res.status(404).json({ error: "Artikel tidak ditemukan" });
+    const { authorName, authorClass, content } = req.body;
+    if (!authorName?.trim() || !content?.trim())
+      return res.status(400).json({ error: "Nama dan isi komentar wajib diisi." });
+    if (content.trim().length < 10)
+      return res.status(400).json({ error: "Komentar minimal 10 karakter." });
+    if (content.trim().length > 500)
+      return res.status(400).json({ error: "Komentar maksimal 500 karakter." });
+    const newKomentar: KomentarSuara = {
+      id: crypto.randomUUID(),
+      artikelId: karya.id,
+      artikelTitle: karya.title,
+      authorName: authorName.trim(),
+      authorClass: (authorClass || "").trim(),
+      content: content.trim(),
+      status: "PENDING",
+      createdAt: new Date().toISOString(),
+    };
+    const existing = readKomentar();
+    existing.push(newKomentar);
+    writeKomentar(existing);
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch("/api/suara/komentar/:commentId/approve", requireAuth, (req, res) => {
+  try {
+    const all = readKomentar();
+    const idx = all.findIndex(k => k.id === req.params.commentId);
+    if (idx === -1) return res.status(404).json({ error: "Komentar tidak ditemukan" });
+    all[idx].status = "APPROVED";
+    writeKomentar(all);
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete("/api/suara/komentar/:commentId", requireAuth, (req, res) => {
+  try {
+    const all = readKomentar();
+    const filtered = all.filter(k => k.id !== req.params.commentId);
+    if (filtered.length === all.length) return res.status(404).json({ error: "Komentar tidak ditemukan" });
+    writeKomentar(filtered);
     res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
