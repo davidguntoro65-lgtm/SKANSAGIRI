@@ -19,6 +19,7 @@ import News from "./components/News";
 import PPDBcta from "./components/PPDBcta";
 import Footer from "./components/Footer";
 import AdminPanel from "./components/AdminPanel";
+import WhatsNewNotification from "./components/WhatsNewNotification";
 import KepalaSokolah from "./pages/KepalaSokolah";
 import ManajemenSekolah from "./pages/ManajemenSekolah";
 import VisiMisi from "./pages/VisiMisi";
@@ -276,6 +277,9 @@ export default function App() {
       </main>
 
       <Footer theme={theme} />
+
+      {/* What's New — pops up for returning visitors when there are unread articles */}
+      <WhatsNewNotification />
 
       {/* Floating OSDAI Shortcut */}
       <a

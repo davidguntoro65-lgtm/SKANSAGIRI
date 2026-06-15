@@ -26,7 +26,7 @@ export interface AppData {
   partners: IndustriPartner[];
 }
 
-const STORAGE_KEYS = {
+export const STORAGE_KEYS = {
   COMPETENCES: "smkn1_competencies",
   MILESTONES: "smkn1_milestones",
   GALLERY: "smkn1_gallery",

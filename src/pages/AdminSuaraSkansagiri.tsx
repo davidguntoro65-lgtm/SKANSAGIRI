@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowLeft, CheckCircle2, XCircle, Archive, Trash2, Eye, Clock,
@@ -129,7 +129,7 @@ export default function AdminSuaraSkansagiri({ theme, onBack }: AdminSuaraProps)
     } finally { setActionLoading(null); }
   }
 
-  async function handleLogin(e: React.FormEvent) {
+  async function handleLogin(e: FormEvent) {
     e.preventDefault();
     setLoginError(""); setLoginLoading(true);
     try {

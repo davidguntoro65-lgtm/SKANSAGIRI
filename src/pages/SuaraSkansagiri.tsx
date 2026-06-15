@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type FormEvent } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   PenLine, Heart, Eye, BookOpen, Lightbulb, Feather, MessageCircle,
@@ -135,7 +135,7 @@ export default function SuaraSkansagiri({ theme }: SuaraSkansagiriProps) {
     } finally { setCommentsLoading(false); }
   }
 
-  async function handleCommentSubmit(e: React.FormEvent) {
+  async function handleCommentSubmit(e: FormEvent) {
     e.preventDefault();
     setCommentError("");
     if (!commentForm.authorName.trim()) { setCommentError("Nama wajib diisi."); return; }
@@ -203,7 +203,7 @@ export default function SuaraSkansagiri({ theme }: SuaraSkansagiriProps) {
     } catch {}
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setFormError("");
     if (!form.title.trim() || !form.authorName.trim() || !form.authorClass.trim() || !form.category || !form.content.trim()) {

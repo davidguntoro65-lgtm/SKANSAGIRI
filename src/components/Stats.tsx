@@ -155,9 +155,10 @@ export default function Stats({ theme = "dark" }: { theme?: "light" | "dark" }) 
   return (
     <section className="relative z-20 -mt-16 md:-mt-24 px-6 md:px-12 max-w-7xl mx-auto" id="stats-section">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-        {statsList.map((stat, idx) => (
-          <StatCounterItem key={stat.id} stat={stat} theme={theme} delay={idx * 0.1} />
-        ))}
+        {statsList.map((stat, idx) => {
+          // @ts-ignore -- React 19: key is a valid JSX prop but not in component props type
+          return <StatCounterItem key={stat.id} stat={stat} theme={theme} delay={idx * 0.1} />;
+        })}
       </div>
     </section>
   );

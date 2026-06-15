@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { navigate } from "../utils/navigation";
 import {
@@ -137,7 +137,7 @@ export default function HubungiKami({ theme = "light" }: { theme?: "light" | "da
     setTouched((prev) => ({ ...prev, [field]: true }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setTouched({ nama: true, email: true, keperluan: true, pesan: true });
     const errors = validate();
