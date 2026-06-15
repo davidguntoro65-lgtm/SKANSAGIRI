@@ -5,21 +5,31 @@ import {
   Calendar, ArrowUpRight, Shield, Server, Cpu, Activity, ChevronDown, ChevronUp, FileText, Info
 } from "lucide-react";
 
+// Compute real-time status from date range
+function getStepStatus(start: Date, end: Date): { status: string; statusType: "active" | "upcoming" | "done" } {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const s = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const e = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  if (today > e) return { status: "Selesai", statusType: "done" };
+  if (today >= s && today <= e) return { status: "Berlangsung", statusType: "active" };
+  return { status: "Akan Datang", statusType: "upcoming" };
+}
+
 export default function PPDBcta({ theme = "dark" }: { theme?: "light" | "dark" }) {
   const isDark = theme === "dark";
   const [openFaq, setOpenFaq] = useState<number | null>(0); // Initialize first FAQ open for beautiful presentation
 
-  const applicationSteps = [
+  const stepsRaw = [
     {
       num: "01",
       name: "Pengajuan Akun",
+      start: new Date(2026, 5, 3),
+      end: new Date(2026, 5, 12),
       datePart1: "03 Juni 2026 s/d 12",
       datePart2: "Juni 2026",
       desc: "Calon peserta didik mengajukan pembuatan akun verifikasi secara mandiri di portal resmi.",
-      isBlue: true,
       icon: "laptop",
-      status: "Berlangsung",
-      statusType: "active",
       attributes: [
         { label: "Akses Utama", value: "Gadget/PC Mandiri" },
         { label: "Dokumen", value: "NIK, NISN & KK" },
@@ -29,13 +39,12 @@ export default function PPDBcta({ theme = "dark" }: { theme?: "light" | "dark" }
     {
       num: "02",
       name: "Verifikasi Akun",
+      start: new Date(2026, 5, 4),
+      end: new Date(2026, 5, 13),
       datePart1: "04 Juni 2026 s/d 13",
       datePart2: "Juni 2026",
       desc: "Admin operator melakukan verifikasi berkas dan syarat administrasi pendaftaran.",
-      isBlue: true,
       icon: "search",
-      status: "Berlangsung",
-      statusType: "active",
       attributes: [
         { label: "Verifikator", value: "Panitia PPDB" },
         { label: "Dokumen", value: "Scan Ijazah & Akta" },
@@ -45,13 +54,12 @@ export default function PPDBcta({ theme = "dark" }: { theme?: "light" | "dark" }
     {
       num: "03",
       name: "Aktivasi Akun",
+      start: new Date(2026, 5, 4),
+      end: new Date(2026, 5, 13),
       datePart1: "04 Juni 2026 s/d 13",
       datePart2: "Juni 2026",
       desc: "Calon peserta didik melakukan aktivasi akun setelah mendapatkan persetujuan verifikasi.",
-      isBlue: true,
       icon: "laptop-check",
-      status: "Berlangsung",
-      statusType: "active",
       attributes: [
         { label: "Metode", value: "Aktivasi Token" },
         { label: "Output", value: "ID & Password" },
@@ -61,13 +69,12 @@ export default function PPDBcta({ theme = "dark" }: { theme?: "light" | "dark" }
     {
       num: "04",
       name: "Daftar Sekolah",
+      start: new Date(2026, 5, 15),
+      end: new Date(2026, 5, 18),
       datePart1: "15 Juni 2026 s/d 18",
       datePart2: "Juni 2026",
       desc: "Pemilihan kompetensi keahlian dan pendaftaran pilihan sekolah di sistem PPDB.",
-      isBlue: false,
       icon: "school",
-      status: "Akan Datang",
-      statusType: "upcoming",
       attributes: [
         { label: "Kompetensi", value: "Max. 3 Pilihan" },
         { label: "Jalur", value: "Zonasi & Prestasi" },
@@ -77,13 +84,12 @@ export default function PPDBcta({ theme = "dark" }: { theme?: "light" | "dark" }
     {
       num: "05",
       name: "Hasil Seleksi SPMB",
+      start: new Date(2026, 5, 21),
+      end: new Date(2026, 5, 21),
       datePart1: "21 Juni 2026",
       datePart2: "",
       desc: "Pengumuman resmi hasil seleksi penerimaan murid baru secara serentak.",
-      isBlue: false,
       icon: "users",
-      status: "Akan Datang",
-      statusType: "upcoming",
       attributes: [
         { label: "Sifat PDF", value: "SAH & Legalitas" },
         { label: "Frekuensi", value: "Realtime Tiap Jam" },
@@ -93,13 +99,12 @@ export default function PPDBcta({ theme = "dark" }: { theme?: "light" | "dark" }
     {
       num: "06",
       name: "Daftar Ulang",
+      start: new Date(2026, 5, 22),
+      end: new Date(2026, 5, 25),
       datePart1: "22 Juni 2026 s/d 25",
       datePart2: "Juni 2026",
       desc: "Registrasi fisik dan penyerahan berkas asli bagi calon siswa yang dinyatakan lolos.",
-      isBlue: false,
       icon: "clipboard",
-      status: "Akan Datang",
-      statusType: "upcoming",
       attributes: [
         { label: "Tempat", value: "Loket SMKN 1" },
         { label: "Prosedur", value: "Fisik & Seragam" },
@@ -107,6 +112,12 @@ export default function PPDBcta({ theme = "dark" }: { theme?: "light" | "dark" }
       ]
     }
   ];
+
+  const applicationSteps = stepsRaw.map(s => ({
+    ...s,
+    ...getStepStatus(s.start, s.end),
+    isBlue: getStepStatus(s.start, s.end).statusType === "active",
+  }));
 
   const faqData = [
     {
@@ -336,10 +347,10 @@ export default function PPDBcta({ theme = "dark" }: { theme?: "light" | "dark" }
         {/* Steps Grid (Focusing on clean, high-contrast, premium layouts) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 max-w-7xl mx-auto mb-20 text-center relative z-10" id="ppdb-steps-row">
           {applicationSteps.map((step, idx) => {
-            const isBlueStep = step.isBlue;
             const isActive = step.statusType === "active";
+            const isDone = step.statusType === "done";
             
-            // Premium background and styling configurations focusing on high elegance, whites, and light-frosted effects
+            // Premium background and styling configurations
             let cardClasses = "";
             let nameClasses = "";
             let dateClasses = "";
@@ -350,20 +361,24 @@ export default function PPDBcta({ theme = "dark" }: { theme?: "light" | "dark" }
             let attrValClasses = "";
 
             if (isDark) {
-              // --- DARK MODE: Premium High-Contrast Frosted Metallic White Panels ---
               labelClasses = "text-slate-400";
               attrValClasses = "text-white font-medium";
 
               if (isActive) {
-                // Frosted translucent silver with subtle orange/blue neon edge and golden status
                 cardClasses = "bg-white/[0.09] hover:bg-white/[0.14] border border-white/20 hover:border-amber-400/60 text-white shadow-[0_20px_45px_-12px_rgba(255,255,255,0.03)] hover:shadow-[0_20px_50px_rgba(245,158,11,0.08)]";
                 nameClasses = "text-white font-black";
                 dateClasses = "text-[#f15e42] bg-white border border-[#feeae6] font-extrabold shadow-md";
                 descClasses = "text-slate-200 text-[11px] leading-relaxed font-light";
                 statusBadgeClasses = "bg-amber-400/20 text-amber-300 border border-amber-400/40 font-extrabold";
                 statusDotClasses = "bg-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.6)]";
+              } else if (isDone) {
+                cardClasses = "bg-emerald-950/30 hover:bg-emerald-900/40 border border-emerald-500/20 hover:border-emerald-400/40 text-slate-100 shadow-md hover:shadow-[0_20px_45px_rgba(16,185,129,0.08)] opacity-80";
+                nameClasses = "text-slate-200 font-extrabold";
+                dateClasses = "text-emerald-300 bg-emerald-900/50 font-extrabold border border-emerald-500/20";
+                descClasses = "text-slate-400 text-[11px] leading-relaxed font-light";
+                statusBadgeClasses = "bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 font-extrabold";
+                statusDotClasses = "bg-emerald-500";
               } else {
-                // Highly refined white-silver glass card
                 cardClasses = "bg-white/[0.06] hover:bg-white/[0.11] border border-white/10 hover:border-[#f15e42]/40 text-slate-100 shadow-md hover:shadow-[0_20px_45px_rgba(0,0,0,0.3)]";
                 nameClasses = "text-white font-extrabold";
                 dateClasses = "text-slate-750 bg-slate-100/90 font-extrabold border border-white/10";
@@ -372,20 +387,24 @@ export default function PPDBcta({ theme = "dark" }: { theme?: "light" | "dark" }
                 statusDotClasses = "bg-slate-500";
               }
             } else {
-              // --- LIGHT MODE: Crisp, Perfect Premium Pure White Styling ---
               labelClasses = "text-slate-500";
               attrValClasses = "text-slate-800 font-bold";
 
               if (isActive) {
-                // Luxurious active crisp white with warm light accent shadows and active borders
                 cardClasses = "bg-white border-2 border-slate-900 text-slate-900 shadow-[0_22px_45px_-12px_rgba(15,23,42,0.08)] hover:shadow-2xl hover:border-[#f15e42]";
                 nameClasses = "text-slate-950 font-black";
                 dateClasses = "text-white bg-[#f15e42] font-black shadow-sm text-center";
                 descClasses = "text-slate-650 text-[11.5px] leading-relaxed font-medium";
                 statusBadgeClasses = "bg-[#feeae6] text-[#f15e42] border border-[#f15e42]/20 font-black";
                 statusDotClasses = "bg-[#f15e42] shadow-[0_0_8px_rgba(241,94,66,0.6)]";
+              } else if (isDone) {
+                cardClasses = "bg-emerald-50 border border-emerald-200 text-slate-700 shadow-sm hover:shadow-md hover:border-emerald-400 opacity-80";
+                nameClasses = "text-slate-700 font-extrabold";
+                dateClasses = "text-emerald-700 bg-emerald-100 font-black border border-emerald-200";
+                descClasses = "text-slate-500 text-[11.5px] leading-relaxed font-normal";
+                statusBadgeClasses = "bg-emerald-100 text-emerald-700 border border-emerald-200 font-black";
+                statusDotClasses = "bg-emerald-500";
               } else {
-                // Elegant crisp pure white card
                 cardClasses = "bg-white border border-slate-200/80 text-slate-800 shadow-[0_15px_35px_-10px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-slate-400";
                 nameClasses = "text-slate-900 font-extrabold";
                 dateClasses = "text-[#f15e42] bg-[#feeae6] font-black shadow-none border border-transparent";
@@ -414,7 +433,7 @@ export default function PPDBcta({ theme = "dark" }: { theme?: "light" | "dark" }
                 <div className="flex flex-col items-center w-full relative z-10">
                   {/* Top Header Labeling & Indicators */}
                   <div className="flex items-center justify-between w-full mb-5 font-mono text-[9px] tracking-widest font-bold">
-                    <span className={isActive ? "text-[#f15e42] font-bold" : "text-slate-400"}>
+                    <span className={isActive ? "text-[#f15e42] font-bold" : isDone ? "text-emerald-500 font-bold" : "text-slate-400"}>
                       LANGKAH {step.num}
                     </span>
                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[8.5px] uppercase ${statusBadgeClasses}`}>
@@ -433,6 +452,13 @@ export default function PPDBcta({ theme = "dark" }: { theme?: "light" | "dark" }
                         <div className="absolute inset-0 bg-[#f15e42]/20 rounded-full animate-ping z-0" />
                         <div className="absolute inset-2 bg-amber-500/20 rounded-full animate-pulse z-0" style={{ animationDuration: "1.5s" }} />
                       </>
+                    )}
+                    {isDone && (
+                      <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center z-20 shadow-sm">
+                        <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth="2.5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
+                        </svg>
+                      </div>
                     )}
                   </div>
                   
