@@ -1102,6 +1102,48 @@ app.delete("/api/suara/komentar/:commentId", requireAuth, (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+app.get("/sitemap.xml", (req, res) => {
+  const BASE_URL = (process.env.SITE_URL || "https://smkn1wonogiri.sch.id/id").replace(/\/$/, "");
+  const staticRoutes = [
+    { path: "/", priority: "1.0", changefreq: "weekly" },
+    { path: "/berita", priority: "0.9", changefreq: "daily" },
+    { path: "/tentang/kepala-sekolah", priority: "0.8", changefreq: "monthly" },
+    { path: "/tentang/manajemen-sekolah", priority: "0.8", changefreq: "monthly" },
+    { path: "/tentang/visi-misi", priority: "0.8", changefreq: "monthly" },
+    { path: "/tracer-studi", priority: "0.7", changefreq: "weekly" },
+    { path: "/modul-integrasi", priority: "0.7", changefreq: "monthly" },
+    { path: "/suara-skansagiri", priority: "0.7", changefreq: "weekly" },
+    { path: "/hubungi-kami", priority: "0.6", changefreq: "monthly" }
+  ];
+  let newsUrls = "";
+  try {
+    const newsData = JSON.parse(import_fs.default.readFileSync(filePaths.news, "utf-8"));
+    newsData.forEach((item) => {
+      if (item.id) {
+        newsUrls += `
+  <url>
+    <loc>${BASE_URL}/berita#${item.id}</loc>
+    <priority>0.6</priority>
+    <changefreq>never</changefreq>
+  </url>`;
+      }
+    });
+  } catch (_) {
+  }
+  const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+  const staticXml = staticRoutes.map((r) => `
+  <url>
+    <loc>${BASE_URL}${r.path}</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>${r.changefreq}</changefreq>
+    <priority>${r.priority}</priority>
+  </url>`).join("");
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${staticXml}${newsUrls}
+</urlset>`;
+  res.set("Content-Type", "application/xml");
+  res.send(xml);
+});
 async function main() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await (0, import_vite.createServer)({
