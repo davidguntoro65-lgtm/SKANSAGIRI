@@ -4,7 +4,8 @@ import {
   LayoutDashboard, LogOut, KeyRound, User, Lock, Save, Trash2, Edit2, Plus, X, Globe, 
   Trophy, Camera, Users, Newspaper, CheckCircle2, RefreshCw, ArrowLeft, Image, Link, 
   Compass, ChevronRight, AlertCircle, BookOpen, GraduationCap, HardDrive,
-  Upload, SlidersHorizontal, Sparkles, Crop, Check, Eye, Handshake, Target, Telescope
+  Upload, SlidersHorizontal, Sparkles, Crop, Check, Eye, Handshake, Target, Telescope,
+  Inbox, Mail, MailOpen, Search, Phone, MessageSquare, MailCheck, Filter, ChevronDown
 } from "lucide-react";
 import { Competency, Milestone, GalleryItem, Alumnus, NewsArticle, IndustriPartner } from "../data";
 import { DataStore } from "../dataStore";
@@ -30,7 +31,7 @@ export default function AdminPanel({
   const [loginLoading, setLoginLoading] = useState(false);
 
   // Active Admin Sidebar Tab
-  const [activeTab, setActiveTab] = useState<"competencies" | "milestones" | "gallery" | "alumni" | "news" | "partners" | "branding" | "about" | "kepala-sekolah" | "manajemen-sekolah" | "visi-misi" | "social-media">("competencies");
+  const [activeTab, setActiveTab] = useState<"competencies" | "milestones" | "gallery" | "alumni" | "news" | "partners" | "branding" | "about" | "kepala-sekolah" | "manajemen-sekolah" | "visi-misi" | "social-media" | "inbox-pesan">("competencies");
   const { branding, saveBranding, getLogo } = useBranding();
   const [brandingDraft, setBrandingDraft] = useState<Branding | null>(null);
   const [brandingLoading, setBrandingLoading] = useState(false);
@@ -62,6 +63,17 @@ export default function AdminPanel({
   interface SocialMediaData { instagram: string; youtube: string; website: string; facebook: string; tiktok: string; twitter: string; }
   const [socialMedia, setSocialMedia] = useState<SocialMediaData>({ instagram: "", youtube: "", website: "", facebook: "", tiktok: "", twitter: "" });
   const [socialMediaLoading, setSocialMediaLoading] = useState(false);
+
+  // Contact Messages (Inbox)
+  interface ContactMessage { id: string; nama: string; email: string; noHp: string; keperluan: string; pesan: string; waktu: string; dibaca: boolean; }
+  const [contactMessages, setContactMessages] = useState<ContactMessage[]>([]);
+  const [contactLoading, setContactLoading] = useState(false);
+  const [contactSearch, setContactSearch] = useState("");
+  const [contactFilterStatus, setContactFilterStatus] = useState<"semua" | "belum-dibaca" | "sudah-dibaca">("semua");
+  const [contactFilterKeperluan, setContactFilterKeperluan] = useState("semua");
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+  const [contactDeleting, setContactDeleting] = useState<Set<string>>(new Set());
+  const [contactKeperluanDropOpen, setContactKeperluanDropOpen] = useState(false);
 
   // Editing state
   const [editingItem, setEditingItem] = useState<any>(null);
@@ -268,6 +280,18 @@ export default function AdminPanel({
       fetch("/api/social-media").then(r => r.json()).then(d => setSocialMedia(d)).catch(() => {});
     }
   }, [isLoggedIn]);
+
+  const loadContactMessages = () => {
+    setContactLoading(true);
+    fetch("/api/contact", { headers: getAuthHeaders() })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => { setContactMessages(Array.isArray(d) ? d : []); setContactLoading(false); })
+      .catch(() => setContactLoading(false));
+  };
+
+  useEffect(() => {
+    if (activeTab === "inbox-pesan" && isLoggedIn) loadContactMessages();
+  }, [activeTab, isLoggedIn]);
 
   const getAuthHeaders = (): HeadersInit => {
     const token = localStorage.getItem("smkn1_adm_token") || "";
@@ -751,7 +775,8 @@ export default function AdminPanel({
                     { id: "kepala-sekolah", label: "Kepala Sekolah", icon: User, count: null },
                     { id: "manajemen-sekolah", label: "Manajemen Sekolah", icon: Users, count: null },
                     { id: "visi-misi", label: "Visi & Misi", icon: Target, count: null },
-                    { id: "social-media", label: "Media Sosial", icon: Globe, count: null }
+                    { id: "social-media", label: "Media Sosial", icon: Globe, count: null },
+                    { id: "inbox-pesan", label: "Inbox Pesan Masuk", icon: Inbox, count: contactMessages.filter(m => !m.dibaca).length || null }
                   ].map((tab) => {
                     const TabIcon = tab.icon;
                     const isActive = activeTab === tab.id;
@@ -831,6 +856,7 @@ export default function AdminPanel({
                     {activeTab === "manajemen-sekolah" && "Manajemen & Pimpinan Sekolah"}
                     {activeTab === "visi-misi" && "Visi & Misi Sekolah"}
                     {activeTab === "social-media" && "Kelola Tautan Media Sosial"}
+                    {activeTab === "inbox-pesan" && "Inbox Pesan Masuk"}
                   </h2>
                   <p className={`text-xs ${isDarkTheme ? "text-slate-400" : "text-slate-500"} font-light mt-0.5`}>
                     {activeTab === "competencies" && "Perbarui deskripsi, kurikulum, bidang karir, and detail program keahlian sekolah."}
@@ -845,10 +871,11 @@ export default function AdminPanel({
                     {activeTab === "manajemen-sekolah" && "Perbarui foto dan nama untuk setiap jabatan pimpinan yang tampil di halaman Manajemen Sekolah."}
                     {activeTab === "visi-misi" && "Edit teks Visi dan butir-butir Misi sekolah yang tampil di halaman Visi & Misi."}
                     {activeTab === "social-media" && "Atur URL akun Instagram, YouTube, Facebook, dan Website resmi yang tampil di footer portal."}
+                    {activeTab === "inbox-pesan" && "Baca, balas, dan kelola semua pesan yang masuk melalui formulir Hubungi Kami."}
                   </p>
                 </div>
 
-                {!isAddingNew && !editingItem && activeTab !== "branding" && activeTab !== "about" && activeTab !== "kepala-sekolah" && activeTab !== "manajemen-sekolah" && activeTab !== "visi-misi" && activeTab !== "social-media" && (
+                {!isAddingNew && !editingItem && activeTab !== "branding" && activeTab !== "about" && activeTab !== "kepala-sekolah" && activeTab !== "manajemen-sekolah" && activeTab !== "visi-misi" && activeTab !== "social-media" && activeTab !== "inbox-pesan" && (
                   <button
                     onClick={() => {
                       setIsAddingNew(true);
@@ -2785,6 +2812,329 @@ export default function AdminPanel({
                             Perubahan akan tampil di Footer halaman utama.
                           </p>
                         </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* ── INBOX PESAN MASUK PANEL ─────────────────────────── */}
+                  {activeTab === "inbox-pesan" && (() => {
+                    const keperluanOptions = [
+                      "semua",
+                      "Informasi Pendaftaran PPDB",
+                      "Informasi Jurusan / Program Keahlian",
+                      "Informasi Biaya Sekolah",
+                      "Kerjasama & Kemitraan Industri",
+                      "Magang / PKL Siswa",
+                      "Alumni & Bursa Kerja (BKK)",
+                      "Permohonan Dokumen / Surat",
+                      "Kunjungan / Studi Banding",
+                      "Pengaduan & Saran",
+                      "Lainnya",
+                    ];
+
+                    const filtered = contactMessages.filter(m => {
+                      const q = contactSearch.toLowerCase();
+                      const matchSearch = !q || m.nama.toLowerCase().includes(q) || m.email.toLowerCase().includes(q) || m.pesan.toLowerCase().includes(q) || m.keperluan.toLowerCase().includes(q);
+                      const matchStatus = contactFilterStatus === "semua" || (contactFilterStatus === "belum-dibaca" ? !m.dibaca : m.dibaca);
+                      const matchKeperluan = contactFilterKeperluan === "semua" || m.keperluan === contactFilterKeperluan;
+                      return matchSearch && matchStatus && matchKeperluan;
+                    });
+
+                    const selectedMsg = filtered.find(m => m.id === selectedMessageId) || filtered[0] || null;
+
+                    const markAsRead = async (id: string) => {
+                      try {
+                        await fetch(`/api/contact/${id}/baca`, { method: "PATCH", headers: getAuthHeaders() });
+                        setContactMessages(prev => prev.map(m => m.id === id ? { ...m, dibaca: true } : m));
+                      } catch { showFeedback("Gagal menandai pesan.", "error"); }
+                    };
+
+                    const deleteMessage = async (id: string, nama: string) => {
+                      if (!window.confirm(`Hapus pesan dari "${nama}"? Tindakan ini tidak dapat dibatalkan.`)) return;
+                      setContactDeleting(prev => new Set([...prev, id]));
+                      try {
+                        const res = await fetch(`/api/contact/${id}`, { method: "DELETE", headers: getAuthHeaders() });
+                        if (res.ok) {
+                          setContactMessages(prev => prev.filter(m => m.id !== id));
+                          if (selectedMessageId === id) setSelectedMessageId(null);
+                          showFeedback(`Pesan dari "${nama}" berhasil dihapus.`, "success");
+                        } else { showFeedback("Gagal menghapus pesan.", "error"); }
+                      } catch { showFeedback("Gagal menghapus pesan.", "error"); }
+                      setContactDeleting(prev => { const s = new Set(prev); s.delete(id); return s; });
+                    };
+
+                    const markAllRead = async () => {
+                      const unread = contactMessages.filter(m => !m.dibaca);
+                      for (const m of unread) {
+                        try { await fetch(`/api/contact/${m.id}/baca`, { method: "PATCH", headers: getAuthHeaders() }); } catch {}
+                      }
+                      setContactMessages(prev => prev.map(m => ({ ...m, dibaca: true })));
+                      showFeedback(`${unread.length} pesan ditandai sudah dibaca.`, "success");
+                    };
+
+                    const formatTime = (iso: string) => {
+                      try {
+                        const d = new Date(iso);
+                        const now = new Date();
+                        const diffMs = now.getTime() - d.getTime();
+                        const diffMin = Math.floor(diffMs / 60000);
+                        const diffH = Math.floor(diffMin / 60);
+                        const diffD = Math.floor(diffH / 24);
+                        if (diffMin < 1) return "Baru saja";
+                        if (diffMin < 60) return `${diffMin} mnt lalu`;
+                        if (diffH < 24) return `${diffH} jam lalu`;
+                        if (diffD < 7) return `${diffD} hari lalu`;
+                        return d.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+                      } catch { return iso; }
+                    };
+
+                    const formatFullTime = (iso: string) => {
+                      try {
+                        return new Date(iso).toLocaleString("id-ID", {
+                          weekday: "long", day: "numeric", month: "long", year: "numeric",
+                          hour: "2-digit", minute: "2-digit"
+                        });
+                      } catch { return iso; }
+                    };
+
+                    const totalUnread = contactMessages.filter(m => !m.dibaca).length;
+
+                    return (
+                      <div className="space-y-5 text-left">
+
+                        {/* ── Stats Row ── */}
+                        <div className="grid grid-cols-3 gap-4">
+                          {[
+                            { label: "Total Pesan", val: contactMessages.length, icon: MessageSquare, color: "text-blue-500", bg: isDarkTheme ? "bg-blue-500/8 border-blue-500/15" : "bg-blue-50 border-blue-100" },
+                            { label: "Belum Dibaca", val: totalUnread, icon: Mail, color: "text-amber-500", bg: isDarkTheme ? "bg-amber-500/8 border-amber-500/15" : "bg-amber-50 border-amber-100" },
+                            { label: "Sudah Dibaca", val: contactMessages.length - totalUnread, icon: MailCheck, color: "text-emerald-500", bg: isDarkTheme ? "bg-emerald-500/8 border-emerald-500/15" : "bg-emerald-50 border-emerald-100" },
+                          ].map(s => (
+                            <div key={s.label} className={`rounded-xl border p-4 flex items-center gap-3 ${s.bg}`}>
+                              <s.icon className={`w-5 h-5 shrink-0 ${s.color}`} />
+                              <div>
+                                <p className={`text-xl font-bold font-mono ${isDarkTheme ? "text-white" : "text-slate-900"}`}>{s.val}</p>
+                                <p className={`text-[10px] uppercase tracking-widest font-mono ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>{s.label}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* ── Toolbar ── */}
+                        <div className="flex flex-wrap items-center gap-3">
+                          <div className={`flex-1 min-w-[180px] flex items-center gap-2 px-3 py-2 rounded-xl border text-sm ${isDarkTheme ? "bg-slate-900 border-white/8" : "bg-white border-slate-200"}`}>
+                            <Search className="w-4 h-4 text-slate-400 shrink-0" />
+                            <input
+                              type="text"
+                              placeholder="Cari nama, email, pesan…"
+                              value={contactSearch}
+                              onChange={e => setContactSearch(e.target.value)}
+                              className={`flex-1 outline-none bg-transparent text-xs ${isDarkTheme ? "text-slate-100 placeholder:text-slate-600" : "text-slate-800 placeholder:text-slate-400"}`}
+                            />
+                            {contactSearch && <button onClick={() => setContactSearch("")} className="text-slate-400 hover:text-slate-600"><X className="w-3.5 h-3.5" /></button>}
+                          </div>
+
+                          {/* Status Filter */}
+                          {(["semua", "belum-dibaca", "sudah-dibaca"] as const).map(f => (
+                            <button key={f} onClick={() => setContactFilterStatus(f)}
+                              className={`px-3 py-2 rounded-xl border text-[10px] font-mono uppercase tracking-widest transition-all ${
+                                contactFilterStatus === f
+                                  ? "bg-amber-500 border-amber-500 text-slate-950 font-bold"
+                                  : isDarkTheme ? "border-white/8 text-slate-400 hover:bg-white/5" : "border-slate-200 text-slate-500 hover:bg-slate-100"
+                              }`}>
+                              {f === "semua" ? "Semua" : f === "belum-dibaca" ? "Belum Dibaca" : "Sudah Dibaca"}
+                            </button>
+                          ))}
+
+                          {/* Keperluan Dropdown */}
+                          <div className="relative" onClick={() => setContactKeperluanDropOpen(v => !v)}>
+                            <button className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[10px] font-mono uppercase tracking-widest transition-all ${
+                              contactFilterKeperluan !== "semua"
+                                ? "bg-amber-500 border-amber-500 text-slate-950 font-bold"
+                                : isDarkTheme ? "border-white/8 text-slate-400 hover:bg-white/5" : "border-slate-200 text-slate-500 hover:bg-slate-100"
+                            }`}>
+                              <Filter className="w-3 h-3" />
+                              {contactFilterKeperluan === "semua" ? "Keperluan" : contactFilterKeperluan.slice(0, 18) + (contactFilterKeperluan.length > 18 ? "…" : "")}
+                              <ChevronDown className={`w-3 h-3 transition-transform ${contactKeperluanDropOpen ? "rotate-180" : ""}`} />
+                            </button>
+                            <AnimatePresence>
+                              {contactKeperluanDropOpen && (
+                                <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }}
+                                  className={`absolute right-0 top-full mt-2 w-64 rounded-xl border shadow-xl z-50 overflow-hidden ${isDarkTheme ? "bg-slate-900 border-white/8" : "bg-white border-slate-200"}`}>
+                                  {keperluanOptions.map(opt => (
+                                    <button key={opt} onClick={() => { setContactFilterKeperluan(opt); setContactKeperluanDropOpen(false); }}
+                                      className={`w-full text-left px-4 py-2.5 text-xs transition-colors ${
+                                        contactFilterKeperluan === opt
+                                          ? "bg-amber-500 text-slate-950 font-bold"
+                                          : isDarkTheme ? "text-slate-300 hover:bg-white/5" : "text-slate-700 hover:bg-slate-50"
+                                      }`}>
+                                      {opt === "semua" ? "— Semua Keperluan —" : opt}
+                                    </button>
+                                  ))}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+
+                          <div className="ml-auto flex items-center gap-2">
+                            {totalUnread > 0 && (
+                              <button onClick={markAllRead}
+                                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[10px] font-mono uppercase tracking-widest transition-all ${isDarkTheme ? "border-white/8 text-emerald-400 hover:bg-emerald-500/8" : "border-slate-200 text-emerald-600 hover:bg-emerald-50"}`}>
+                                <MailCheck className="w-3.5 h-3.5" />
+                                Tandai Semua Dibaca
+                              </button>
+                            )}
+                            <button onClick={loadContactMessages} disabled={contactLoading}
+                              className={`p-2 rounded-xl border transition-all ${isDarkTheme ? "border-white/8 text-slate-400 hover:bg-white/5" : "border-slate-200 text-slate-500 hover:bg-slate-100"}`}>
+                              <RefreshCw className={`w-4 h-4 ${contactLoading ? "animate-spin" : ""}`} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* ── Main Two-Panel Email Client Layout ── */}
+                        {contactLoading ? (
+                          <div className="flex items-center justify-center py-20">
+                            <RefreshCw className="w-6 h-6 animate-spin text-amber-500" />
+                          </div>
+                        ) : filtered.length === 0 ? (
+                          <div className={`py-20 text-center rounded-2xl border ${isDarkTheme ? "border-dashed border-white/5" : "border-dashed border-slate-200"}`}>
+                            <Inbox className="w-8 h-8 mx-auto text-slate-400/50 mb-3" />
+                            <p className={`text-sm font-semibold ${isDarkTheme ? "text-slate-400" : "text-slate-500"}`}>
+                              {contactMessages.length === 0 ? "Belum ada pesan masuk" : "Tidak ada pesan yang cocok"}
+                            </p>
+                            <p className={`text-xs mt-1 ${isDarkTheme ? "text-slate-600" : "text-slate-400"}`}>
+                              {contactMessages.length === 0 ? "Pesan dari halaman Hubungi Kami akan muncul di sini." : "Coba ubah filter pencarian."}
+                            </p>
+                          </div>
+                        ) : (
+                          <div className={`rounded-2xl border overflow-hidden ${isDarkTheme ? "border-white/8" : "border-slate-200"}`}
+                            style={{ display: "grid", gridTemplateColumns: "320px 1fr", minHeight: 560 }}>
+
+                            {/* Left: Message List */}
+                            <div className={`border-r overflow-y-auto ${isDarkTheme ? "border-white/8" : "border-slate-200"}`} style={{ maxHeight: 620 }}>
+                              {filtered.map(msg => {
+                                const isSelected = selectedMessageId === msg.id || (!selectedMessageId && msg.id === filtered[0]?.id);
+                                return (
+                                  <button key={msg.id} onClick={() => { setSelectedMessageId(msg.id); if (!msg.dibaca) markAsRead(msg.id); }}
+                                    className={`w-full text-left px-4 py-4 border-b transition-all ${
+                                      isDarkTheme ? "border-white/5" : "border-slate-100"
+                                    } ${isSelected
+                                      ? isDarkTheme ? "bg-amber-500/10 border-l-2 border-l-amber-500" : "bg-amber-50 border-l-2 border-l-amber-500"
+                                      : isDarkTheme ? "hover:bg-white/3" : "hover:bg-slate-50"
+                                    }`}>
+                                    <div className="flex items-start justify-between gap-2 mb-1">
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        {!msg.dibaca && <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0 mt-1" />}
+                                        <span className={`text-xs font-semibold truncate ${isDarkTheme ? "text-slate-100" : "text-slate-900"} ${!msg.dibaca ? "font-bold" : ""}`}>
+                                          {msg.nama}
+                                        </span>
+                                      </div>
+                                      <span className={`text-[10px] font-mono shrink-0 ${isDarkTheme ? "text-slate-600" : "text-slate-400"}`}>
+                                        {formatTime(msg.waktu)}
+                                      </span>
+                                    </div>
+                                    <p className={`text-[10px] truncate mb-1.5 ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>{msg.email}</p>
+                                    <span className={`inline-block text-[9px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                                      isDarkTheme ? "bg-slate-800 text-slate-400" : "bg-slate-100 text-slate-500"
+                                    }`}>{msg.keperluan.slice(0, 28)}{msg.keperluan.length > 28 ? "…" : ""}</span>
+                                    <p className={`text-[11px] mt-2 leading-relaxed line-clamp-2 ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>
+                                      {msg.pesan}
+                                    </p>
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {/* Right: Message Detail */}
+                            {selectedMsg ? (
+                              <div className={`flex flex-col ${isDarkTheme ? "bg-slate-900/40" : "bg-white"}`}>
+                                {/* Detail Header */}
+                                <div className={`px-6 py-4 border-b flex items-start justify-between gap-4 ${isDarkTheme ? "border-white/8" : "border-slate-100"}`}>
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                                      <span className={`text-[9px] font-mono uppercase tracking-widest px-2 py-0.5 rounded-full ${
+                                        selectedMsg.dibaca
+                                          ? isDarkTheme ? "bg-emerald-500/10 text-emerald-400" : "bg-emerald-50 text-emerald-600"
+                                          : isDarkTheme ? "bg-amber-500/10 text-amber-400" : "bg-amber-50 text-amber-600"
+                                      }`}>
+                                        {selectedMsg.dibaca ? "Sudah Dibaca" : "Belum Dibaca"}
+                                      </span>
+                                      <span className={`text-[9px] font-mono uppercase tracking-widest px-2 py-0.5 rounded-full ${isDarkTheme ? "bg-slate-800 text-slate-400" : "bg-slate-100 text-slate-500"}`}>
+                                        {selectedMsg.keperluan}
+                                      </span>
+                                    </div>
+                                    <h3 className={`text-sm font-bold mt-1 ${isDarkTheme ? "text-white" : "text-slate-900"}`}>{selectedMsg.nama}</h3>
+                                    <p className={`text-[11px] mt-0.5 ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>{formatFullTime(selectedMsg.waktu)}</p>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    {!selectedMsg.dibaca && (
+                                      <button onClick={() => markAsRead(selectedMsg.id)}
+                                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[10px] font-mono uppercase tracking-widest transition-all ${isDarkTheme ? "border-white/8 text-emerald-400 hover:bg-emerald-500/8" : "border-slate-200 text-emerald-600 hover:bg-emerald-50"}`}>
+                                        <Eye className="w-3.5 h-3.5" />
+                                        Tandai Dibaca
+                                      </button>
+                                    )}
+                                    <button onClick={() => deleteMessage(selectedMsg.id, selectedMsg.nama)}
+                                      disabled={contactDeleting.has(selectedMsg.id)}
+                                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[10px] font-mono uppercase tracking-widest transition-all ${isDarkTheme ? "border-red-500/20 text-red-400 hover:bg-red-500/8" : "border-red-200 text-red-500 hover:bg-red-50"}`}>
+                                      {contactDeleting.has(selectedMsg.id) ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                                      Hapus
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Sender Details */}
+                                <div className={`px-6 py-4 border-b grid grid-cols-3 gap-4 ${isDarkTheme ? "border-white/8 bg-slate-900/60" : "border-slate-100 bg-slate-50/60"}`}>
+                                  {[
+                                    { icon: User, label: "Nama Lengkap", val: selectedMsg.nama },
+                                    { icon: Mail, label: "Email", val: selectedMsg.email, href: `mailto:${selectedMsg.email}` },
+                                    { icon: Phone, label: "No. HP/WA", val: selectedMsg.noHp || "—", href: selectedMsg.noHp ? `tel:${selectedMsg.noHp}` : undefined },
+                                  ].map(({ icon: Icon, label, val, href }) => (
+                                    <div key={label}>
+                                      <p className={`text-[9px] font-mono uppercase tracking-widest mb-1 ${isDarkTheme ? "text-slate-600" : "text-slate-400"}`}>{label}</p>
+                                      {href ? (
+                                        <a href={href} className={`text-xs font-medium break-all ${isDarkTheme ? "text-amber-400 hover:text-amber-300" : "text-amber-600 hover:text-amber-700"}`}>{val}</a>
+                                      ) : (
+                                        <p className={`text-xs font-medium ${isDarkTheme ? "text-slate-200" : "text-slate-700"}`}>{val}</p>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+
+                                {/* Message Body */}
+                                <div className="px-6 py-5 flex-1">
+                                  <p className={`text-[10px] font-mono uppercase tracking-widest mb-3 ${isDarkTheme ? "text-slate-600" : "text-slate-400"}`}>Isi Pesan</p>
+                                  <div className={`p-5 rounded-xl border leading-relaxed text-sm whitespace-pre-wrap ${isDarkTheme ? "bg-slate-900 border-white/5 text-slate-200" : "bg-slate-50 border-slate-200 text-slate-700"}`}>
+                                    {selectedMsg.pesan}
+                                  </div>
+                                </div>
+
+                                {/* Quick Reply Buttons */}
+                                <div className={`px-6 py-4 border-t flex gap-3 ${isDarkTheme ? "border-white/8" : "border-slate-100"}`}>
+                                  <a href={`mailto:${selectedMsg.email}?subject=Re: ${encodeURIComponent(selectedMsg.keperluan)} - SMKN 1 Wonogiri&body=Yth. ${encodeURIComponent(selectedMsg.nama)},%0A%0A`}
+                                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold uppercase tracking-widest transition-colors shadow-sm">
+                                    <MailOpen className="w-3.5 h-3.5" />
+                                    Balas via Email
+                                  </a>
+                                  {selectedMsg.noHp && (
+                                    <a href={`https://wa.me/${selectedMsg.noHp.replace(/[^0-9]/g, "")}?text=${encodeURIComponent("Halo " + selectedMsg.nama + ", terima kasih telah menghubungi SMKN 1 Wonogiri.")}`}
+                                      target="_blank" rel="noopener noreferrer"
+                                      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-bold uppercase tracking-widest transition-colors ${isDarkTheme ? "border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/8" : "border-emerald-200 text-emerald-600 hover:bg-emerald-50"}`}>
+                                      <Phone className="w-3.5 h-3.5" />
+                                      WhatsApp
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-center h-full text-center p-8">
+                                <div>
+                                  <Inbox className="w-10 h-10 mx-auto text-slate-400/40 mb-3" />
+                                  <p className={`text-sm ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>Pilih pesan untuk membacanya</p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })()}
