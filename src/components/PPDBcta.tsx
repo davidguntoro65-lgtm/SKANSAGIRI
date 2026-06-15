@@ -1,9 +1,74 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   ArrowRight, Sparkles, Laptop, Search, FileEdit, School, Users, ClipboardCheck, 
-  Calendar, ArrowUpRight, Shield, Server, Cpu, Activity, ChevronDown, ChevronUp, FileText, Info
+  Calendar, ArrowUpRight, Shield, Server, Cpu, Activity, ChevronDown, ChevronUp, FileText, Info, Timer
 } from "lucide-react";
+
+// Live countdown to end of a date (23:59:59 on that day)
+function useCountdownToDate(endDate: Date) {
+  const getRemaining = () => {
+    const target = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59);
+    const diff = target.getTime() - Date.now();
+    if (diff <= 0) return { days: 0, hours: 0, minutes: 0, seconds: 0, expired: true };
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+    return { days, hours, minutes, seconds, expired: false };
+  };
+  const [remaining, setRemaining] = useState(getRemaining);
+  useEffect(() => {
+    const id = setInterval(() => setRemaining(getRemaining()), 1000);
+    return () => clearInterval(id);
+  }, [endDate.getTime()]);
+  return remaining;
+}
+
+// Countdown display sub-component (safe: hooks called at top level of component)
+function CountdownDisplay({ endDate, isDark }: { endDate: Date; isDark: boolean }) {
+  const { days, hours, minutes, seconds, expired } = useCountdownToDate(endDate);
+  if (expired) return null;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const units = [
+    { label: "Hari", value: days },
+    { label: "Jam", value: hours },
+    { label: "Menit", value: minutes },
+    { label: "Detik", value: seconds },
+  ];
+  return (
+    <div className={`w-full rounded-xl p-3 mb-4 border ${
+      isDark
+        ? "bg-slate-900/70 border-amber-400/20"
+        : "bg-[#fff8f6] border-[#f15e42]/20"
+    }`}>
+      <div className={`flex items-center gap-1.5 mb-2.5 justify-center font-mono text-[8.5px] tracking-widest uppercase font-bold ${
+        isDark ? "text-amber-400" : "text-[#f15e42]"
+      }`}>
+        <Timer className="w-3 h-3 animate-pulse" />
+        <span>Sisa Waktu Tahap Ini</span>
+      </div>
+      <div className="grid grid-cols-4 gap-1.5">
+        {units.map(({ label, value }) => (
+          <div key={label} className={`flex flex-col items-center rounded-lg py-1.5 px-1 ${
+            isDark ? "bg-white/5 border border-white/10" : "bg-white border border-slate-200 shadow-xs"
+          }`}>
+            <span className={`font-mono text-[16px] font-black leading-none tabular-nums ${
+              isDark ? "text-white" : "text-slate-900"
+            }`}>
+              {pad(value)}
+            </span>
+            <span className={`font-mono text-[7px] uppercase tracking-widest mt-1 font-bold ${
+              isDark ? "text-slate-500" : "text-slate-400"
+            }`}>
+              {label}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // Compute real-time status from date range
 function getStepStatus(start: Date, end: Date): { status: string; statusType: "active" | "upcoming" | "done" } {
@@ -478,6 +543,9 @@ export default function PPDBcta({ theme = "dark" }: { theme?: "light" | "dark" }
                     </div>
                   </div>
                 </div>
+
+                {/* Live countdown — only on the active step */}
+                {isActive && <CountdownDisplay endDate={step.end} isDark={isDark} />}
 
                 {/* Main Descriptive content inside */}
                 <p className={`mb-6 text-center leading-relaxed font-sans ${descClasses}`}>
