@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { navigate } from "../utils/navigation";
 import {
   Briefcase, GraduationCap, Store, Clock, ArrowLeft, ArrowRight,
   CheckCircle2, ChevronRight, Users, TrendingUp, Award, MapPin,
@@ -196,7 +197,7 @@ export default function TracerStudi({ theme = "light" }: { theme?: "light" | "da
         <nav className="flex items-center gap-2 mb-10 text-[10px] font-mono uppercase tracking-widest">
           <a
             href="/"
-            onClick={(e) => { e.preventDefault(); window.history.pushState({}, "", "/"); window.dispatchEvent(new Event("popstate")); }}
+            onClick={(e) => { e.preventDefault(); navigate("/"); }}
             className={`transition-colors ${isDark ? "text-slate-500 hover:text-amber-400" : "text-slate-400 hover:text-amber-600"}`}
           >
             Beranda
@@ -651,7 +652,7 @@ export default function TracerStudi({ theme = "light" }: { theme?: "light" | "da
                 </p>
 
                 <button
-                  onClick={() => { window.history.pushState({}, "", "/"); window.dispatchEvent(new Event("popstate")); }}
+                  onClick={() => { navigate("/"); }}
                   className={`mt-6 flex items-center gap-2 mx-auto text-xs font-bold uppercase tracking-widest px-5 py-2.5 rounded-full border transition-colors ${isDark ? "border-white/10 text-slate-400 hover:text-white hover:border-white/20" : "border-slate-200 text-slate-500 hover:text-slate-700"}`}
                 >
                   <ArrowLeft className="w-4 h-4" /> Kembali ke Beranda

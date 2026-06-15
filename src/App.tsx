@@ -30,11 +30,12 @@ import ModulIntegrasi from "./pages/ModulIntegrasi";
 import SuaraSkansagiri from "./pages/SuaraSkansagiri";
 import AdminSuaraSkansagiri from "./pages/AdminSuaraSkansagiri";
 import { DataStore } from "./dataStore";
+import { navigate, getAppPath } from "./utils/navigation";
 
 type AppPath = "/" | "/adm-panel" | "/tentang/kepala-sekolah" | "/tentang/manajemen-sekolah" | "/tentang/visi-misi" | "/tracer-studi" | "/admin/tracer-studi" | "/berita" | "/hubungi-kami" | "/modul-integrasi" | "/suara-skansagiri" | "/admin/suara-skansagiri";
 
 function getPath(): AppPath {
-  const p = window.location.pathname;
+  const p = getAppPath();
   if (p === "/adm-panel") return "/adm-panel";
   if (p === "/tentang/kepala-sekolah") return "/tentang/kepala-sekolah";
   if (p === "/tentang/manajemen-sekolah") return "/tentang/manajemen-sekolah";
@@ -136,10 +137,7 @@ export default function App() {
     return (
       <AdminPanel
         theme={theme}
-        onBackToFrontpage={() => {
-          window.history.pushState({}, "", "/");
-          window.dispatchEvent(new Event("popstate"));
-        }}
+        onBackToFrontpage={() => navigate("/")}
       />
     );
   }
@@ -197,10 +195,7 @@ export default function App() {
         <GlobalPageBg theme={theme} />
         <AdminTracerStudi
           theme={theme}
-          onBack={() => {
-            window.history.pushState({}, "", "/");
-            window.dispatchEvent(new Event("popstate"));
-          }}
+          onBack={() => navigate("/")}
         />
       </div>
     );
@@ -254,10 +249,7 @@ export default function App() {
     return (
       <AdminSuaraSkansagiri
         theme={theme}
-        onBack={() => {
-          window.history.pushState({}, "", "/");
-          window.dispatchEvent(new Event("popstate"));
-        }}
+        onBack={() => navigate("/")}
       />
     );
   }
@@ -271,8 +263,7 @@ export default function App() {
         <Hero theme={theme} />
         <Stats theme={theme} />
         <About theme={theme} onNavigate={(page) => {
-          window.history.pushState({}, "", `/tentang/${page}`);
-          window.dispatchEvent(new Event("popstate"));
+          navigate(`/tentang/${page}`);
           window.scrollTo({ top: 0, behavior: "smooth" });
         }} />
         <Competencies theme={theme} />

@@ -907,10 +907,15 @@ async function main() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*all", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
+    const BASE = process.env.BASE_PATH || "";
+    if (BASE) {
+      app.use(BASE, express.static(distPath));
+      app.get(BASE, (_req, res) => res.sendFile(path.join(distPath, "index.html")));
+      app.get(`${BASE}/*splat`, (_req, res) => res.sendFile(path.join(distPath, "index.html")));
+    } else {
+      app.use(express.static(distPath));
+      app.get("*all", (_req, res) => res.sendFile(path.join(distPath, "index.html")));
+    }
   }
 
   app.listen(PORT, "0.0.0.0", () => {

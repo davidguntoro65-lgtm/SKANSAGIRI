@@ -2,14 +2,10 @@ import { useEffect, useState } from "react";
 import { motion, useScroll, useTransform } from "motion/react";
 import { ArrowDown, GraduationCap, ArrowUpRight, Sparkles, Calendar, ChevronRight, Newspaper, Instagram, Youtube, Globe, Facebook } from "lucide-react";
 import { DataStore } from "../dataStore";
+import { navigate as navigateTo } from "../utils/navigation";
 
 interface SocialMedia {
   instagram: string; youtube: string; website: string; facebook: string; tiktok: string; twitter: string;
-}
-
-function navigateTo(path: string) {
-  window.history.pushState({}, "", path);
-  window.dispatchEvent(new Event("popstate"));
 }
 
 export default function Hero({ theme }: { theme: "light" | "dark" }) {

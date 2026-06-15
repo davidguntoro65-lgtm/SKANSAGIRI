@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { Quote, Award, Feather, ArrowLeft, ChevronRight } from "lucide-react";
+import { navigate } from "../utils/navigation";
 
 interface KepalaSekolahData {
   nama: string;
@@ -39,7 +40,7 @@ export default function KepalaSokolah({ theme = "light" }: { theme?: "light" | "
           className="flex items-center gap-2 mb-12 text-[10px] font-mono uppercase tracking-widest"
         >
           <button
-            onClick={() => { window.history.pushState({}, "", "/"); window.dispatchEvent(new Event("popstate")); }}
+            onClick={() => { navigate("/"); }}
             className={`flex items-center gap-1 transition-colors ${isDark ? "text-slate-500 hover:text-amber-400" : "text-slate-400 hover:text-amber-600"}`}
           >
             <ArrowLeft className="w-3 h-3" />

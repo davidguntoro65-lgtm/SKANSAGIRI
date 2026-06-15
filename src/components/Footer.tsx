@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Landmark, ArrowUp, Mail, Phone, MapPin, Instagram, Youtube, Globe, Award, Facebook } from "lucide-react";
 import { useBranding } from "../hooks/useBranding";
+import { BASE_PATH } from "../utils/navigation";
 
 interface SocialMedia {
   instagram: string;
@@ -120,7 +121,7 @@ export default function Footer({ theme = "dark" }: { theme?: "light" | "dark" })
             <ul className="space-y-3.5 text-xs font-sans font-light">
               {["Akuntansi & Keuangan Lembaga (AKL)", "Manaj. Perkantoran Layanan Bisnis (MPLB)", "Bisnis Daring dan Pemasaran", "Kuliner", "Desain Mode & Tata Busana"].map((prog) => (
                 <li key={prog}>
-                  <a href="/#kompetensi" className={`block duration-300 ${
+                  <a href={`${BASE_PATH}/#kompetensi`} className={`block duration-300 ${
                     isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-900"
                   }`}>
                     {prog}
@@ -140,11 +141,11 @@ export default function Footer({ theme = "dark" }: { theme?: "light" | "dark" })
             </h4>
             <ul className="space-y-3.5 text-xs font-sans font-light">
               {[
-                { label: "Profil Sekolah", href: "/#about" },
-                { label: "Kemitraan Industri", href: "/#kemitraan" },
-                { label: "Galeri Kampus", href: "/#gallery" },
-                { label: "Warta & Agenda", href: "/#news" },
-                { label: "Admisi PPDB Jateng", href: "/#ppdb-cta" }
+                { label: "Profil Sekolah", href: `${BASE_PATH}/#about` },
+                { label: "Kemitraan Industri", href: `${BASE_PATH}/#kemitraan` },
+                { label: "Galeri Kampus", href: `${BASE_PATH}/#gallery` },
+                { label: "Warta & Agenda", href: `${BASE_PATH}/#news` },
+                { label: "Admisi PPDB Jateng", href: `${BASE_PATH}/#ppdb-cta` }
               ].map((link) => (
                 <li key={link.label}>
                   <a href={link.href} className={`block duration-300 ${

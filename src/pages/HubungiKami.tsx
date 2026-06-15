@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { navigate } from "../utils/navigation";
 import {
   ArrowLeft, ChevronRight, MapPin, Phone, Mail, Clock,
   Send, CheckCircle2, AlertCircle, Instagram, Youtube,
@@ -189,7 +190,7 @@ export default function HubungiKami({ theme = "light" }: { theme?: "light" | "da
           className="flex items-center gap-2 mb-12 text-[10px] font-mono uppercase tracking-widest"
         >
           <button
-            onClick={() => { window.history.pushState({}, "", "/"); window.dispatchEvent(new Event("popstate")); }}
+            onClick={() => { navigate("/"); }}
             className={`flex items-center gap-1 transition-colors ${isDark ? "text-slate-500 hover:text-amber-400" : "text-slate-400 hover:text-amber-600"}`}
           >
             <ArrowLeft className="w-3 h-3" />

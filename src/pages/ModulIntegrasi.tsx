@@ -4,10 +4,7 @@ import {
   ArrowRight, Layers, Clock, ChevronRight, ExternalLink
 } from "lucide-react";
 
-function navigate(path: string) {
-  window.history.pushState({}, "", path);
-  window.dispatchEvent(new Event("popstate"));
-}
+import { navigate } from "../utils/navigation";
 
 interface ModulIntegrasiProps {
   theme: "light" | "dark";

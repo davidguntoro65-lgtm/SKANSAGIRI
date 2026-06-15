@@ -8,23 +8,19 @@ interface NavbarProps {
   toggleTheme: () => void;
 }
 
-function navigate(path: string) {
-  window.history.pushState({}, "", path);
-  window.dispatchEvent(new Event("popstate"));
-}
+import { navigate, getAppPath } from "../utils/navigation";
 
 function navigateToAnchor(href: string) {
   if (!href.startsWith("#")) {
     navigate(href);
     return;
   }
-  const isOnHomepage = window.location.pathname === "/";
+  const isOnHomepage = getAppPath() === "/";
   if (isOnHomepage) {
     const el = document.querySelector(href);
     if (el) el.scrollIntoView({ behavior: "smooth" });
   } else {
-    window.history.pushState({}, "", "/");
-    window.dispatchEvent(new Event("popstate"));
+    navigate("/");
     setTimeout(() => {
       const el = document.querySelector(href);
       if (el) el.scrollIntoView({ behavior: "smooth" });
@@ -39,7 +35,7 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
   const [tentangOpen, setTentangOpen] = useState(false);
   const [mobileAktifitasOpen, setMobileAktifitasOpen] = useState(false);
   const [mobileTentangOpen, setMobileTentangOpen] = useState(false);
-  const [currentPath, setCurrentPath] = useState(() => window.location.pathname);
+  const [currentPath, setCurrentPath] = useState(() => getAppPath());
   const aktifitasRef = useRef<HTMLDivElement>(null);
   const tentangRef = useRef<HTMLDivElement>(null);
   const isDark = theme === "dark";
@@ -57,7 +53,7 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
   }, []);
 
   useEffect(() => {
-    const handleLocation = () => setCurrentPath(window.location.pathname);
+    const handleLocation = () => setCurrentPath(getAppPath());
     window.addEventListener("popstate", handleLocation);
     window.addEventListener("hashchange", handleLocation);
     return () => {
