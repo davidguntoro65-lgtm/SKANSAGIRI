@@ -1,0 +1,65 @@
+{
+  "name": "SMK Negeri 1 Wonogiri",
+  "short_name": "SMKN 1 Wonogiri",
+  "description": "Website resmi SMK Negeri 1 Wonogiri – Skansa Giri. Sekolah kejuruan terakreditasi Unggul & SMK Pusat Keunggulan.",
+  "start_url": "/id/",
+  "scope": "/id/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "lang": "id",
+  "dir": "ltr",
+  "categories": ["education"],
+  "icons": [
+    {
+      "src": "/id/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/id/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/id/icons/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/id/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/id/og-image.svg",
+      "sizes": "1200x630",
+      "type": "image/svg+xml",
+      "form_factor": "wide",
+      "label": "SMK Negeri 1 Wonogiri – Center of Excellence"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "PPDB Online",
+      "short_name": "PPDB",
+      "description": "Pendaftaran Peserta Didik Baru",
+      "url": "/id/?section=ppdb",
+      "icons": [{ "src": "/id/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Berita Terbaru",
+      "short_name": "Berita",
+      "description": "Informasi dan berita sekolah",
+      "url": "/id/?section=berita",
+      "icons": [{ "src": "/id/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
