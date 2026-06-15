@@ -27,9 +27,11 @@ import AdminTracerStudi from "./pages/AdminTracerStudi";
 import Berita from "./pages/Berita";
 import HubungiKami from "./pages/HubungiKami";
 import ModulIntegrasi from "./pages/ModulIntegrasi";
+import SuaraSkansagiri from "./pages/SuaraSkansagiri";
+import AdminSuaraSkansagiri from "./pages/AdminSuaraSkansagiri";
 import { DataStore } from "./dataStore";
 
-type AppPath = "/" | "/adm-panel" | "/tentang/kepala-sekolah" | "/tentang/manajemen-sekolah" | "/tentang/visi-misi" | "/tracer-studi" | "/admin/tracer-studi" | "/berita" | "/hubungi-kami" | "/modul-integrasi";
+type AppPath = "/" | "/adm-panel" | "/tentang/kepala-sekolah" | "/tentang/manajemen-sekolah" | "/tentang/visi-misi" | "/tracer-studi" | "/admin/tracer-studi" | "/berita" | "/hubungi-kami" | "/modul-integrasi" | "/suara-skansagiri" | "/admin/suara-skansagiri";
 
 function getPath(): AppPath {
   const p = window.location.pathname;
@@ -42,6 +44,8 @@ function getPath(): AppPath {
   if (p === "/berita") return "/berita";
   if (p === "/hubungi-kami") return "/hubungi-kami";
   if (p === "/modul-integrasi") return "/modul-integrasi";
+  if (p === "/suara-skansagiri") return "/suara-skansagiri";
+  if (p === "/admin/suara-skansagiri") return "/admin/suara-skansagiri";
   const h = window.location.hash;
   if (h === "#/adm-panel" || h === "#adm-panel") return "/adm-panel";
   return "/";
@@ -232,6 +236,29 @@ export default function App() {
         <ModulIntegrasi theme={theme} />
         <Footer theme={theme} />
       </div>
+    );
+  }
+
+  if (currentPath === "/suara-skansagiri") {
+    return (
+      <div className={containerClass} id="application-container">
+        <GlobalPageBg theme={theme} />
+        <Navbar theme={theme} toggleTheme={toggleTheme} />
+        <SuaraSkansagiri theme={theme} />
+        <Footer theme={theme} />
+      </div>
+    );
+  }
+
+  if (currentPath === "/admin/suara-skansagiri") {
+    return (
+      <AdminSuaraSkansagiri
+        theme={theme}
+        onBack={() => {
+          window.history.pushState({}, "", "/");
+          window.dispatchEvent(new Event("popstate"));
+        }}
+      />
     );
   }
 

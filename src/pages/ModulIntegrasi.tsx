@@ -1,8 +1,13 @@
 import { motion } from "motion/react";
 import {
   Briefcase, Users, Vote, FileCheck, Mail, Award, Factory, Megaphone,
-  ArrowRight, Layers, Clock, ChevronRight
+  ArrowRight, Layers, Clock, ChevronRight, ExternalLink
 } from "lucide-react";
+
+function navigate(path: string) {
+  window.history.pushState({}, "", path);
+  window.dispatchEvent(new Event("popstate"));
+}
 
 interface ModulIntegrasiProps {
   theme: "light" | "dark";
@@ -184,22 +189,35 @@ export default function ModulIntegrasi({ theme }: ModulIntegrasiProps) {
             const accentClass = accentMap[mod.accent];
             const tagClass = tagMap[mod.accent];
 
+            const isLive = mod.id === "aspirasi";
+
             return (
               <motion.div
                 key={mod.id}
                 initial={{ opacity: 0, y: 32 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: i * 0.07, ease: "easeOut" }}
+                onClick={isLive ? () => navigate("/suara-skansagiri") : undefined}
                 className={`group relative flex flex-col rounded-2xl border overflow-hidden
-                  transition-all duration-300 cursor-default
-                  hover:-translate-y-1 hover:shadow-2xl ${mod.glow}
+                  transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl ${mod.glow}
+                  ${isLive ? "cursor-pointer" : "cursor-default"}
                   ${isDark
                     ? "bg-slate-900/60 border-white/6 hover:border-white/12 hover:bg-slate-900/80"
                     : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/80"
-                  }`}
+                  }
+                  ${isLive ? (isDark ? "ring-1 ring-fuchsia-500/20 hover:ring-fuchsia-500/40" : "ring-1 ring-fuchsia-300/40 hover:ring-fuchsia-400/60") : ""}
+                  `}
               >
                 {/* Top gradient bar */}
-                <div className={`absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r ${mod.color} opacity-60 group-hover:opacity-100 transition-opacity duration-300`} />
+                <div className={`absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r ${mod.color} ${isLive ? "opacity-90" : "opacity-60"} group-hover:opacity-100 transition-opacity duration-300`} />
+
+                {/* LIVE badge for active modules */}
+                {isLive && (
+                  <div className="absolute top-3 right-3 z-10 flex items-center gap-1 px-2 py-0.5 rounded-full bg-fuchsia-500/20 border border-fuchsia-500/30">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-fuchsia-400 animate-pulse" />
+                    <span className="text-[8px] font-mono tracking-widest uppercase text-fuchsia-400">Live</span>
+                  </div>
+                )}
 
                 {/* Number watermark */}
                 <span className={`absolute top-4 right-4 font-mono text-6xl font-black leading-none select-none pointer-events-none
@@ -238,16 +256,26 @@ export default function ModulIntegrasi({ theme }: ModulIntegrasiProps) {
                     ))}
                   </div>
 
-                  {/* Coming soon footer */}
+                  {/* Footer */}
                   <div className={`flex items-center justify-between pt-3 border-t mt-1
                     ${isDark ? "border-white/5" : "border-slate-100"}`}>
-                    <span className={`text-[9px] font-mono tracking-widest uppercase flex items-center gap-1.5
-                      ${isDark ? "text-slate-600" : "text-slate-400"}`}>
-                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400/60 animate-pulse" />
-                      Segera Hadir
-                    </span>
+                    {isLive ? (
+                      <span className="text-[9px] font-mono tracking-widest uppercase flex items-center gap-1.5 text-fuchsia-400 group-hover:text-fuchsia-300 transition-colors">
+                        <ExternalLink className="w-2.5 h-2.5" />
+                        Buka Modul
+                      </span>
+                    ) : (
+                      <span className={`text-[9px] font-mono tracking-widest uppercase flex items-center gap-1.5
+                        ${isDark ? "text-slate-600" : "text-slate-400"}`}>
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400/60 animate-pulse" />
+                        Segera Hadir
+                      </span>
+                    )}
                     <ChevronRight className={`w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-x-0.5
-                      ${isDark ? "text-slate-600 group-hover:text-slate-400" : "text-slate-300 group-hover:text-slate-500"}`} />
+                      ${isLive
+                        ? "text-fuchsia-500 group-hover:text-fuchsia-300"
+                        : isDark ? "text-slate-600 group-hover:text-slate-400" : "text-slate-300 group-hover:text-slate-500"
+                      }`} />
                   </div>
                 </div>
               </motion.div>

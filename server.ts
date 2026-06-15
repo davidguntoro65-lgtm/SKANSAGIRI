@@ -601,6 +601,173 @@ app.delete("/api/contact/:id", requireAuth, (req, res) => {
   }
 });
 
+// ── Suara Skansagiri ──────────────────────────────────────────────────────────
+interface KaryaSiswa {
+  id: string;
+  title: string;
+  slug: string;
+  content: string;
+  excerpt: string;
+  category: "JURNAL_VOKASI" | "ESAI_INOVASI" | "SASTRA" | "OPINI";
+  status: "REVIEW" | "PUBLISHED" | "REVISION" | "ARCHIVED";
+  feedback: string | null;
+  views: number;
+  likes: number;
+  authorName: string;
+  authorClass: string;
+  authorJurusan: string;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+  publishedAt: string | null;
+}
+
+const SUARA_FILE = path.join(DATA_DIR, "suara-skansagiri.json");
+initJsonFile(SUARA_FILE, []);
+
+function readSuara(): KaryaSiswa[] {
+  try { return JSON.parse(fs.readFileSync(SUARA_FILE, "utf-8")); } catch { return []; }
+}
+function writeSuara(data: KaryaSiswa[]) {
+  fs.writeFileSync(SUARA_FILE, JSON.stringify(data, null, 2), "utf-8");
+}
+function slugify(text: string): string {
+  return text.toLowerCase()
+    .replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "-").replace(/^-+|-+$/g, "").substring(0, 80);
+}
+
+app.get("/api/suara", (req, res) => {
+  try {
+    const all = readSuara();
+    const { category, search } = req.query as Record<string, string>;
+    let result = all.filter(k => k.status === "PUBLISHED");
+    if (category && category !== "ALL") result = result.filter(k => k.category === category);
+    if (search) {
+      const q = search.toLowerCase();
+      result = result.filter(k =>
+        k.title.toLowerCase().includes(q) ||
+        k.excerpt.toLowerCase().includes(q) ||
+        k.authorName.toLowerCase().includes(q) ||
+        k.tags.some(t => t.toLowerCase().includes(q))
+      );
+    }
+    result.sort((a, b) => new Date(b.publishedAt || b.createdAt).getTime() - new Date(a.publishedAt || a.createdAt).getTime());
+    res.json(result);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.get("/api/suara/admin", requireAuth, (req, res) => {
+  try {
+    const all = readSuara();
+    all.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    res.json(all);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.get("/api/suara/:id", (req, res) => {
+  try {
+    const all = readSuara();
+    const karya = all.find(k => k.id === req.params.id || k.slug === req.params.id);
+    if (!karya) return res.status(404).json({ error: "Karya tidak ditemukan" });
+    if (karya.status !== "PUBLISHED") {
+      const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
+      if (!token || !activeSessions.has(token)) return res.status(403).json({ error: "Karya belum dipublikasikan" });
+    }
+    res.json(karya);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.post("/api/suara", (req, res) => {
+  try {
+    const { title, content, category, authorName, authorClass, authorJurusan, tags } = req.body;
+    if (!title || !content || !category || !authorName || !authorClass)
+      return res.status(400).json({ error: "Field wajib tidak lengkap." });
+    if (content.trim().length < 200)
+      return res.status(400).json({ error: "Konten minimal 200 karakter." });
+    const validCats = ["JURNAL_VOKASI", "ESAI_INOVASI", "SASTRA", "OPINI"];
+    if (!validCats.includes(category)) return res.status(400).json({ error: "Kategori tidak valid." });
+    const all = readSuara();
+    const baseSlug = slugify(title);
+    let slug = baseSlug || `karya-${Date.now()}`;
+    let counter = 1;
+    while (all.some(k => k.slug === slug)) slug = `${baseSlug}-${counter++}`;
+    const excerpt = content.trim().replace(/\n+/g, " ").substring(0, 220) + (content.length > 220 ? "..." : "");
+    const now = new Date().toISOString();
+    const newKarya: KaryaSiswa = {
+      id: crypto.randomUUID(), title: title.trim(), slug, content: content.trim(), excerpt,
+      category, status: "REVIEW", feedback: null, views: 0, likes: 0,
+      authorName: authorName.trim(), authorClass: authorClass.trim(),
+      authorJurusan: (authorJurusan || "").trim(),
+      tags: Array.isArray(tags) ? tags.map((t: string) => t.trim()).filter(Boolean)
+        : (tags || "").split(",").map((t: string) => t.trim()).filter(Boolean),
+      createdAt: now, updatedAt: now, publishedAt: null,
+    };
+    all.push(newKarya);
+    writeSuara(all);
+    res.json({ success: true, id: newKarya.id, slug: newKarya.slug });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch("/api/suara/:id/like", (req, res) => {
+  try {
+    const all = readSuara();
+    const idx = all.findIndex(k => k.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: "Karya tidak ditemukan" });
+    all[idx].likes = (all[idx].likes || 0) + 1;
+    all[idx].updatedAt = new Date().toISOString();
+    writeSuara(all);
+    res.json({ likes: all[idx].likes });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch("/api/suara/:id/view", (req, res) => {
+  try {
+    const all = readSuara();
+    const idx = all.findIndex(k => k.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: "Karya tidak ditemukan" });
+    all[idx].views = (all[idx].views || 0) + 1;
+    writeSuara(all);
+    res.json({ views: all[idx].views });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch("/api/suara/:id/approve", requireAuth, (req, res) => {
+  try {
+    const all = readSuara();
+    const idx = all.findIndex(k => k.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: "Karya tidak ditemukan" });
+    const now = new Date().toISOString();
+    all[idx].status = "PUBLISHED"; all[idx].feedback = null;
+    all[idx].publishedAt = all[idx].publishedAt || now; all[idx].updatedAt = now;
+    writeSuara(all);
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch("/api/suara/:id/reject", requireAuth, (req, res) => {
+  try {
+    const all = readSuara();
+    const idx = all.findIndex(k => k.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: "Karya tidak ditemukan" });
+    const { feedback, action } = req.body;
+    all[idx].status = action === "archive" ? "ARCHIVED" : "REVISION";
+    all[idx].feedback = feedback || null;
+    all[idx].updatedAt = new Date().toISOString();
+    writeSuara(all);
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete("/api/suara/:id", requireAuth, (req, res) => {
+  try {
+    const all = readSuara();
+    const filtered = all.filter(k => k.id !== req.params.id);
+    if (filtered.length === all.length) return res.status(404).json({ error: "Karya tidak ditemukan" });
+    writeSuara(filtered);
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 // Initialize Vite and setup listening
 async function main() {
   if (process.env.NODE_ENV !== "production") {
