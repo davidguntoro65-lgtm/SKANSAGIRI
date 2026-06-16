@@ -955,14 +955,48 @@ async function main() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    const BASE = process.env.BASE_PATH || "";
+    // BASE_PATH defaults to "/id" for cPanel production (smkn1wonogiri.sch.id/id).
+    // Set BASE_PATH="" explicitly only if deploying at the root domain.
+    const BASE = process.env.BASE_PATH ?? "/id";
+
+    // Explicit MIME types — prevents Apache/Passenger returning wrong content-type
+    const mimeOverride: express.RequestHandler = (_req, res, next) => {
+      const url = _req.url;
+      if (url.endsWith(".js") || url.endsWith(".mjs")) {
+        res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+      } else if (url.endsWith(".css")) {
+        res.setHeader("Content-Type", "text/css; charset=utf-8");
+      } else if (url.endsWith(".json")) {
+        res.setHeader("Content-Type", "application/json; charset=utf-8");
+      }
+      next();
+    };
+
     if (BASE) {
-      app.use(BASE, express.static(distPath));
+      app.use(BASE, mimeOverride);
+      app.use(BASE, express.static(distPath, { index: false }));
+      // Exact base path → serve index.html
       app.get(BASE, (_req, res) => res.sendFile(path.join(distPath, "index.html")));
-      app.get(`${BASE}/*splat`, (_req, res) => res.sendFile(path.join(distPath, "index.html")));
+      app.get(`${BASE}/`, (_req, res) => res.sendFile(path.join(distPath, "index.html")));
+      // SPA catch-all: only return index.html when the path is NOT a real file
+      app.get(`${BASE}/*splat`, (req, res) => {
+        const filePath = path.join(distPath, req.path.replace(BASE, ""));
+        if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+          return res.sendFile(filePath);
+        }
+        res.sendFile(path.join(distPath, "index.html"));
+      });
     } else {
-      app.use(express.static(distPath));
-      app.get("*all", (_req, res) => res.sendFile(path.join(distPath, "index.html")));
+      app.use(mimeOverride);
+      app.use(express.static(distPath, { index: false }));
+      app.get("/", (_req, res) => res.sendFile(path.join(distPath, "index.html")));
+      app.get("/*splat", (req, res) => {
+        const filePath = path.join(distPath, req.path);
+        if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+          return res.sendFile(filePath);
+        }
+        res.sendFile(path.join(distPath, "index.html"));
+      });
     }
   }
 

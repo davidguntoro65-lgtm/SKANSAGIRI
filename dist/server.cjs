@@ -1153,14 +1153,41 @@ async function main() {
     app.use(vite.middlewares);
   } else {
     const distPath = import_path.default.join(process.cwd(), "dist");
-    const BASE = process.env.BASE_PATH || "";
+    const BASE = process.env.BASE_PATH ?? "/id";
+    const mimeOverride = (_req, res, next) => {
+      const url = _req.url;
+      if (url.endsWith(".js") || url.endsWith(".mjs")) {
+        res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+      } else if (url.endsWith(".css")) {
+        res.setHeader("Content-Type", "text/css; charset=utf-8");
+      } else if (url.endsWith(".json")) {
+        res.setHeader("Content-Type", "application/json; charset=utf-8");
+      }
+      next();
+    };
     if (BASE) {
-      app.use(BASE, import_express.default.static(distPath));
+      app.use(BASE, mimeOverride);
+      app.use(BASE, import_express.default.static(distPath, { index: false }));
       app.get(BASE, (_req, res) => res.sendFile(import_path.default.join(distPath, "index.html")));
-      app.get(`${BASE}/*splat`, (_req, res) => res.sendFile(import_path.default.join(distPath, "index.html")));
+      app.get(`${BASE}/`, (_req, res) => res.sendFile(import_path.default.join(distPath, "index.html")));
+      app.get(`${BASE}/*splat`, (req, res) => {
+        const filePath = import_path.default.join(distPath, req.path.replace(BASE, ""));
+        if (import_fs.default.existsSync(filePath) && import_fs.default.statSync(filePath).isFile()) {
+          return res.sendFile(filePath);
+        }
+        res.sendFile(import_path.default.join(distPath, "index.html"));
+      });
     } else {
-      app.use(import_express.default.static(distPath));
-      app.get("*all", (_req, res) => res.sendFile(import_path.default.join(distPath, "index.html")));
+      app.use(mimeOverride);
+      app.use(import_express.default.static(distPath, { index: false }));
+      app.get("/", (_req, res) => res.sendFile(import_path.default.join(distPath, "index.html")));
+      app.get("/*splat", (req, res) => {
+        const filePath = import_path.default.join(distPath, req.path);
+        if (import_fs.default.existsSync(filePath) && import_fs.default.statSync(filePath).isFile()) {
+          return res.sendFile(filePath);
+        }
+        res.sendFile(import_path.default.join(distPath, "index.html"));
+      });
     }
   }
   app.listen(PORT, "0.0.0.0", () => {

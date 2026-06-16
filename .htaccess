@@ -1,9 +1,18 @@
 # ─── Phusion Passenger (cPanel Node.js Selector) ─────────────────────────────
-# Tells Passenger this is a Node.js app and which file to start.
-# These lines are required when using cPanel → Node.js Selector.
+# cPanel manages Passenger via the Node.js Selector UI.
+# Startup file must match what is set in cPanel → Node.js Selector (app.js).
 PassengerEnabled On
 PassengerAppType node
-PassengerStartupFile dist/server.cjs
+PassengerStartupFile app.js
+
+# ─── Explicit MIME types (critical for ES module scripts) ─────────────────────
+# Without this, some cPanel/Apache configs serve .js as text/html → blank page.
+AddType application/javascript .js
+AddType application/javascript .mjs
+AddType text/css .css
+AddType application/json .json
+AddType image/svg+xml .svg
+AddType application/manifest+json .webmanifest
 
 # ─── Security: block direct access to source / config files ──────────────────
 <FilesMatch "\.(env|ts|tsx|md|lock|log)$">
