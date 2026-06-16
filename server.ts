@@ -232,6 +232,42 @@ app.get("/api/auth/verify", (req, res) => {
   return res.status(401).json({ valid: false });
 });
 
+// --- Health Check Endpoint ---
+
+app.get("/api/health", (_req, res) => {
+  const startedAt = new Date(Date.now() - process.uptime() * 1000).toISOString();
+  const uptimeSeconds = Math.floor(process.uptime());
+
+  // adminCredentials is intentionally optional — falls back to env vars when absent
+  const optionalFiles = new Set(["adminCredentials"]);
+
+  const dataFiles = Object.entries(filePaths) as [string, string][];
+  const fileStatus = dataFiles.map(([name, filePath]) => {
+    try {
+      if (!fs.existsSync(filePath)) return { name, status: optionalFiles.has(name) ? "optional" : "missing" };
+      const raw = fs.readFileSync(filePath, "utf-8");
+      JSON.parse(raw);
+      return { name, status: "ok" };
+    } catch {
+      return { name, status: "corrupt" };
+    }
+  });
+
+  const allOk = fileStatus.every(f => f.status === "ok" || f.status === "optional");
+
+  res.status(allOk ? 200 : 207).json({
+    status: allOk ? "ok" : "degraded",
+    server: "running",
+    uptime_seconds: uptimeSeconds,
+    started_at: startedAt,
+    timestamp: new Date().toISOString(),
+    node_version: process.version,
+    env: process.env.NODE_ENV || "development",
+    active_sessions: activeSessions.size,
+    data_files: fileStatus,
+  });
+});
+
 // --- Express REST API Routes for High Integrity CRUD ---
 
 // 1. Competencies API
