@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import * as XLSX from "xlsx";
 import { 
   LayoutDashboard, LogOut, KeyRound, User, Lock, Save, Trash2, Edit2, Plus, X, Globe, 
   Trophy, Camera, Users, Newspaper, CheckCircle2, RefreshCw, ArrowLeft, Image, Link, 
   Compass, ChevronRight, AlertCircle, BookOpen, GraduationCap, HardDrive,
   Upload, SlidersHorizontal, Sparkles, Crop, Check, Eye, EyeOff, Handshake, Target, Telescope,
   Inbox, Mail, MailOpen, Search, Phone, MessageSquare, MailCheck, Filter, ChevronDown,
-  ShieldCheck, Settings, Activity, Server, Clock, Cpu, Database, Wifi, WifiOff
+  ShieldCheck, Settings, Activity, Server, Clock, Cpu, Database, Wifi, WifiOff,
+  FileSpreadsheet, BarChart3, Briefcase, Store, Download, TrendingUp, Banknote
 } from "lucide-react";
 import { Competency, Milestone, GalleryItem, Alumnus, NewsArticle, IndustriPartner } from "../data";
 import { DataStore } from "../dataStore";
@@ -32,7 +34,7 @@ export default function AdminPanel({
   const [loginLoading, setLoginLoading] = useState(false);
 
   // Active Admin Sidebar Tab
-  const [activeTab, setActiveTab] = useState<"competencies" | "milestones" | "gallery" | "alumni" | "news" | "partners" | "branding" | "about" | "kepala-sekolah" | "manajemen-sekolah" | "visi-misi" | "social-media" | "inbox-pesan" | "server-monitor">("competencies");
+  const [activeTab, setActiveTab] = useState<"competencies" | "milestones" | "gallery" | "alumni" | "news" | "partners" | "branding" | "about" | "kepala-sekolah" | "manajemen-sekolah" | "visi-misi" | "social-media" | "inbox-pesan" | "server-monitor" | "tracer-studi">("competencies");
   const { branding, saveBranding, getLogo } = useBranding();
   const [brandingDraft, setBrandingDraft] = useState<Branding | null>(null);
   const [brandingLoading, setBrandingLoading] = useState(false);
@@ -346,6 +348,155 @@ export default function AdminPanel({
       return () => clearInterval(interval);
     }
   }, [activeTab, isLoggedIn]);
+
+  // --- Tracer Study State & Export ---
+  interface TracerEntry {
+    id: string; nama: string; jurusan: string; tahunLulus: string;
+    status: "bekerja" | "kuliah" | "wirausaha" | "belum_bekerja";
+    namaPerusahaan?: string; posisi?: string; kota?: string;
+    relevansiJurusan?: string; rentangGaji?: string;
+    universitas?: string; programStudi?: string; jalurMasuk?: string;
+    namaUsaha?: string; bidangUsaha?: string; tahunBerdiri?: string;
+    alasanBelumBekerja?: string; whatsapp?: string; email?: string;
+    createdAt: string;
+  }
+  const STATUS_LABELS: Record<string, string> = { bekerja: "Bekerja", kuliah: "Kuliah", wirausaha: "Wirausaha", belum_bekerja: "Belum Bekerja" };
+  const GAJI_LABELS: Record<string, string> = { lt2: "< Rp 2 Juta", "2-4": "Rp 2–4 Juta", "4-6": "Rp 4–6 Juta", gt6: "> Rp 6 Juta" };
+  const GAJI_ORDER = ["lt2", "2-4", "4-6", "gt6"];
+  const RELEVANCE_LABELS: Record<string, string> = { sangat_relevan: "Sangat Relevan", relevan: "Relevan", cukup_relevan: "Cukup Relevan", tidak_relevan: "Tidak Relevan" };
+  const pct = (n: number, total: number) => total ? Math.round((n / total) * 100) : 0;
+  const fmtDate = (iso: string) => { try { return new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }); } catch { return iso; } };
+
+  const [tracerEntries, setTracerEntries] = useState<TracerEntry[]>([]);
+  const [tracerLoading, setTracerLoading] = useState(false);
+  const [tracerError, setTracerError] = useState("");
+  const [tracerExporting, setTracerExporting] = useState(false);
+  const [tracerDeleteId, setTracerDeleteId] = useState<string | null>(null);
+  const [tracerFeedback, setTracerFeedback] = useState("");
+
+  const showTracerFeedback = (msg: string) => { setTracerFeedback(msg); setTimeout(() => setTracerFeedback(""), 3000); };
+
+  const loadTracerEntries = () => {
+    setTracerLoading(true); setTracerError("");
+    fetch("/api/tracer")
+      .then(r => r.json())
+      .then((d: TracerEntry[]) => { setTracerEntries(Array.isArray(d) ? d : []); setTracerLoading(false); })
+      .catch(() => { setTracerError("Gagal memuat data tracer."); setTracerLoading(false); });
+  };
+
+  useEffect(() => {
+    if (activeTab === "tracer-studi" && isLoggedIn) loadTracerEntries();
+  }, [activeTab, isLoggedIn]);
+
+  const tracerStats = useMemo(() => {
+    const t = tracerEntries;
+    const total = t.length;
+    const bekerja = t.filter(e => e.status === "bekerja").length;
+    const kuliah = t.filter(e => e.status === "kuliah").length;
+    const wirausaha = t.filter(e => e.status === "wirausaha").length;
+    const belum = t.filter(e => e.status === "belum_bekerja").length;
+    return { total, bekerja, kuliah, wirausaha, belum, productive: bekerja + kuliah + wirausaha };
+  }, [tracerEntries]);
+
+  const allTracerJurusan = useMemo(() => [...new Set(tracerEntries.map(e => e.jurusan))].sort(), [tracerEntries]);
+
+  const handleTracerDelete = async (id: string, nama: string) => {
+    if (!window.confirm(`Hapus data "${nama}"?`)) return;
+    setTracerDeleteId(id);
+    try {
+      const res = await fetch(`/api/tracer/${id}`, { method: "DELETE", headers: getAuthHeaders() });
+      if (res.ok) { setTracerEntries(prev => prev.filter(e => e.id !== id)); showTracerFeedback(`Data "${nama}" dihapus.`); }
+      else showTracerFeedback("Gagal menghapus data.");
+    } catch { showTracerFeedback("Gagal menghapus data."); }
+    setTracerDeleteId(null);
+  };
+
+  const exportTracerExcel = () => {
+    if (tracerEntries.length === 0) return;
+    setTracerExporting(true);
+    setTimeout(() => {
+      try {
+        const now = new Date();
+        const dateStr = now.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+        const entries = tracerEntries;
+        const stats = tracerStats;
+        const wb = XLSX.utils.book_new();
+
+        // Sheet 1 — Ringkasan
+        const jurusanMap: Record<string, number> = {};
+        entries.forEach(e => { jurusanMap[e.jurusan] = (jurusanMap[e.jurusan] ?? 0) + 1; });
+        const jurusanRows = Object.entries(jurusanMap).map(([l, v]) => [l, v, pct(v, stats.total)]).sort((a, b) => (b[1] as number) - (a[1] as number));
+        const tahunMap: Record<string, number> = {};
+        entries.forEach(e => { tahunMap[e.tahunLulus] = (tahunMap[e.tahunLulus] ?? 0) + 1; });
+        const tahunRows = Object.entries(tahunMap).map(([l, v]) => [l, v, pct(v, stats.total)]).sort((a, b) => Number(a[0]) - Number(b[0]));
+        const gajiMap: Record<string, number> = {};
+        entries.filter(e => e.status === "bekerja" && e.rentangGaji).forEach(e => { gajiMap[e.rentangGaji!] = (gajiMap[e.rentangGaji!] ?? 0) + 1; });
+        const gajiRows = GAJI_ORDER.filter(k => gajiMap[k]).map(k => [GAJI_LABELS[k], gajiMap[k], pct(gajiMap[k], stats.bekerja)]);
+        const relMap: Record<string, number> = {};
+        entries.filter(e => e.status === "bekerja" && e.relevansiJurusan).forEach(e => { relMap[e.relevansiJurusan!] = (relMap[e.relevansiJurusan!] ?? 0) + 1; });
+        const relRows = Object.entries(relMap).map(([k, v]) => [RELEVANCE_LABELS[k] ?? k, v, pct(v, stats.bekerja)]);
+
+        const summaryData: (string | number)[][] = [
+          ["LAPORAN TRACER STUDI", "", ""], ["SMKN 1 Wonogiri", "", ""], ["", "", ""],
+          [`Tanggal Cetak: ${dateStr}`, "", ""], [`Jumlah Responden: ${stats.total}`, "", ""], ["", "", ""],
+          ["RINGKASAN STATISTIK", "", ""], ["Kategori", "Jumlah", "Persentase (%)"],
+          ["Total Responden", stats.total, 100], ["Bekerja", stats.bekerja, pct(stats.bekerja, stats.total)],
+          ["Kuliah", stats.kuliah, pct(stats.kuliah, stats.total)], ["Wirausaha", stats.wirausaha, pct(stats.wirausaha, stats.total)],
+          ["Belum Bekerja", stats.belum, pct(stats.belum, stats.total)],
+          ["Produktif (Bekerja+Kuliah+Wirausaha)", stats.productive, pct(stats.productive, stats.total)],
+          ["", "", ""], ["SEBARAN PER JURUSAN", "", ""], ["Jurusan", "Jumlah", "Persentase (%)"],
+          ...jurusanRows,
+          ["", "", ""], ["SEBARAN PER TAHUN LULUS", "", ""], ["Tahun Lulus", "Jumlah", "Persentase (%)"],
+          ...tahunRows,
+          ["", "", ""], ["RENTANG GAJI (Lulusan Bekerja)", "", ""], ["Rentang Gaji", "Jumlah", "% Pekerja"],
+          ...gajiRows,
+          ["", "", ""], ["RELEVANSI JURUSAN (Lulusan Bekerja)", "", ""], ["Relevansi", "Jumlah", "% Pekerja"],
+          ...relRows,
+        ];
+        const ws1 = XLSX.utils.aoa_to_sheet(summaryData);
+        ws1["!cols"] = [{ wch: 45 }, { wch: 12 }, { wch: 18 }];
+        XLSX.utils.book_append_sheet(wb, ws1, "Ringkasan");
+
+        // Sheet 2 — Data Lengkap
+        const dataHeaders = ["No","Nama","Jurusan","Tahun Lulus","Status","Perusahaan/Univ/Usaha","Posisi/Prodi/Bidang Usaha","Kota","Relevansi Jurusan","Rentang Gaji","Universitas","Program Studi","Jalur Masuk","Nama Usaha","Bidang Usaha","Tahun Berdiri Usaha","Alasan Belum Bekerja","WhatsApp","Email","Tanggal Mengisi"];
+        const dataRows = entries.map((e, i) => [
+          i + 1, e.nama, e.jurusan, e.tahunLulus, STATUS_LABELS[e.status] ?? e.status,
+          e.namaPerusahaan ?? e.universitas ?? e.namaUsaha ?? "",
+          e.posisi ?? e.programStudi ?? e.bidangUsaha ?? "",
+          e.kota ?? "", RELEVANCE_LABELS[e.relevansiJurusan ?? ""] ?? (e.relevansiJurusan ?? ""),
+          GAJI_LABELS[e.rentangGaji ?? ""] ?? (e.rentangGaji ?? ""),
+          e.universitas ?? "", e.programStudi ?? "", e.jalurMasuk ?? "",
+          e.namaUsaha ?? "", e.bidangUsaha ?? "", e.tahunBerdiri ?? "",
+          e.alasanBelumBekerja ?? "", e.whatsapp ?? "", e.email ?? "", fmtDate(e.createdAt),
+        ]);
+        const ws2 = XLSX.utils.aoa_to_sheet([dataHeaders, ...dataRows]);
+        ws2["!cols"] = [{ wch: 5 }, { wch: 25 }, { wch: 28 }, { wch: 12 }, { wch: 15 }, { wch: 30 }, { wch: 28 }, { wch: 18 }, { wch: 18 }, { wch: 15 }, { wch: 25 }, { wch: 22 }, { wch: 18 }, { wch: 25 }, { wch: 22 }, { wch: 16 }, { wch: 30 }, { wch: 18 }, { wch: 28 }, { wch: 18 }];
+        ws2["!freeze"] = { xSplit: 0, ySplit: 1 };
+        XLSX.utils.book_append_sheet(wb, ws2, "Data Responden");
+
+        // Sheet 3 — Per Jurusan × Status
+        const crossHeaders = ["Jurusan","Total","Bekerja","%Bekerja","Kuliah","%Kuliah","Wirausaha","%Wirausaha","Belum Bekerja","%Belum Bekerja"];
+        const crossRows = allTracerJurusan.map(j => {
+          const g = entries.filter(e => e.jurusan === j);
+          const tot = g.length;
+          const bk = g.filter(e => e.status === "bekerja").length;
+          const ku = g.filter(e => e.status === "kuliah").length;
+          const wi = g.filter(e => e.status === "wirausaha").length;
+          const bb = g.filter(e => e.status === "belum_bekerja").length;
+          return [j, tot, bk, `${pct(bk, tot)}%`, ku, `${pct(ku, tot)}%`, wi, `${pct(wi, tot)}%`, bb, `${pct(bb, tot)}%`];
+        });
+        const ws3 = XLSX.utils.aoa_to_sheet([crossHeaders, ...crossRows]);
+        ws3["!cols"] = [{ wch: 30 }, { wch: 8 }, { wch: 10 }, { wch: 12 }, { wch: 8 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 16 }];
+        XLSX.utils.book_append_sheet(wb, ws3, "Per Jurusan");
+
+        XLSX.writeFile(wb, `tracer-studi-smkn1wonogiri-${now.toISOString().slice(0, 10)}.xlsx`);
+        showTracerFeedback(`Excel berhasil diekspor (${entries.length} data, 3 sheet).`);
+      } catch (err) {
+        showTracerFeedback("Gagal mengekspor Excel.");
+      }
+      setTracerExporting(false);
+    }, 100);
+  };
 
   const formatUptime = (seconds: number) => {
     const d = Math.floor(seconds / 86400);
@@ -1010,6 +1161,7 @@ export default function AdminPanel({
                     { id: "visi-misi", label: "Visi & Misi", icon: Target, count: null },
                     { id: "social-media", label: "Media Sosial", icon: Globe, count: null },
                     { id: "inbox-pesan", label: "Inbox Pesan Masuk", icon: Inbox, count: contactMessages.filter(m => !m.dibaca).length || null },
+                    { id: "tracer-studi", label: "Tracer Study", icon: BarChart3, count: tracerEntries.length || null },
                     { id: "server-monitor", label: "Monitor Server", icon: Activity, count: null }
                   ].map((tab) => {
                     const TabIcon = tab.icon;
@@ -1091,6 +1243,7 @@ export default function AdminPanel({
                     {activeTab === "visi-misi" && "Visi & Misi Sekolah"}
                     {activeTab === "social-media" && "Kelola Tautan Media Sosial"}
                     {activeTab === "inbox-pesan" && "Inbox Pesan Masuk"}
+                    {activeTab === "tracer-studi" && "Data & Ekspor Tracer Study"}
                     {activeTab === "server-monitor" && "Monitor Status Server"}
                   </h2>
                   <p className={`text-xs ${isDarkTheme ? "text-slate-400" : "text-slate-500"} font-light mt-0.5`}>
@@ -1107,11 +1260,12 @@ export default function AdminPanel({
                     {activeTab === "visi-misi" && "Edit teks Visi dan butir-butir Misi sekolah yang tampil di halaman Visi & Misi."}
                     {activeTab === "social-media" && "Atur URL akun Instagram, YouTube, Facebook, dan Website resmi yang tampil di footer portal."}
                     {activeTab === "inbox-pesan" && "Baca, balas, dan kelola semua pesan yang masuk melalui formulir Hubungi Kami."}
+                    {activeTab === "tracer-studi" && "Lihat statistik, kelola responden, dan ekspor seluruh data ke Excel (.xlsx) 3 sheet sekaligus."}
                     {activeTab === "server-monitor" && "Pantau status, uptime, dan integritas file data server secara real-time. Diperbarui otomatis tiap 30 detik."}
                   </p>
                 </div>
 
-                {!isAddingNew && !editingItem && activeTab !== "branding" && activeTab !== "about" && activeTab !== "kepala-sekolah" && activeTab !== "manajemen-sekolah" && activeTab !== "visi-misi" && activeTab !== "social-media" && activeTab !== "inbox-pesan" && activeTab !== "server-monitor" && (
+                {!isAddingNew && !editingItem && activeTab !== "branding" && activeTab !== "about" && activeTab !== "kepala-sekolah" && activeTab !== "manajemen-sekolah" && activeTab !== "visi-misi" && activeTab !== "social-media" && activeTab !== "inbox-pesan" && activeTab !== "server-monitor" && activeTab !== "tracer-studi" && (
                   <button
                     onClick={() => {
                       setIsAddingNew(true);
@@ -3374,6 +3528,172 @@ export default function AdminPanel({
                       </div>
                     );
                   })()}
+
+                  {/* Tracer Study Panel */}
+                  {activeTab === "tracer-studi" && (
+                    <div className="space-y-6">
+                      {/* Feedback toast */}
+                      <AnimatePresence>
+                        {tracerFeedback && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm"
+                          >
+                            <CheckCircle2 className="w-4 h-4 shrink-0" />
+                            {tracerFeedback}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      {/* Action bar */}
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          onClick={loadTracerEntries}
+                          disabled={tracerLoading}
+                          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border transition-all ${
+                            isDarkTheme
+                              ? "bg-slate-800 border-white/8 text-slate-300 hover:bg-slate-700"
+                              : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                          }`}
+                        >
+                          <RefreshCw className={`w-4 h-4 ${tracerLoading ? "animate-spin" : ""}`} />
+                          {tracerLoading ? "Memuat..." : "Refresh"}
+                        </button>
+                        <button
+                          onClick={exportTracerExcel}
+                          disabled={tracerExporting || tracerEntries.length === 0}
+                          className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold bg-emerald-500 hover:bg-emerald-400 text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-500/20"
+                        >
+                          <FileSpreadsheet className="w-4 h-4" />
+                          {tracerExporting ? "Mengekspor..." : `Ekspor Excel (.xlsx) — ${tracerEntries.length} data`}
+                        </button>
+                      </div>
+
+                      {/* Error */}
+                      {tracerError && (
+                        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                          <AlertCircle className="w-4 h-4 shrink-0" /> {tracerError}
+                        </div>
+                      )}
+
+                      {/* Stats cards */}
+                      {!tracerLoading && tracerEntries.length > 0 && (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                          {[
+                            { label: "Total Responden", value: tracerStats.total, icon: Users, color: "text-amber-400", bg: "bg-amber-500/10 border-amber-500/20" },
+                            { label: "Bekerja", value: tracerStats.bekerja, icon: Briefcase, color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20" },
+                            { label: "Kuliah", value: tracerStats.kuliah, icon: GraduationCap, color: "text-blue-400", bg: "bg-blue-500/10 border-blue-500/20" },
+                            { label: "Wirausaha", value: tracerStats.wirausaha, icon: Store, color: "text-violet-400", bg: "bg-violet-500/10 border-violet-500/20" },
+                            { label: "Belum Bekerja", value: tracerStats.belum, icon: Clock, color: "text-slate-400", bg: "bg-slate-500/10 border-slate-500/20" },
+                            { label: "% Produktif", value: `${pct(tracerStats.productive, tracerStats.total)}%`, icon: TrendingUp, color: "text-amber-400", bg: "bg-amber-500/10 border-amber-500/20" },
+                          ].map(({ label, value, icon: Icon, color, bg }) => (
+                            <div key={label} className={`rounded-xl p-4 border ${isDarkTheme ? "bg-slate-800/60 border-white/8" : "bg-white border-slate-200"} flex flex-col gap-2`}>
+                              <div className={`w-8 h-8 rounded-lg ${bg} flex items-center justify-center`}>
+                                <Icon className={`w-4 h-4 ${color}`} />
+                              </div>
+                              <div className={`text-2xl font-bold ${color}`}>{value}</div>
+                              <div className={`text-xs ${isDarkTheme ? "text-slate-400" : "text-slate-500"}`}>{label}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Export info card */}
+                      <div className={`rounded-xl p-5 border ${isDarkTheme ? "bg-slate-800/40 border-white/8" : "bg-slate-50 border-slate-200"}`}>
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                            <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
+                          </div>
+                          <div>
+                            <div className={`font-semibold text-sm mb-1 ${isDarkTheme ? "text-slate-100" : "text-slate-800"}`}>Format Ekspor Excel — 3 Sheet</div>
+                            <ul className={`text-xs space-y-1 ${isDarkTheme ? "text-slate-400" : "text-slate-500"}`}>
+                              <li>• <span className="font-medium text-emerald-400">Sheet 1 — Ringkasan:</span> Statistik total, sebaran jurusan, tahun lulus, rentang gaji, relevansi</li>
+                              <li>• <span className="font-medium text-blue-400">Sheet 2 — Data Responden:</span> Semua kolom per baris (20 kolom lengkap)</li>
+                              <li>• <span className="font-medium text-violet-400">Sheet 3 — Per Jurusan:</span> Tabel silang jurusan × status (bekerja, kuliah, wirausaha, belum)</li>
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Data table */}
+                      <div className={`rounded-xl border overflow-hidden ${isDarkTheme ? "border-white/8" : "border-slate-200"}`}>
+                        <div className={`px-4 py-3 border-b flex items-center justify-between ${isDarkTheme ? "bg-slate-800/60 border-white/8" : "bg-slate-50 border-slate-200"}`}>
+                          <span className={`text-sm font-semibold ${isDarkTheme ? "text-slate-200" : "text-slate-700"}`}>
+                            Daftar Responden
+                          </span>
+                          <span className={`text-xs ${isDarkTheme ? "text-slate-400" : "text-slate-500"}`}>
+                            {tracerEntries.length} responden
+                          </span>
+                        </div>
+
+                        {tracerLoading ? (
+                          <div className="flex items-center justify-center py-16 gap-3">
+                            <RefreshCw className="w-5 h-5 animate-spin text-amber-400" />
+                            <span className={`text-sm ${isDarkTheme ? "text-slate-400" : "text-slate-500"}`}>Memuat data...</span>
+                          </div>
+                        ) : tracerEntries.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center py-16 gap-3">
+                            <BarChart3 className={`w-10 h-10 ${isDarkTheme ? "text-slate-600" : "text-slate-300"}`} />
+                            <span className={`text-sm ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>Belum ada data tracer study</span>
+                          </div>
+                        ) : (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className={`text-xs uppercase tracking-wider ${isDarkTheme ? "bg-slate-800/80 text-slate-400" : "bg-slate-100 text-slate-500"}`}>
+                                  <th className="px-4 py-3 text-left font-semibold">Nama</th>
+                                  <th className="px-4 py-3 text-left font-semibold">Jurusan</th>
+                                  <th className="px-4 py-3 text-left font-semibold">Tahun</th>
+                                  <th className="px-4 py-3 text-left font-semibold">Status</th>
+                                  <th className="px-4 py-3 text-left font-semibold">Detail</th>
+                                  <th className="px-4 py-3 text-left font-semibold">Tanggal</th>
+                                  <th className="px-4 py-3 text-center font-semibold">Hapus</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-white/5">
+                                {[...tracerEntries].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map(entry => {
+                                  const statusColors: Record<string, string> = {
+                                    bekerja: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
+                                    kuliah: "text-blue-400 bg-blue-500/10 border-blue-500/20",
+                                    wirausaha: "text-violet-400 bg-violet-500/10 border-violet-500/20",
+                                    belum_bekerja: "text-slate-400 bg-slate-500/10 border-slate-500/20",
+                                  };
+                                  const detail = entry.namaPerusahaan ?? entry.universitas ?? entry.namaUsaha ?? entry.alasanBelumBekerja ?? "—";
+                                  return (
+                                    <tr key={entry.id} className={`transition-colors ${isDarkTheme ? "hover:bg-slate-800/40" : "hover:bg-slate-50"}`}>
+                                      <td className={`px-4 py-3 font-medium ${isDarkTheme ? "text-slate-200" : "text-slate-800"}`}>{entry.nama}</td>
+                                      <td className={`px-4 py-3 text-xs ${isDarkTheme ? "text-slate-400" : "text-slate-500"}`}>{entry.jurusan}</td>
+                                      <td className={`px-4 py-3 text-xs ${isDarkTheme ? "text-slate-400" : "text-slate-500"}`}>{entry.tahunLulus}</td>
+                                      <td className="px-4 py-3">
+                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${statusColors[entry.status] ?? "text-slate-400 bg-slate-500/10 border-slate-500/20"}`}>
+                                          {({bekerja:"Bekerja",kuliah:"Kuliah",wirausaha:"Wirausaha",belum_bekerja:"Belum"})[entry.status] ?? entry.status}
+                                        </span>
+                                      </td>
+                                      <td className={`px-4 py-3 text-xs max-w-[180px] truncate ${isDarkTheme ? "text-slate-400" : "text-slate-500"}`} title={detail}>{detail}</td>
+                                      <td className={`px-4 py-3 text-xs whitespace-nowrap ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>{fmtDate(entry.createdAt)}</td>
+                                      <td className="px-4 py-3 text-center">
+                                        <button
+                                          onClick={() => handleTracerDelete(entry.id, entry.nama)}
+                                          disabled={tracerDeleteId === entry.id}
+                                          className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-40"
+                                          title="Hapus entri ini"
+                                        >
+                                          {tracerDeleteId === entry.id
+                                            ? <RefreshCw className="w-4 h-4 animate-spin" />
+                                            : <Trash2 className="w-4 h-4" />
+                                          }
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Server Monitor Panel */}
                   {activeTab === "server-monitor" && (
