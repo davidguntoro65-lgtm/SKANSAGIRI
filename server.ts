@@ -3,7 +3,6 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { createServer as createViteServer } from "vite";
 import { 
   COMPETENCY_DATA, 
   TIMELINE_ACHIEVEMENTS, 
@@ -948,6 +947,7 @@ app.get("/sitemap.xml", (req, res) => {
 // Initialize Vite and setup listening
 async function main() {
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa"
