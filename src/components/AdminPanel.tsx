@@ -4,8 +4,9 @@ import {
   LayoutDashboard, LogOut, KeyRound, User, Lock, Save, Trash2, Edit2, Plus, X, Globe, 
   Trophy, Camera, Users, Newspaper, CheckCircle2, RefreshCw, ArrowLeft, Image, Link, 
   Compass, ChevronRight, AlertCircle, BookOpen, GraduationCap, HardDrive,
-  Upload, SlidersHorizontal, Sparkles, Crop, Check, Eye, Handshake, Target, Telescope,
-  Inbox, Mail, MailOpen, Search, Phone, MessageSquare, MailCheck, Filter, ChevronDown
+  Upload, SlidersHorizontal, Sparkles, Crop, Check, Eye, EyeOff, Handshake, Target, Telescope,
+  Inbox, Mail, MailOpen, Search, Phone, MessageSquare, MailCheck, Filter, ChevronDown,
+  ShieldCheck, Settings
 } from "lucide-react";
 import { Competency, Milestone, GalleryItem, Alumnus, NewsArticle, IndustriPartner } from "../data";
 import { DataStore } from "../dataStore";
@@ -63,6 +64,17 @@ export default function AdminPanel({
   interface SocialMediaData { instagram: string; youtube: string; website: string; facebook: string; tiktok: string; twitter: string; }
   const [socialMedia, setSocialMedia] = useState<SocialMediaData>({ instagram: "", youtube: "", website: "", facebook: "", tiktok: "", twitter: "" });
   const [socialMediaLoading, setSocialMediaLoading] = useState(false);
+
+  // Change Password Modal state
+  const [showChangePass, setShowChangePass] = useState(false);
+  const [cpCurrentPass, setCpCurrentPass] = useState("");
+  const [cpNewUser, setCpNewUser] = useState("");
+  const [cpNewPass, setCpNewPass] = useState("");
+  const [cpConfirmPass, setCpConfirmPass] = useState("");
+  const [cpShowCurrent, setCpShowCurrent] = useState(false);
+  const [cpShowNew, setCpShowNew] = useState(false);
+  const [cpLoading, setCpLoading] = useState(false);
+  const [cpError, setCpError] = useState("");
 
   // Contact Messages (Inbox)
   interface ContactMessage { id: string; nama: string; email: string; noHp: string; keperluan: string; pesan: string; waktu: string; dibaca: boolean; }
@@ -334,6 +346,36 @@ export default function AdminPanel({
     setFeedback({ message: "Sesi admin telah diakhiri.", type: "success" });
   };
 
+  const openChangePass = () => {
+    setCpCurrentPass(""); setCpNewUser(""); setCpNewPass(""); setCpConfirmPass("");
+    setCpShowCurrent(false); setCpShowNew(false); setCpError("");
+    setShowChangePass(true);
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCpError("");
+    if (cpNewPass !== cpConfirmPass) { setCpError("Konfirmasi password baru tidak cocok."); return; }
+    if (cpNewPass.length < 8) { setCpError("Password baru minimal 8 karakter."); return; }
+    setCpLoading(true);
+    try {
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ currentPassword: cpCurrentPass, newUsername: cpNewUser, newPassword: cpNewPass }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setShowChangePass(false);
+        showFeedback("Password berhasil diubah! Silakan login kembali.", "success");
+        setTimeout(() => { localStorage.removeItem("smkn1_adm_token"); setIsLoggedIn(false); }, 2200);
+      } else {
+        setCpError(data.error || "Gagal mengubah password.");
+      }
+    } catch { setCpError("Gagal menghubungi server. Periksa koneksi."); }
+    setCpLoading(false);
+  };
+
   const showFeedback = (message: string, type: "success" | "error" = "success") => {
     setFeedback({ message, type });
   };
@@ -550,6 +592,131 @@ export default function AdminPanel({
   return (
     <div className={`min-h-screen font-sans ${isDarkTheme ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"} antialiased transition-colors duration-300 relative`}>
       
+      {/* Change Password Modal */}
+      <AnimatePresence>
+        {showChangePass && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+            onClick={e => { if (e.target === e.currentTarget) setShowChangePass(false); }}>
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 16 }}
+              className={`w-full max-w-md rounded-3xl border shadow-2xl p-7 ${isDarkTheme ? "bg-slate-900 border-white/8" : "bg-white border-slate-200"}`}>
+
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isDarkTheme ? "bg-amber-500/15" : "bg-amber-50"}`}>
+                    <ShieldCheck className="w-4.5 h-4.5 text-amber-500" />
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-mono uppercase tracking-widest text-amber-500">Keamanan Akun</div>
+                    <div className={`text-sm font-bold ${isDarkTheme ? "text-white" : "text-slate-900"}`}>Ganti Username & Password</div>
+                  </div>
+                </div>
+                <button onClick={() => setShowChangePass(false)}
+                  className={`p-1.5 rounded-lg transition-colors ${isDarkTheme ? "hover:bg-white/8 text-slate-400" : "hover:bg-slate-100 text-slate-500"}`}>
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleChangePassword} className="space-y-4">
+                <div>
+                  <label className={`block text-[10px] font-mono uppercase tracking-widest mb-1.5 ${isDarkTheme ? "text-slate-400" : "text-slate-500"}`}>Password Saat Ini *</label>
+                  <div className="relative">
+                    <input type={cpShowCurrent ? "text" : "password"} value={cpCurrentPass}
+                      onChange={e => setCpCurrentPass(e.target.value)} required
+                      placeholder="Masukkan password saat ini"
+                      autoComplete="current-password"
+                      className={`w-full px-4 py-2.5 pr-10 rounded-xl border text-sm outline-none transition-colors ${isDarkTheme ? "bg-slate-800 border-white/10 text-white placeholder-slate-500 focus:border-amber-500/40" : "bg-white border-slate-200 text-slate-900 placeholder-slate-400 focus:border-amber-400"}`} />
+                    <button type="button" onClick={() => setCpShowCurrent(!cpShowCurrent)}
+                      className={`absolute right-3 top-1/2 -translate-y-1/2 transition-colors ${isDarkTheme ? "text-slate-400 hover:text-amber-500" : "text-slate-400 hover:text-amber-600"}`}>
+                      {cpShowCurrent ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className={`h-px ${isDarkTheme ? "bg-white/6" : "bg-slate-100"}`} />
+
+                <div>
+                  <label className={`block text-[10px] font-mono uppercase tracking-widest mb-1.5 ${isDarkTheme ? "text-slate-400" : "text-slate-500"}`}>
+                    Username Baru <span className="normal-case">(kosongkan = tidak berubah)</span>
+                  </label>
+                  <input type="text" value={cpNewUser} onChange={e => setCpNewUser(e.target.value)}
+                    placeholder="Username baru (opsional)" autoComplete="username"
+                    className={`w-full px-4 py-2.5 rounded-xl border text-sm outline-none transition-colors ${isDarkTheme ? "bg-slate-800 border-white/10 text-white placeholder-slate-500 focus:border-amber-500/40" : "bg-white border-slate-200 text-slate-900 placeholder-slate-400 focus:border-amber-400"}`} />
+                </div>
+
+                <div>
+                  <label className={`block text-[10px] font-mono uppercase tracking-widest mb-1.5 ${isDarkTheme ? "text-slate-400" : "text-slate-500"}`}>
+                    Password Baru * <span className="normal-case">(min. 8 karakter)</span>
+                  </label>
+                  <div className="relative">
+                    <input type={cpShowNew ? "text" : "password"} value={cpNewPass}
+                      onChange={e => setCpNewPass(e.target.value)} required
+                      placeholder="Buat password baru yang kuat" autoComplete="new-password"
+                      className={`w-full px-4 py-2.5 pr-10 rounded-xl border text-sm outline-none transition-colors ${isDarkTheme ? "bg-slate-800 border-white/10 text-white placeholder-slate-500 focus:border-amber-500/40" : "bg-white border-slate-200 text-slate-900 placeholder-slate-400 focus:border-amber-400"}`} />
+                    <button type="button" onClick={() => setCpShowNew(!cpShowNew)}
+                      className={`absolute right-3 top-1/2 -translate-y-1/2 transition-colors ${isDarkTheme ? "text-slate-400 hover:text-amber-500" : "text-slate-400 hover:text-amber-600"}`}>
+                      {cpShowNew ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                  {cpNewPass.length > 0 && (
+                    <div className="mt-1.5 flex items-center gap-1">
+                      {[1,2,3,4].map(i => (
+                        <div key={i} className={`h-1 flex-1 rounded-full transition-colors ${
+                          cpNewPass.length >= i * 3
+                            ? cpNewPass.length >= 12 ? "bg-emerald-500" : cpNewPass.length >= 9 ? "bg-amber-500" : "bg-red-400"
+                            : isDarkTheme ? "bg-slate-700" : "bg-slate-200"
+                        }`} />
+                      ))}
+                      <span className={`text-[9px] font-mono ml-1 ${isDarkTheme ? "text-slate-400" : "text-slate-500"}`}>
+                        {cpNewPass.length >= 12 ? "Kuat" : cpNewPass.length >= 8 ? "Cukup" : "Lemah"}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className={`block text-[10px] font-mono uppercase tracking-widest mb-1.5 ${isDarkTheme ? "text-slate-400" : "text-slate-500"}`}>Konfirmasi Password Baru *</label>
+                  <input type="password" value={cpConfirmPass}
+                    onChange={e => setCpConfirmPass(e.target.value)} required
+                    placeholder="Ulangi password baru" autoComplete="new-password"
+                    className={`w-full px-4 py-2.5 rounded-xl border text-sm outline-none transition-colors ${
+                      isDarkTheme ? "bg-slate-800 border-white/10 text-white placeholder-slate-500 focus:border-amber-500/40" : "bg-white border-slate-200 text-slate-900 placeholder-slate-400 focus:border-amber-400"
+                    } ${cpConfirmPass && cpConfirmPass !== cpNewPass ? "!border-red-500/50" : cpConfirmPass && cpConfirmPass === cpNewPass ? "!border-emerald-500/50" : ""}`} />
+                  {cpConfirmPass && cpConfirmPass === cpNewPass && (
+                    <div className="flex items-center gap-1 mt-1 text-[10px] text-emerald-500 font-mono">
+                      <CheckCircle2 className="w-3 h-3" /> Password cocok
+                    </div>
+                  )}
+                </div>
+
+                {cpError && (
+                  <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {cpError}
+                  </div>
+                )}
+
+                <div className={`flex items-start gap-2 text-[10px] font-mono rounded-xl px-3 py-2.5 ${isDarkTheme ? "bg-amber-500/8 text-amber-400/80 border border-amber-500/15" : "bg-amber-50 text-amber-700 border border-amber-200"}`}>
+                  <AlertCircle className="w-3 h-3 shrink-0 mt-0.5" />
+                  Setelah disimpan, semua sesi aktif akan diakhiri dan Anda perlu login ulang dengan kredensial baru.
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button type="button" onClick={() => setShowChangePass(false)}
+                    className={`flex-1 py-2.5 rounded-xl border text-xs font-mono uppercase tracking-widest transition-colors cursor-pointer ${isDarkTheme ? "border-white/10 text-slate-400 hover:bg-white/5" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
+                    Batal
+                  </button>
+                  <button type="submit" disabled={cpLoading || !cpCurrentPass || !cpNewPass || !cpConfirmPass}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 text-xs font-bold tracking-wider transition-colors cursor-pointer">
+                    {cpLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                    {cpLoading ? "Menyimpan..." : "Simpan Perubahan"}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Dynamic Feedback Toast Alert */}
       <AnimatePresence>
         {feedback && (
@@ -729,6 +896,20 @@ export default function AdminPanel({
                 >
                   <Globe className="w-4 h-4 text-amber-500" />
                   <span className="hidden sm:inline">Pratinjau Frontpage</span>
+                </button>
+
+                <button
+                  onClick={openChangePass}
+                  className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center gap-1.5 text-xs font-semibold ${
+                    isDarkTheme
+                      ? "border-white/5 text-slate-400 hover:bg-white/5 hover:border-white/10 hover:text-amber-400"
+                      : "border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-amber-600"
+                  }`}
+                  title="Ganti Username & Password"
+                  id="btn-change-pass"
+                >
+                  <Settings className="w-4 h-4" />
+                  <span className="hidden md:inline font-mono uppercase text-[10px] tracking-widest">Keamanan</span>
                 </button>
 
                 <button
