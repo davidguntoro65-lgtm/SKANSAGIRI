@@ -6,7 +6,7 @@ import {
   Compass, ChevronRight, AlertCircle, BookOpen, GraduationCap, HardDrive,
   Upload, SlidersHorizontal, Sparkles, Crop, Check, Eye, EyeOff, Handshake, Target, Telescope,
   Inbox, Mail, MailOpen, Search, Phone, MessageSquare, MailCheck, Filter, ChevronDown,
-  ShieldCheck, Settings
+  ShieldCheck, Settings, Activity, Server, Clock, Cpu, Database, Wifi, WifiOff
 } from "lucide-react";
 import { Competency, Milestone, GalleryItem, Alumnus, NewsArticle, IndustriPartner } from "../data";
 import { DataStore } from "../dataStore";
@@ -32,7 +32,7 @@ export default function AdminPanel({
   const [loginLoading, setLoginLoading] = useState(false);
 
   // Active Admin Sidebar Tab
-  const [activeTab, setActiveTab] = useState<"competencies" | "milestones" | "gallery" | "alumni" | "news" | "partners" | "branding" | "about" | "kepala-sekolah" | "manajemen-sekolah" | "visi-misi" | "social-media" | "inbox-pesan">("competencies");
+  const [activeTab, setActiveTab] = useState<"competencies" | "milestones" | "gallery" | "alumni" | "news" | "partners" | "branding" | "about" | "kepala-sekolah" | "manajemen-sekolah" | "visi-misi" | "social-media" | "inbox-pesan" | "server-monitor">("competencies");
   const { branding, saveBranding, getLogo } = useBranding();
   const [brandingDraft, setBrandingDraft] = useState<Branding | null>(null);
   const [brandingLoading, setBrandingLoading] = useState(false);
@@ -304,6 +304,58 @@ export default function AdminPanel({
   useEffect(() => {
     if (activeTab === "inbox-pesan" && isLoggedIn) loadContactMessages();
   }, [activeTab, isLoggedIn]);
+
+  // --- Server Monitor State ---
+  interface HealthFile { name: string; status: string; }
+  interface HealthData {
+    status: "ok" | "degraded";
+    server: string;
+    uptime_seconds: number;
+    started_at: string;
+    timestamp: string;
+    node_version: string;
+    env: string;
+    active_sessions: number;
+    data_files: HealthFile[];
+  }
+  const [healthData, setHealthData] = useState<HealthData | null>(null);
+  const [healthLoading, setHealthLoading] = useState(false);
+  const [healthError, setHealthError] = useState("");
+  const [healthLastFetched, setHealthLastFetched] = useState<Date | null>(null);
+
+  const fetchHealthData = () => {
+    setHealthLoading(true);
+    setHealthError("");
+    fetch("/api/health")
+      .then(r => r.json())
+      .then((d: HealthData) => {
+        setHealthData(d);
+        setHealthLastFetched(new Date());
+        setHealthLoading(false);
+      })
+      .catch(() => {
+        setHealthError("Gagal terhubung ke server. Periksa koneksi Anda.");
+        setHealthLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    if (activeTab === "server-monitor" && isLoggedIn) {
+      fetchHealthData();
+      const interval = setInterval(fetchHealthData, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [activeTab, isLoggedIn]);
+
+  const formatUptime = (seconds: number) => {
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (d > 0) return `${d}h ${h}j ${m}m`;
+    if (h > 0) return `${h}j ${m}m ${s}d`;
+    return `${m}m ${s}d`;
+  };
 
   const getAuthHeaders = (): HeadersInit => {
     const token = localStorage.getItem("smkn1_adm_token") || "";
@@ -957,7 +1009,8 @@ export default function AdminPanel({
                     { id: "manajemen-sekolah", label: "Manajemen Sekolah", icon: Users, count: null },
                     { id: "visi-misi", label: "Visi & Misi", icon: Target, count: null },
                     { id: "social-media", label: "Media Sosial", icon: Globe, count: null },
-                    { id: "inbox-pesan", label: "Inbox Pesan Masuk", icon: Inbox, count: contactMessages.filter(m => !m.dibaca).length || null }
+                    { id: "inbox-pesan", label: "Inbox Pesan Masuk", icon: Inbox, count: contactMessages.filter(m => !m.dibaca).length || null },
+                    { id: "server-monitor", label: "Monitor Server", icon: Activity, count: null }
                   ].map((tab) => {
                     const TabIcon = tab.icon;
                     const isActive = activeTab === tab.id;
@@ -1038,6 +1091,7 @@ export default function AdminPanel({
                     {activeTab === "visi-misi" && "Visi & Misi Sekolah"}
                     {activeTab === "social-media" && "Kelola Tautan Media Sosial"}
                     {activeTab === "inbox-pesan" && "Inbox Pesan Masuk"}
+                    {activeTab === "server-monitor" && "Monitor Status Server"}
                   </h2>
                   <p className={`text-xs ${isDarkTheme ? "text-slate-400" : "text-slate-500"} font-light mt-0.5`}>
                     {activeTab === "competencies" && "Perbarui deskripsi, kurikulum, bidang karir, and detail program keahlian sekolah."}
@@ -1053,10 +1107,11 @@ export default function AdminPanel({
                     {activeTab === "visi-misi" && "Edit teks Visi dan butir-butir Misi sekolah yang tampil di halaman Visi & Misi."}
                     {activeTab === "social-media" && "Atur URL akun Instagram, YouTube, Facebook, dan Website resmi yang tampil di footer portal."}
                     {activeTab === "inbox-pesan" && "Baca, balas, dan kelola semua pesan yang masuk melalui formulir Hubungi Kami."}
+                    {activeTab === "server-monitor" && "Pantau status, uptime, dan integritas file data server secara real-time. Diperbarui otomatis tiap 30 detik."}
                   </p>
                 </div>
 
-                {!isAddingNew && !editingItem && activeTab !== "branding" && activeTab !== "about" && activeTab !== "kepala-sekolah" && activeTab !== "manajemen-sekolah" && activeTab !== "visi-misi" && activeTab !== "social-media" && activeTab !== "inbox-pesan" && (
+                {!isAddingNew && !editingItem && activeTab !== "branding" && activeTab !== "about" && activeTab !== "kepala-sekolah" && activeTab !== "manajemen-sekolah" && activeTab !== "visi-misi" && activeTab !== "social-media" && activeTab !== "inbox-pesan" && activeTab !== "server-monitor" && (
                   <button
                     onClick={() => {
                       setIsAddingNew(true);
@@ -3319,6 +3374,193 @@ export default function AdminPanel({
                       </div>
                     );
                   })()}
+
+                  {/* Server Monitor Panel */}
+                  {activeTab === "server-monitor" && (
+                    <div className="space-y-6">
+                      {/* Top action bar */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {healthData && (
+                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-widest ${
+                              healthData.status === "ok"
+                                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                                : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                            }`}>
+                              {healthData.status === "ok" ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+                              {healthData.status === "ok" ? "Server Online" : "Degraded"}
+                            </span>
+                          )}
+                          {healthLastFetched && (
+                            <span className={`text-[10px] font-mono ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>
+                              Diperbarui: {healthLastFetched.toLocaleTimeString("id-ID")}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          onClick={fetchHealthData}
+                          disabled={healthLoading}
+                          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all border cursor-pointer ${
+                            isDarkTheme
+                              ? "border-white/10 text-slate-300 hover:bg-white/5"
+                              : "border-slate-200 text-slate-600 hover:bg-slate-100"
+                          }`}
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${healthLoading ? "animate-spin" : ""}`} />
+                          Refresh
+                        </button>
+                      </div>
+
+                      {/* Error state */}
+                      {healthError && (
+                        <div className="flex items-center gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                          <WifiOff className="w-4 h-4 shrink-0" />
+                          {healthError}
+                        </div>
+                      )}
+
+                      {/* Loading skeleton */}
+                      {healthLoading && !healthData && (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          {[...Array(4)].map((_, i) => (
+                            <div key={i} className={`h-28 rounded-2xl animate-pulse ${isDarkTheme ? "bg-white/5" : "bg-slate-100"}`} />
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Stat Cards */}
+                      {healthData && (
+                        <>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {/* Status */}
+                            <div className={`p-5 rounded-2xl border flex flex-col gap-3 ${isDarkTheme ? "bg-white/3 border-white/8" : "bg-white border-slate-200 shadow-sm"}`}>
+                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${healthData.status === "ok" ? "bg-emerald-500/15" : "bg-amber-500/15"}`}>
+                                {healthData.status === "ok"
+                                  ? <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                                  : <AlertCircle className="w-5 h-5 text-amber-400" />
+                                }
+                              </div>
+                              <div>
+                                <p className={`text-[10px] uppercase tracking-widest font-bold mb-1 ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>Status</p>
+                                <p className={`text-lg font-bold font-mono capitalize ${healthData.status === "ok" ? "text-emerald-400" : "text-amber-400"}`}>
+                                  {healthData.status}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Uptime */}
+                            <div className={`p-5 rounded-2xl border flex flex-col gap-3 ${isDarkTheme ? "bg-white/3 border-white/8" : "bg-white border-slate-200 shadow-sm"}`}>
+                              <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-blue-500/15">
+                                <Clock className="w-5 h-5 text-blue-400" />
+                              </div>
+                              <div>
+                                <p className={`text-[10px] uppercase tracking-widest font-bold mb-1 ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>Uptime</p>
+                                <p className={`text-lg font-bold font-mono ${isDarkTheme ? "text-white" : "text-slate-900"}`}>
+                                  {formatUptime(healthData.uptime_seconds)}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Node.js */}
+                            <div className={`p-5 rounded-2xl border flex flex-col gap-3 ${isDarkTheme ? "bg-white/3 border-white/8" : "bg-white border-slate-200 shadow-sm"}`}>
+                              <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-amber-500/15">
+                                <Cpu className="w-5 h-5 text-amber-400" />
+                              </div>
+                              <div>
+                                <p className={`text-[10px] uppercase tracking-widest font-bold mb-1 ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>Node.js</p>
+                                <p className={`text-lg font-bold font-mono ${isDarkTheme ? "text-white" : "text-slate-900"}`}>
+                                  {healthData.node_version}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Active Sessions */}
+                            <div className={`p-5 rounded-2xl border flex flex-col gap-3 ${isDarkTheme ? "bg-white/3 border-white/8" : "bg-white border-slate-200 shadow-sm"}`}>
+                              <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-purple-500/15">
+                                <Users className="w-5 h-5 text-purple-400" />
+                              </div>
+                              <div>
+                                <p className={`text-[10px] uppercase tracking-widest font-bold mb-1 ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>Sesi Aktif</p>
+                                <p className={`text-lg font-bold font-mono ${isDarkTheme ? "text-white" : "text-slate-900"}`}>
+                                  {healthData.active_sessions}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Server Meta */}
+                          <div className={`p-5 rounded-2xl border ${isDarkTheme ? "bg-white/3 border-white/8" : "bg-white border-slate-200 shadow-sm"}`}>
+                            <div className="flex items-center gap-2 mb-4">
+                              <Server className="w-4 h-4 text-amber-400" />
+                              <h3 className={`text-xs font-bold uppercase tracking-widest ${isDarkTheme ? "text-slate-300" : "text-slate-700"}`}>Info Server</h3>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <div>
+                                <p className={`text-[10px] font-mono uppercase tracking-wider mb-1 ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>Environment</p>
+                                <span className={`inline-block px-2.5 py-1 rounded-lg text-xs font-bold font-mono ${
+                                  healthData.env === "production"
+                                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                                    : "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                                }`}>{healthData.env}</span>
+                              </div>
+                              <div>
+                                <p className={`text-[10px] font-mono uppercase tracking-wider mb-1 ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>Mulai Sejak</p>
+                                <p className={`text-xs font-mono ${isDarkTheme ? "text-slate-300" : "text-slate-700"}`}>
+                                  {new Date(healthData.started_at).toLocaleString("id-ID")}
+                                </p>
+                              </div>
+                              <div>
+                                <p className={`text-[10px] font-mono uppercase tracking-wider mb-1 ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>Waktu Server</p>
+                                <p className={`text-xs font-mono ${isDarkTheme ? "text-slate-300" : "text-slate-700"}`}>
+                                  {new Date(healthData.timestamp).toLocaleString("id-ID")}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Data Files Integrity */}
+                          <div className={`p-5 rounded-2xl border ${isDarkTheme ? "bg-white/3 border-white/8" : "bg-white border-slate-200 shadow-sm"}`}>
+                            <div className="flex items-center gap-2 mb-4">
+                              <Database className="w-4 h-4 text-amber-400" />
+                              <h3 className={`text-xs font-bold uppercase tracking-widest ${isDarkTheme ? "text-slate-300" : "text-slate-700"}`}>Integritas File Data</h3>
+                              <span className={`ml-auto text-[10px] font-mono ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>
+                                {healthData.data_files.filter(f => f.status === "ok").length}/{healthData.data_files.length} OK
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                              {healthData.data_files.map((file) => (
+                                <div
+                                  key={file.name}
+                                  className={`flex items-center justify-between px-3 py-2.5 rounded-xl border text-xs ${
+                                    file.status === "ok"
+                                      ? isDarkTheme ? "bg-emerald-500/8 border-emerald-500/20" : "bg-emerald-50 border-emerald-200"
+                                      : file.status === "optional"
+                                      ? isDarkTheme ? "bg-slate-500/8 border-white/8" : "bg-slate-50 border-slate-200"
+                                      : file.status === "missing"
+                                      ? isDarkTheme ? "bg-amber-500/8 border-amber-500/20" : "bg-amber-50 border-amber-200"
+                                      : isDarkTheme ? "bg-red-500/8 border-red-500/20" : "bg-red-50 border-red-200"
+                                  }`}
+                                >
+                                  <span className={`font-mono font-semibold truncate ${
+                                    file.status === "ok" ? (isDarkTheme ? "text-emerald-300" : "text-emerald-700")
+                                    : file.status === "optional" ? (isDarkTheme ? "text-slate-400" : "text-slate-500")
+                                    : file.status === "missing" ? (isDarkTheme ? "text-amber-300" : "text-amber-700")
+                                    : (isDarkTheme ? "text-red-300" : "text-red-700")
+                                  }`}>{file.name}</span>
+                                  <span className="shrink-0 ml-2">
+                                    {file.status === "ok" && <Check className="w-3 h-3 text-emerald-400" />}
+                                    {file.status === "optional" && <span className={`text-[9px] font-bold ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>OPT</span>}
+                                    {file.status === "missing" && <AlertCircle className="w-3 h-3 text-amber-400" />}
+                                    {file.status === "corrupt" && <X className="w-3 h-3 text-red-400" />}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
 
                   {/* Empty Alert Checker if superadmin deletes everything */}
                   {((activeTab === "competencies" && competencies.length === 0) ||
