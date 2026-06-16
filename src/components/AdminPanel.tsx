@@ -523,7 +523,7 @@ export default function AdminPanel({
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
-        headers: getAuthHeaders(),
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password })
       });
       const data = await res.json();

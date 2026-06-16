@@ -16,8 +16,53 @@ const app = express();
 const PORT = parseInt(process.env.PORT || "5000", 10);
 const DATA_DIR = path.join(process.cwd(), "data");
 
-// In-memory session store (cleared on restart — intended for shared hosting)
-const activeSessions = new Set<string>();
+// ─── Persistent session store ────────────────────────────────────────────────
+// Sessions are written to data/sessions.json so they survive Passenger restarts.
+// Each entry maps token → expiry timestamp (48h TTL).
+const SESSION_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
+const SESSIONS_FILE = path.join(DATA_DIR, "sessions.json");
+
+function loadSessions(): Map<string, number> {
+  try {
+    if (fs.existsSync(SESSIONS_FILE)) {
+      const raw = JSON.parse(fs.readFileSync(SESSIONS_FILE, "utf-8"));
+      const now = Date.now();
+      // Hydrate and drop expired entries
+      return new Map(Object.entries(raw as Record<string, number>).filter(([, exp]) => exp > now));
+    }
+  } catch { /* fall through */ }
+  return new Map();
+}
+
+function saveSessions(sessions: Map<string, number>) {
+  try {
+    const obj: Record<string, number> = {};
+    sessions.forEach((exp, tok) => { obj[tok] = exp; });
+    fs.writeFileSync(SESSIONS_FILE, JSON.stringify(obj), "utf-8");
+  } catch { /* best-effort */ }
+}
+
+const activeSessions = loadSessions();
+
+function addSession(token: string) {
+  const now = Date.now();
+  // Purge expired sessions while we're at it
+  activeSessions.forEach((exp, tok) => { if (exp <= now) activeSessions.delete(tok); });
+  activeSessions.set(token, now + SESSION_TTL_MS);
+  saveSessions(activeSessions);
+}
+
+function hasSession(token: string): boolean {
+  const exp = activeSessions.get(token);
+  if (!exp) return false;
+  if (Date.now() > exp) { activeSessions.delete(token); saveSessions(activeSessions); return false; }
+  return true;
+}
+
+function removeSession(token: string) {
+  activeSessions.delete(token);
+  saveSessions(activeSessions);
+}
 
 // Login rate limiter: max 5 attempts per IP, then 60s lockout
 const loginAttempts = new Map<string, { count: number; lockUntil: number }>();
@@ -47,7 +92,7 @@ function clearAttempts(ip: string) {
 function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
   const authHeader = req.headers.authorization || "";
   const token = authHeader.replace("Bearer ", "").trim();
-  if (!token || !activeSessions.has(token)) {
+  if (!token || !hasSession(token)) {
     return res.status(401).json({ error: "Tidak diotorisasi. Silakan login kembali." });
   }
   next();
@@ -152,6 +197,17 @@ app.use((_req, res, next) => {
   next();
 });
 
+// Path normalisation — strip the BASE_PATH prefix (/id) when Passenger passes the
+// full URI to Express (e.g. /id/api/auth/login → /api/auth/login).
+// Harmless when the frontend calls /api/… directly (no /id prefix present).
+app.use((req, _res, next) => {
+  const BASE = (process.env.BASE_PATH || "").replace(/\/$/, ""); // e.g. "/id"
+  if (BASE && req.url.startsWith(BASE + "/")) {
+    req.url = req.url.slice(BASE.length); // strip prefix; req.path updates automatically
+  }
+  next();
+});
+
 // Global write-protection: every POST/DELETE/PUT except public ones requires a valid session token
 app.use((req, res, next) => {
   const writeMethods = ["POST", "DELETE", "PUT", "PATCH"];
@@ -187,7 +243,7 @@ app.post("/api/auth/login", (req, res) => {
   if (username === creds.username && password === creds.password) {
     clearAttempts(ip);
     const token = crypto.randomBytes(48).toString("hex");
-    activeSessions.add(token);
+    addSession(token);
     return res.json({ token });
   }
   recordFailedAttempt(ip);
@@ -214,6 +270,7 @@ app.post("/api/auth/change-password", (req, res) => {
     fs.writeFileSync(filePaths.adminCredentials, JSON.stringify(updated, null, 2), "utf-8");
     // Invalidate all active sessions so user must re-login with new credentials
     activeSessions.clear();
+    saveSessions(activeSessions);
     return res.json({ success: true, username: updated.username });
   } catch (err: any) {
     return res.status(500).json({ error: "Gagal menyimpan perubahan: " + err.message });
@@ -222,13 +279,13 @@ app.post("/api/auth/change-password", (req, res) => {
 
 app.post("/api/auth/logout", (req, res) => {
   const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
-  if (token) activeSessions.delete(token);
+  if (token) removeSession(token);
   return res.json({ success: true });
 });
 
 app.get("/api/auth/verify", (req, res) => {
   const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
-  if (token && activeSessions.has(token)) return res.json({ valid: true });
+  if (token && hasSession(token)) return res.json({ valid: true });
   return res.status(401).json({ valid: false });
 });
 
@@ -774,7 +831,7 @@ app.get("/api/suara/:id", (req, res) => {
     if (!karya) return res.status(404).json({ error: "Karya tidak ditemukan" });
     if (karya.status !== "PUBLISHED") {
       const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
-      if (!token || !activeSessions.has(token)) return res.status(403).json({ error: "Karya belum dipublikasikan" });
+      if (!token || !hasSession(token)) return res.status(403).json({ error: "Karya belum dipublikasikan" });
     }
     res.json(karya);
   } catch (e: any) { res.status(500).json({ error: e.message }); }

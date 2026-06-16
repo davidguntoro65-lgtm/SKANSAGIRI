@@ -1,15 +1,21 @@
-# ─── 1. PASSENGER CONFIG (API only) ─────────────────────────────────────────
+# ─── 1. PASSENGER CONFIG ────────────────────────────────────────────────────
 PassengerEnabled On
 PassengerAppType node
 PassengerStartupFile app.js
-PassengerBaseURI /id/api
+# NOTE: No PassengerBaseURI — Express handles all path routing internally.
+# A path-normalisation middleware in server.ts strips the /id prefix when present,
+# so all API routes work whether the request arrives as /api/* or /id/api/*.
 
 # ─── 2. REWRITE ENGINE ───────────────────────────────────────────────────────
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteBase /id/
 
-    # [A] API → Passenger/Node.js (must be first)
+    # [A1] Direct /api/* calls (frontend absolute-path fetch) → Passenger/Node.js
+    RewriteCond %{REQUEST_URI} ^/api [NC]
+    RewriteRule ^ app.js [L]
+
+    # [A2] /id/api/* → Passenger/Node.js
     RewriteCond %{REQUEST_URI} ^/id/api [NC]
     RewriteRule ^ app.js [L]
 
