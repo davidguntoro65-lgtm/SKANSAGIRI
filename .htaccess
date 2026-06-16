@@ -1,26 +1,46 @@
-# ─── 1. CONFIG ENGINE PASSENGER ──────────────────────────────────────────────
-# Semua request di bawah /id/ diserahkan ke Node.js (Express).
-# Express yang menangani: static dist/, API /api/, dan SPA fallback.
+# ─── 1. PASSENGER CONFIG (API only) ─────────────────────────────────────────
 PassengerEnabled On
 PassengerAppType node
 PassengerStartupFile app.js
-
-# KUNCI UTAMA: /id (bukan /id/api) agar Passenger menangani SEMUA request,
-# bukan hanya API. Jika hanya /id/api, Apache akan serve index.html versi DEV
-# (berisi <script src="/src/main.tsx">) dan frontend tidak bisa tampil.
-PassengerBaseURI /id
+PassengerBaseURI /id/api
 
 # ─── 2. REWRITE ENGINE ───────────────────────────────────────────────────────
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteBase /id/
 
-    # Blokir akses langsung ke file sensitif (berlapis dengan FilesMatch di bawah)
-    RewriteRule ^data/.*$ - [F,L]
-    RewriteRule ^src/.*$ - [F,L]
+    # [A] API → Passenger/Node.js (must be first)
+    RewriteCond %{REQUEST_URI} ^/id/api [NC]
+    RewriteRule ^ app.js [L]
+
+    # [B] Root request & dev index.html → serve built dist/index.html
+    RewriteRule ^$ dist/index.html [L]
+    RewriteRule ^index\.html$ dist/index.html [L]
+
+    # [C] Built assets → dist/assets/
+    RewriteRule ^assets/(.+)$ dist/assets/$1 [L]
+
+    # [D] PWA / static files that live in dist/
+    RewriteRule ^manifest\.json$ dist/manifest.json [L]
+    RewriteRule ^favicon\.svg$ dist/favicon.svg [L]
+    RewriteRule ^favicon\.ico$ dist/favicon.ico [L]
+    RewriteRule ^sw\.js$ dist/sw.js [L]
+    RewriteRule ^robots\.txt$ dist/robots.txt [L]
+    RewriteRule ^icons/(.+)$ dist/icons/$1 [L]
+    RewriteRule ^og-image\.svg$ dist/og-image.svg [L]
+
+    # [E] Serve real physical files as-is (CSS, images already inside dist/, etc.)
+    RewriteCond %{REQUEST_FILENAME} -f
+    RewriteRule ^ - [L]
+
+    # [F] SPA catch-all → dist/index.html
+    RewriteRule ^ dist/index.html [L]
 </IfModule>
 
-# ─── 3. EXPLICIT MIME TYPES ──────────────────────────────────────────────────
+# ─── 3. DIRECTORY INDEX ───────────────────────────────────────────────────────
+DirectoryIndex dist/index.html
+
+# ─── 4. EXPLICIT MIME TYPES ──────────────────────────────────────────────────
 <IfModule mod_mime.c>
     AddType application/javascript .js
     AddType application/javascript .mjs
@@ -30,22 +50,29 @@ PassengerBaseURI /id
     AddType application/manifest+json .webmanifest
 </IfModule>
 
-# ─── 4. SECURITY ─────────────────────────────────────────────────────────────
+# ─── 5. SECURITY ─────────────────────────────────────────────────────────────
 <FilesMatch "\.(env|ts|tsx|md|lock|log)$">
     Require all denied
 </FilesMatch>
 
-# ─── 5. COMPRESSION ──────────────────────────────────────────────────────────
+# Block raw source access
+<IfModule mod_rewrite.c>
+    RewriteRule ^src/.*$ - [F,L]
+    RewriteRule ^data/.*$ - [F,L]
+</IfModule>
+
+# ─── 6. COMPRESSION ──────────────────────────────────────────────────────────
 <IfModule mod_deflate.c>
     AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json
 </IfModule>
 
-# ─── 6. CACHE ASSETS ─────────────────────────────────────────────────────────
+# ─── 7. CACHE ────────────────────────────────────────────────────────────────
 <IfModule mod_expires.c>
     ExpiresActive On
     ExpiresByType image/jpeg "access plus 1 month"
     ExpiresByType image/png "access plus 1 month"
     ExpiresByType image/webp "access plus 1 month"
+    ExpiresByType image/svg+xml "access plus 1 month"
     ExpiresByType text/css "access plus 1 week"
     ExpiresByType application/javascript "access plus 1 week"
 </IfModule>
