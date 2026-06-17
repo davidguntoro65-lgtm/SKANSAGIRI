@@ -1,35 +1,20 @@
-# ─── 1. PASSENGER CONFIG ────────────────────────────────────────────────────
-PassengerEnabled On
-PassengerAppType node
-PassengerStartupFile app.js
-# NOTE: No PassengerBaseURI — Express handles all path routing internally
-# via its BASE_PATH middleware (strips the /id prefix).
-
-# ─── 2. REWRITE ENGINE ───────────────────────────────────────────────────────
+# ─── 1. REWRITE ENGINE ───────────────────────────────────────────────────────
+# LiteSpeed + cPanel Node.js Selector (NO Passenger/Apache)
+# Static assets are served directly by LiteSpeed for performance.
+# API routes (/id/api/*) fall through to LiteSpeed's Node.js proxy (cPanel Selector).
+# SPA routes are caught by the catch-all and served as dist/index.html.
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteBase /id/
 
-    # [API] All /id/api/* requests must NOT be rewritten to a file.
-    # Stopping here lets Passenger forward them to the Node.js app natively.
-    # IMPORTANT: Rewriting to app.js causes Apache to serve app.js as a static
-    # file instead of executing it — that is what produces the
-    # "// cPanel / Phusion Passenger entry point is not valid JSON" error.
-    RewriteCond %{REQUEST_URI} ^/id/api/ [NC]
-    RewriteRule ^ - [L]
-
-    # [API fallback] Handle requests arriving without /id prefix (belt & braces)
-    RewriteCond %{REQUEST_URI} ^/api/ [NC]
-    RewriteRule ^ - [L]
-
-    # [B] Root request & index.html → dist/index.html
+    # [A] Root request → dist/index.html
     RewriteRule ^$ dist/index.html [L]
     RewriteRule ^index\.html$ dist/index.html [L]
 
-    # [C] Built JS/CSS assets → dist/assets/
+    # [B] Built JS/CSS assets → dist/assets/ (served directly for speed)
     RewriteRule ^assets/(.+)$ dist/assets/$1 [L]
 
-    # [D] PWA / static files
+    # [C] PWA / static files
     RewriteRule ^manifest\.json$ dist/manifest.json [L]
     RewriteRule ^favicon\.svg$ dist/favicon.svg [L]
     RewriteRule ^favicon\.ico$ dist/favicon.ico [L]
@@ -37,30 +22,21 @@ PassengerStartupFile app.js
     RewriteRule ^robots\.txt$ dist/robots.txt [L]
     RewriteRule ^icons/(.+)$ dist/icons/$1 [L]
     RewriteRule ^og-image\.svg$ dist/og-image.svg [L]
-    RewriteRule ^sitemap\.xml$ - [L]
+    RewriteRule ^sitemap\.xml$ sitemap.xml [L]
 
-    # [E] Real physical files → serve as-is
+    # [D] Real physical files → serve as-is
     RewriteCond %{REQUEST_FILENAME} -f
     RewriteRule ^ - [L]
 
-    # [F] SPA catch-all → dist/index.html (all other paths handled client-side)
+    # [E] SPA catch-all — serve dist/index.html ONLY for non-API routes.
+    # API routes (/id/api/*) deliberately fall through this rule so
+    # LiteSpeed's Node.js proxy (cPanel Node.js Selector) can handle them.
+    RewriteCond %{REQUEST_URI} !^/id/api/ [NC]
+    RewriteCond %{REQUEST_URI} !^/api/ [NC]
     RewriteRule ^ dist/index.html [L]
 </IfModule>
 
-# ─── 3. DIRECTORY INDEX ───────────────────────────────────────────────────────
-DirectoryIndex dist/index.html
-
-# ─── 4. EXPLICIT MIME TYPES ──────────────────────────────────────────────────
-<IfModule mod_mime.c>
-    AddType application/javascript .js
-    AddType application/javascript .mjs
-    AddType text/css .css
-    AddType application/json .json
-    AddType image/svg+xml .svg
-    AddType application/manifest+json .webmanifest
-</IfModule>
-
-# ─── 5. SECURITY ─────────────────────────────────────────────────────────────
+# ─── 2. SECURITY ─────────────────────────────────────────────────────────────
 <FilesMatch "\.(env|ts|tsx|md|lock|log)$">
     Require all denied
 </FilesMatch>
@@ -70,12 +46,22 @@ DirectoryIndex dist/index.html
     RewriteRule ^data/.*$ - [F,L]
 </IfModule>
 
-# ─── 6. COMPRESSION ──────────────────────────────────────────────────────────
+# ─── 3. EXPLICIT MIME TYPES ──────────────────────────────────────────────────
+<IfModule mod_mime.c>
+    AddType application/javascript .js
+    AddType application/javascript .mjs
+    AddType text/css .css
+    AddType application/json .json
+    AddType image/svg+xml .svg
+    AddType application/manifest+json .webmanifest
+</IfModule>
+
+# ─── 4. COMPRESSION ──────────────────────────────────────────────────────────
 <IfModule mod_deflate.c>
     AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json
 </IfModule>
 
-# ─── 7. CACHE ────────────────────────────────────────────────────────────────
+# ─── 5. CACHE ────────────────────────────────────────────────────────────────
 <IfModule mod_expires.c>
     ExpiresActive On
     ExpiresByType image/jpeg "access plus 1 month"
