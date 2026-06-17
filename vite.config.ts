@@ -4,8 +4,14 @@ import path from 'path';
 import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
+  // VITE_BASE_PATH lets each deployment target set its own base:
+  //   cPanel (smkn1wonogiri.sch.id/id): leave unset → defaults to "/id/" in prod
+  //   Replit Autoscale (root domain):   set VITE_BASE_PATH="/"
+  //   Local dev:                         always "/"
+  const base = process.env.VITE_BASE_PATH
+    ?? (process.env.NODE_ENV === "production" ? "/id/" : "/");
   return {
-    base: process.env.NODE_ENV === "production" ? "/id/" : "/",
+    base,
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

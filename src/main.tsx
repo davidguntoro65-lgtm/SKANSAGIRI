@@ -26,8 +26,9 @@ createRoot(document.getElementById('root')!).render(
 // Register service worker for PWA / offline support
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
+    const swBase = import.meta.env.BASE_URL;
     navigator.serviceWorker
-      .register("/id/sw.js", { scope: "/id/" })
+      .register(`${swBase}sw.js`, { scope: swBase })
       .catch(() => {});
   });
 }

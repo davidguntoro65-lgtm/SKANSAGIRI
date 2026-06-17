@@ -24532,7 +24532,52 @@ var NEWS_COMPILATION = [
 var app = (0, import_express.default)();
 var PORT = parseInt(process.env.PORT || "5000", 10);
 var DATA_DIR = import_path.default.join(process.cwd(), "data");
-var activeSessions = /* @__PURE__ */ new Set();
+var SESSION_TTL_MS = 48 * 60 * 60 * 1e3;
+var SESSIONS_FILE = import_path.default.join(DATA_DIR, "sessions.json");
+function loadSessions() {
+  try {
+    if (import_fs.default.existsSync(SESSIONS_FILE)) {
+      const raw = JSON.parse(import_fs.default.readFileSync(SESSIONS_FILE, "utf-8"));
+      const now = Date.now();
+      return new Map(Object.entries(raw).filter(([, exp]) => exp > now));
+    }
+  } catch {
+  }
+  return /* @__PURE__ */ new Map();
+}
+function saveSessions(sessions) {
+  try {
+    const obj = {};
+    sessions.forEach((exp, tok) => {
+      obj[tok] = exp;
+    });
+    import_fs.default.writeFileSync(SESSIONS_FILE, JSON.stringify(obj), "utf-8");
+  } catch {
+  }
+}
+var activeSessions = loadSessions();
+function addSession(token) {
+  const now = Date.now();
+  activeSessions.forEach((exp, tok) => {
+    if (exp <= now) activeSessions.delete(tok);
+  });
+  activeSessions.set(token, now + SESSION_TTL_MS);
+  saveSessions(activeSessions);
+}
+function hasSession(token) {
+  const exp = activeSessions.get(token);
+  if (!exp) return false;
+  if (Date.now() > exp) {
+    activeSessions.delete(token);
+    saveSessions(activeSessions);
+    return false;
+  }
+  return true;
+}
+function removeSession(token) {
+  activeSessions.delete(token);
+  saveSessions(activeSessions);
+}
 var loginAttempts = /* @__PURE__ */ new Map();
 function checkRateLimit(ip) {
   const now = Date.now();
@@ -24558,7 +24603,7 @@ function clearAttempts(ip) {
 function requireAuth(req, res, next) {
   const authHeader = req.headers.authorization || "";
   const token = authHeader.replace("Bearer ", "").trim();
-  if (!token || !activeSessions.has(token)) {
+  if (!token || !hasSession(token)) {
     return res.status(401).json({ error: "Tidak diotorisasi. Silakan login kembali." });
   }
   next();
@@ -24649,6 +24694,13 @@ app.use((_req, res, next) => {
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   next();
 });
+app.use((req, _res, next) => {
+  const BASE = (process.env.BASE_PATH || "").replace(/\/$/, "");
+  if (BASE && req.url.startsWith(BASE + "/")) {
+    req.url = req.url.slice(BASE.length);
+  }
+  next();
+});
 app.use((req, res, next) => {
   const writeMethods = ["POST", "DELETE", "PUT", "PATCH"];
   if (!writeMethods.includes(req.method)) return next();
@@ -24680,7 +24732,7 @@ app.post("/api/auth/login", (req, res) => {
   if (username === creds.username && password === creds.password) {
     clearAttempts(ip);
     const token = import_crypto.default.randomBytes(48).toString("hex");
-    activeSessions.add(token);
+    addSession(token);
     return res.json({ token });
   }
   recordFailedAttempt(ip);
@@ -24705,6 +24757,7 @@ app.post("/api/auth/change-password", (req, res) => {
   try {
     import_fs.default.writeFileSync(filePaths.adminCredentials, JSON.stringify(updated, null, 2), "utf-8");
     activeSessions.clear();
+    saveSessions(activeSessions);
     return res.json({ success: true, username: updated.username });
   } catch (err) {
     return res.status(500).json({ error: "Gagal menyimpan perubahan: " + err.message });
@@ -24712,13 +24765,41 @@ app.post("/api/auth/change-password", (req, res) => {
 });
 app.post("/api/auth/logout", (req, res) => {
   const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
-  if (token) activeSessions.delete(token);
+  if (token) removeSession(token);
   return res.json({ success: true });
 });
 app.get("/api/auth/verify", (req, res) => {
   const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
-  if (token && activeSessions.has(token)) return res.json({ valid: true });
+  if (token && hasSession(token)) return res.json({ valid: true });
   return res.status(401).json({ valid: false });
+});
+app.get("/api/health", (_req, res) => {
+  const startedAt = new Date(Date.now() - process.uptime() * 1e3).toISOString();
+  const uptimeSeconds = Math.floor(process.uptime());
+  const optionalFiles = /* @__PURE__ */ new Set(["adminCredentials"]);
+  const dataFiles = Object.entries(filePaths);
+  const fileStatus = dataFiles.map(([name, filePath]) => {
+    try {
+      if (!import_fs.default.existsSync(filePath)) return { name, status: optionalFiles.has(name) ? "optional" : "missing" };
+      const raw = import_fs.default.readFileSync(filePath, "utf-8");
+      JSON.parse(raw);
+      return { name, status: "ok" };
+    } catch {
+      return { name, status: "corrupt" };
+    }
+  });
+  const allOk = fileStatus.every((f) => f.status === "ok" || f.status === "optional");
+  res.status(allOk ? 200 : 207).json({
+    status: allOk ? "ok" : "degraded",
+    server: "running",
+    uptime_seconds: uptimeSeconds,
+    started_at: startedAt,
+    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+    node_version: process.version,
+    env: process.env.NODE_ENV || "development",
+    active_sessions: activeSessions.size,
+    data_files: fileStatus
+  });
 });
 app.get("/api/competencies", (req, res) => {
   try {
@@ -25151,7 +25232,7 @@ app.get("/api/suara/:id", (req, res) => {
     if (!karya) return res.status(404).json({ error: "Karya tidak ditemukan" });
     if (karya.status !== "PUBLISHED") {
       const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
-      if (!token || !activeSessions.has(token)) return res.status(403).json({ error: "Karya belum dipublikasikan" });
+      if (!token || !hasSession(token)) return res.status(403).json({ error: "Karya belum dipublikasikan" });
     }
     res.json(karya);
   } catch (e) {
