@@ -32,13 +32,20 @@ export function useBranding() {
 
   const saveBranding = async (data: Branding): Promise<boolean> => {
     try {
+      const token = typeof window !== "undefined" ? (localStorage.getItem("smkn1_adm_token") || "") : "";
       const res = await fetch("/api/branding", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
         body: JSON.stringify(data),
       });
       if (res.ok) { setBranding(data); return true; }
-    } catch { }
+      console.error("saveBranding failed:", res.status, await res.text());
+    } catch (e) {
+      console.error("saveBranding error:", e);
+    }
     return false;
   };
 
