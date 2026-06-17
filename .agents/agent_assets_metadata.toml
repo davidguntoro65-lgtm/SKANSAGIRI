@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "itX9DmNT0XRxNOWQFInjK"
+uri = "file://dist-cpanel-fix.tar.gz"
+type = "unspecified"
+title = "dist-cpanel-fix.tar.gz — Build terbaru untuk cPanel"
