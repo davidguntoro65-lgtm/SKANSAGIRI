@@ -16,6 +16,27 @@ const app = express();
 const PORT = parseInt(process.env.PORT || "5000", 10);
 const DATA_DIR = path.join(process.cwd(), "data");
 
+// ─── Server-side file logger ─────────────────────────────────────────────────
+const LOG_DIR      = path.join(process.cwd(), "logs");
+const SERVER_LOG   = path.join(LOG_DIR, "server.log");
+const MAX_LOG_SIZE = 512 * 1024; // rotate at 512 KB
+
+function serverLog(level: "INFO" | "WARN" | "ERROR", message: string) {
+  const line = `${new Date().toISOString()} [${level}] ${message}\n`;
+  (level === "ERROR" ? process.stderr : process.stdout).write(line);
+  try {
+    if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
+    if (fs.existsSync(SERVER_LOG) && fs.statSync(SERVER_LOG).size > MAX_LOG_SIZE) {
+      const old = path.join(LOG_DIR, "server.log.1");
+      if (fs.existsSync(old)) { try { fs.renameSync(old, path.join(LOG_DIR, "server.log.2")); } catch {} }
+      fs.renameSync(SERVER_LOG, old);
+    }
+    fs.appendFileSync(SERVER_LOG, line, "utf-8");
+  } catch { /* best-effort — never crash the server because of logging */ }
+}
+
+serverLog("INFO", `server.ts loaded — PORT=${PORT}  NODE_ENV=${process.env.NODE_ENV}  BASE_PATH=${process.env.BASE_PATH}`);
+
 // ─── Persistent session store ────────────────────────────────────────────────
 // Sessions are written to data/sessions.json so they survive Passenger restarts.
 // Each entry maps token → expiry timestamp (48h TTL).
@@ -323,6 +344,29 @@ app.get("/api/health", (_req, res) => {
     active_sessions: activeSessions.size,
     data_files: fileStatus,
   });
+});
+
+// --- Logs Endpoint (auth-protected) ---
+
+app.get("/api/logs", requireAuth, (_req, res) => {
+  const files = [
+    { name: "app.log",    path: path.join(process.cwd(), "logs", "app.log") },
+    { name: "server.log", path: SERVER_LOG },
+    { name: "app.log.1",  path: path.join(process.cwd(), "logs", "app.log.1") },
+  ];
+  const TAIL_LINES = 200;
+  const result: Record<string, string[]> = {};
+  for (const f of files) {
+    try {
+      if (!fs.existsSync(f.path)) { result[f.name] = ["(file not found)"]; continue; }
+      const raw = fs.readFileSync(f.path, "utf-8");
+      const lines = raw.split("\n").filter(Boolean);
+      result[f.name] = lines.slice(-TAIL_LINES);
+    } catch (e: any) {
+      result[f.name] = [`(read error: ${e.message})`];
+    }
+  }
+  res.json({ generated_at: new Date().toISOString(), files: result });
 });
 
 // --- Express REST API Routes for High Integrity CRUD ---
@@ -1083,11 +1127,18 @@ async function main() {
     });
   }
 
+  // Global Express error handler — logs every unhandled error to file
+  app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    serverLog("ERROR", `Unhandled Express error on ${req.method} ${req.originalUrl}: ${err.stack || err.message}`);
+    res.status(500).json({ error: "Internal server error" });
+  });
+
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on port ${PORT}`);
+    serverLog("INFO", `Express listening on port ${PORT} — ready to accept requests`);
   });
 }
 
 main().catch(err => {
-  console.error("Failed to start server:", err);
+  serverLog("ERROR", `main() failed: ${err.stack || err.message}`);
+  process.exit(1);
 });

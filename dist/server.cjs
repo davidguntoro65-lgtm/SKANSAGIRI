@@ -24532,6 +24532,30 @@ var NEWS_COMPILATION = [
 var app = (0, import_express.default)();
 var PORT = parseInt(process.env.PORT || "5000", 10);
 var DATA_DIR = import_path.default.join(process.cwd(), "data");
+var LOG_DIR = import_path.default.join(process.cwd(), "logs");
+var SERVER_LOG = import_path.default.join(LOG_DIR, "server.log");
+var MAX_LOG_SIZE = 512 * 1024;
+function serverLog(level, message) {
+  const line = `${(/* @__PURE__ */ new Date()).toISOString()} [${level}] ${message}
+`;
+  (level === "ERROR" ? process.stderr : process.stdout).write(line);
+  try {
+    if (!import_fs.default.existsSync(LOG_DIR)) import_fs.default.mkdirSync(LOG_DIR, { recursive: true });
+    if (import_fs.default.existsSync(SERVER_LOG) && import_fs.default.statSync(SERVER_LOG).size > MAX_LOG_SIZE) {
+      const old = import_path.default.join(LOG_DIR, "server.log.1");
+      if (import_fs.default.existsSync(old)) {
+        try {
+          import_fs.default.renameSync(old, import_path.default.join(LOG_DIR, "server.log.2"));
+        } catch {
+        }
+      }
+      import_fs.default.renameSync(SERVER_LOG, old);
+    }
+    import_fs.default.appendFileSync(SERVER_LOG, line, "utf-8");
+  } catch {
+  }
+}
+serverLog("INFO", `server.ts loaded \u2014 PORT=${PORT}  NODE_ENV=${process.env.NODE_ENV}  BASE_PATH=${process.env.BASE_PATH}`);
 var SESSION_TTL_MS = 48 * 60 * 60 * 1e3;
 var SESSIONS_FILE = import_path.default.join(DATA_DIR, "sessions.json");
 function loadSessions() {
@@ -24800,6 +24824,29 @@ app.get("/api/health", (_req, res) => {
     active_sessions: activeSessions.size,
     data_files: fileStatus
   });
+});
+app.get("/api/logs", requireAuth, (_req, res) => {
+  const files = [
+    { name: "app.log", path: import_path.default.join(process.cwd(), "logs", "app.log") },
+    { name: "server.log", path: SERVER_LOG },
+    { name: "app.log.1", path: import_path.default.join(process.cwd(), "logs", "app.log.1") }
+  ];
+  const TAIL_LINES = 200;
+  const result = {};
+  for (const f of files) {
+    try {
+      if (!import_fs.default.existsSync(f.path)) {
+        result[f.name] = ["(file not found)"];
+        continue;
+      }
+      const raw = import_fs.default.readFileSync(f.path, "utf-8");
+      const lines = raw.split("\n").filter(Boolean);
+      result[f.name] = lines.slice(-TAIL_LINES);
+    } catch (e) {
+      result[f.name] = [`(read error: ${e.message})`];
+    }
+  }
+  res.json({ generated_at: (/* @__PURE__ */ new Date()).toISOString(), files: result });
 });
 app.get("/api/competencies", (req, res) => {
   try {
@@ -25488,12 +25535,17 @@ async function main() {
       res.sendFile(import_path.default.join(distPath, "index.html"));
     });
   }
+  app.use((err, req, res, _next) => {
+    serverLog("ERROR", `Unhandled Express error on ${req.method} ${req.originalUrl}: ${err.stack || err.message}`);
+    res.status(500).json({ error: "Internal server error" });
+  });
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on port ${PORT}`);
+    serverLog("INFO", `Express listening on port ${PORT} \u2014 ready to accept requests`);
   });
 }
 main().catch((err) => {
-  console.error("Failed to start server:", err);
+  serverLog("ERROR", `main() failed: ${err.stack || err.message}`);
+  process.exit(1);
 });
 /*! Bundled license information:
 
