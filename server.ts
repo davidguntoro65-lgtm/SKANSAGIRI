@@ -1048,11 +1048,13 @@ async function main() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    // BASE_PATH defaults to "/id" for cPanel production (smkn1wonogiri.sch.id/id).
-    // Set BASE_PATH="" explicitly only if deploying at the root domain.
-    const BASE = process.env.BASE_PATH ?? "/id";
+    // IMPORTANT: The BASE_PATH middleware above (line ~203) already strips the /id
+    // prefix from req.url for ALL incoming requests.  After stripping, every URL
+    // arrives here as /api/…, /assets/…, /adm-panel, etc. — WITHOUT the /id prefix.
+    // Therefore ALL static / SPA routes must be mounted at root ("/"), not at BASE.
+    // This is identical whether BASE_PATH="/id" (cPanel) or BASE_PATH="" (Replit).
 
-    // Explicit MIME types — prevents Apache/Passenger returning wrong content-type
+    // Explicit MIME types — prevents Passenger / Apache returning wrong content-type
     const mimeOverride: express.RequestHandler = (_req, res, next) => {
       const url = _req.url;
       if (url.endsWith(".js") || url.endsWith(".mjs")) {
@@ -1065,32 +1067,20 @@ async function main() {
       next();
     };
 
-    if (BASE) {
-      app.use(BASE, mimeOverride);
-      app.use(BASE, express.static(distPath, { index: false }));
-      // Exact base path → serve index.html
-      app.get(BASE, (_req, res) => res.sendFile(path.join(distPath, "index.html")));
-      app.get(`${BASE}/`, (_req, res) => res.sendFile(path.join(distPath, "index.html")));
-      // SPA catch-all: only return index.html when the path is NOT a real file
-      app.get(`${BASE}/*splat`, (req, res) => {
-        const filePath = path.join(distPath, req.path.replace(BASE, ""));
-        if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-          return res.sendFile(filePath);
-        }
-        res.sendFile(path.join(distPath, "index.html"));
-      });
-    } else {
-      app.use(mimeOverride);
-      app.use(express.static(distPath, { index: false }));
-      app.get("/", (_req, res) => res.sendFile(path.join(distPath, "index.html")));
-      app.get("/*splat", (req, res) => {
-        const filePath = path.join(distPath, req.path);
-        if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-          return res.sendFile(filePath);
-        }
-        res.sendFile(path.join(distPath, "index.html"));
-      });
-    }
+    app.use(mimeOverride);
+    app.use(express.static(distPath, { index: false }));
+    app.get("/", (_req, res) => res.sendFile(path.join(distPath, "index.html")));
+    // SPA catch-all — serve index.html for any non-API, non-file path
+    app.get("/*splat", (req, res) => {
+      if (req.path.startsWith("/api/")) {
+        return res.status(404).json({ error: "API endpoint not found" });
+      }
+      const filePath = path.join(distPath, req.path);
+      if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+        return res.sendFile(filePath);
+      }
+      res.sendFile(path.join(distPath, "index.html"));
+    });
   }
 
   app.listen(PORT, "0.0.0.0", () => {
