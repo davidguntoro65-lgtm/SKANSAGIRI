@@ -2,31 +2,34 @@
 PassengerEnabled On
 PassengerAppType node
 PassengerStartupFile app.js
-# NOTE: No PassengerBaseURI — Express handles all path routing internally.
-# A path-normalisation middleware in server.ts strips the /id prefix when present,
-# so all API routes work whether the request arrives as /api/* or /id/api/*.
+# NOTE: No PassengerBaseURI — Express handles all path routing internally
+# via its BASE_PATH middleware (strips the /id prefix).
 
 # ─── 2. REWRITE ENGINE ───────────────────────────────────────────────────────
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteBase /id/
 
-    # [A1] Direct /api/* calls (frontend absolute-path fetch) → Passenger/Node.js
-    RewriteCond %{REQUEST_URI} ^/api [NC]
-    RewriteRule ^ app.js [L]
+    # [API] All /id/api/* requests must NOT be rewritten to a file.
+    # Stopping here lets Passenger forward them to the Node.js app natively.
+    # IMPORTANT: Rewriting to app.js causes Apache to serve app.js as a static
+    # file instead of executing it — that is what produces the
+    # "// cPanel / Phusion Passenger entry point is not valid JSON" error.
+    RewriteCond %{REQUEST_URI} ^/id/api/ [NC]
+    RewriteRule ^ - [L]
 
-    # [A2] /id/api/* → Passenger/Node.js
-    RewriteCond %{REQUEST_URI} ^/id/api [NC]
-    RewriteRule ^ app.js [L]
+    # [API fallback] Handle requests arriving without /id prefix (belt & braces)
+    RewriteCond %{REQUEST_URI} ^/api/ [NC]
+    RewriteRule ^ - [L]
 
-    # [B] Root request & dev index.html → serve built dist/index.html
+    # [B] Root request & index.html → dist/index.html
     RewriteRule ^$ dist/index.html [L]
     RewriteRule ^index\.html$ dist/index.html [L]
 
-    # [C] Built assets → dist/assets/
+    # [C] Built JS/CSS assets → dist/assets/
     RewriteRule ^assets/(.+)$ dist/assets/$1 [L]
 
-    # [D] PWA / static files that live in dist/
+    # [D] PWA / static files
     RewriteRule ^manifest\.json$ dist/manifest.json [L]
     RewriteRule ^favicon\.svg$ dist/favicon.svg [L]
     RewriteRule ^favicon\.ico$ dist/favicon.ico [L]
@@ -34,12 +37,13 @@ PassengerStartupFile app.js
     RewriteRule ^robots\.txt$ dist/robots.txt [L]
     RewriteRule ^icons/(.+)$ dist/icons/$1 [L]
     RewriteRule ^og-image\.svg$ dist/og-image.svg [L]
+    RewriteRule ^sitemap\.xml$ - [L]
 
-    # [E] Serve real physical files as-is (CSS, images already inside dist/, etc.)
+    # [E] Real physical files → serve as-is
     RewriteCond %{REQUEST_FILENAME} -f
     RewriteRule ^ - [L]
 
-    # [F] SPA catch-all → dist/index.html
+    # [F] SPA catch-all → dist/index.html (all other paths handled client-side)
     RewriteRule ^ dist/index.html [L]
 </IfModule>
 
@@ -61,7 +65,6 @@ DirectoryIndex dist/index.html
     Require all denied
 </FilesMatch>
 
-# Block raw source access
 <IfModule mod_rewrite.c>
     RewriteRule ^src/.*$ - [F,L]
     RewriteRule ^data/.*$ - [F,L]
