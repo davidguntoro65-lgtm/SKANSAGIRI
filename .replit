@@ -47,4 +47,7 @@ build = ["npm", "run", "build"]
 [userenv]
 
 [userenv.production]
-BASE_PATH = "/id"
+NODE_ENV = "production"
+
+[userenv.development]
+NODE_ENV = "development"
