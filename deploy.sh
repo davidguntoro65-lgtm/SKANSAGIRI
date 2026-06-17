@@ -8,7 +8,10 @@
 #   - data/       (database JSON flat-file)
 #   - .env        (variabel lingkungan / secrets)
 #   - app.js      (Passenger startup file — spesifik cPanel, JANGAN di-overwrite)
-#   - .htaccess   (Apache routing — spesifik cPanel, JANGAN di-overwrite)
+#
+# CATATAN: .htaccess SENGAJA tidak dilindungi agar versi terbaru dari repo
+# selalu diterapkan ke server. Routing API yang benar (RewriteRule ^ - [L])
+# wajib ada agar login dan semua /api/* endpoint bekerja di cPanel/Passenger.
 #
 # Penggunaan:
 #   bash deploy.sh            → deploy branch 'main'
@@ -24,7 +27,8 @@ LOG_FILE="$APP_DIR/deploy.log"
 MAX_LOG_LINES=2000
 
 # Folder/file yang wajib dilindungi dari git (backup sebelum pull, restore sesudah)
-PROTECTED_FILES=("data" ".env" "app.js" ".htaccess")
+# CATATAN: .htaccess TIDAK dilindungi — harus selalu diperbarui dari repo
+PROTECTED_FILES=("data" ".env" "app.js")
 
 # ── Warna terminal ────────────────────────────────────────────────────────────
 if [ -t 1 ]; then
@@ -197,15 +201,15 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 # LANGKAH 4 — Pulihkan file yang dilindungi SEGERA setelah git reset
 #
-# PENTING: app.js dan .htaccess dipulihkan dari backup cPanel, BUKAN dari git.
+# PENTING: app.js dipulihkan dari backup cPanel, BUKAN dari git.
 # app.js adalah Passenger startup file yang dikonfigurasi cPanel.
-# .htaccess mungkin memiliki konfigurasi host-specific yang tidak ada di git.
+# .htaccess TIDAK dilindungi — diperbarui dari repo agar routing API benar.
 # ─────────────────────────────────────────────────────────────────────────────
 log_info "[4/8] Memulihkan file yang dilindungi..."
 
 restore_protected
 
-log_ok "data/, .env, app.js, .htaccess aman — tidak tersentuh git."
+log_ok "data/, .env, app.js aman — tidak tersentuh git. .htaccess diperbarui dari repo."
 
 # ─────────────────────────────────────────────────────────────────────────────
 # LANGKAH 5 — Install npm (hanya jika diperlukan)
@@ -340,9 +344,9 @@ log_ok   "DEPLOY BERHASIL ✓"
 log_info "Commit  : $COMMIT_AFTER"
 log_info "Branch  : $BRANCH"
 log_info "Build   : ${BUILD_SECS}s"
-log_info "Data DB : TIDAK DIUBAH"
-log_info "app.js  : TIDAK DIUBAH (dari cPanel)"
-log_info ".htaccess : TIDAK DIUBAH (dari cPanel)"
+log_info "Data DB   : TIDAK DIUBAH"
+log_info "app.js    : TIDAK DIUBAH (dari cPanel)"
+log_info ".htaccess : DIPERBARUI dari repo (routing API /id/api/* → Passenger)"
 log_info "Log     : $LOG_FILE"
 log_info "══════════════════════════════════════════════════"
 log_info ""
