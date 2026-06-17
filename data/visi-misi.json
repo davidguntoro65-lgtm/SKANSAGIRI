@@ -1,1 +1,6 @@
-{}
+{
+  "visi": "Test visi",
+  "misi": [
+    "Misi 1"
+  ]
+}

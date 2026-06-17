@@ -1,1 +1,6 @@
-{}
+{
+  "nama": "Test",
+  "nip": "123",
+  "foto": null,
+  "sambutan": "Test sambutan"
+}
