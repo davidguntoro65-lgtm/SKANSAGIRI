@@ -1,4 +1,4 @@
-modules = ["nodejs-20", "web", "bash"]
+modules = ["nodejs-20", "bash", "web"]
 [agent]
 expertMode = true
 stack = "BEST_EFFORT_FALLBACK"
@@ -52,3 +52,4 @@ VITE_BASE_PATH = "/"
 
 [userenv.development]
 NODE_ENV = "development"
+VITE_BASE_PATH = "/"
