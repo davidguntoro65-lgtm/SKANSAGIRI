@@ -912,6 +912,48 @@ app.post("/api/suara", (req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+app.put("/api/suara/:id", requireAuth, (req, res) => {
+  try {
+    const { title, content, category, tags, authorName, authorClass, authorJurusan } = req.body;
+    if (!title || !content || !category)
+      return res.status(400).json({ error: "Judul, konten, dan kategori wajib diisi." });
+    if (content.trim().length < 200)
+      return res.status(400).json({ error: "Konten minimal 200 karakter." });
+    const validCats = ["JURNAL_VOKASI", "ESAI_INOVASI", "SASTRA", "OPINI"];
+    if (!validCats.includes(category)) return res.status(400).json({ error: "Kategori tidak valid." });
+    const all = readSuara();
+    const idx = all.findIndex(k => k.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: "Karya tidak ditemukan." });
+    const existing = all[idx];
+    let slug = existing.slug;
+    if (title.trim() !== existing.title) {
+      const baseSlug = slugify(title);
+      slug = baseSlug || `karya-${Date.now()}`;
+      let counter = 1;
+      while (all.some((k, i) => i !== idx && k.slug === slug)) slug = `${baseSlug}-${counter++}`;
+    }
+    const trimmedContent = content.trim();
+    const excerpt = trimmedContent.replace(/\n+/g, " ").substring(0, 220) + (trimmedContent.length > 220 ? "..." : "");
+    all[idx] = {
+      ...existing,
+      title: title.trim(),
+      slug,
+      content: trimmedContent,
+      excerpt,
+      category,
+      tags: Array.isArray(tags)
+        ? tags.map((t: string) => t.trim()).filter(Boolean)
+        : (tags || "").split(",").map((t: string) => t.trim()).filter(Boolean),
+      authorName: authorName ? authorName.trim() : existing.authorName,
+      authorClass: authorClass ? authorClass.trim() : existing.authorClass,
+      authorJurusan: authorJurusan !== undefined ? authorJurusan.trim() : existing.authorJurusan,
+      updatedAt: new Date().toISOString(),
+    };
+    writeSuara(all);
+    res.json({ success: true, data: all[idx] });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 app.patch("/api/suara/:id/like", (req, res) => {
   try {
     const all = readSuara();

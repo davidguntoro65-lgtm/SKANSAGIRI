@@ -4,7 +4,7 @@ import {
   ArrowLeft, CheckCircle2, XCircle, Archive, Trash2, Eye, Clock,
   RefreshCw, Loader2, AlertCircle, BookOpen, MessageSquare, Send,
   Filter, Search, X, User, TrendingUp, Lightbulb, Feather, Heart,
-  FileText, ChevronRight, LogOut, Lock, EyeOff, LayoutDashboard
+  FileText, ChevronRight, LogOut, Lock, EyeOff, LayoutDashboard, Pencil
 } from "lucide-react";
 
 interface KaryaSiswa {
@@ -79,6 +79,17 @@ export default function AdminSuaraSkansagiri({ theme, onBack }: AdminSuaraProps)
   const [komentarList, setKomentarList] = useState<KomentarSuara[]>([]);
   const [komentarLoading, setKomentarLoading] = useState(false);
   const [komentarFilter, setKomentarFilter] = useState<"ALL" | "PENDING" | "APPROVED" | "REJECTED">("PENDING");
+
+  const [editMode, setEditMode] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editContent, setEditContent] = useState("");
+  const [editCategory, setEditCategory] = useState<KaryaSiswa["category"]>("JURNAL_VOKASI");
+  const [editTags, setEditTags] = useState("");
+  const [editAuthorName, setEditAuthorName] = useState("");
+  const [editAuthorClass, setEditAuthorClass] = useState("");
+  const [editAuthorJurusan, setEditAuthorJurusan] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState("");
 
   function toast(text: string, type: "ok" | "err" = "ok") {
     setToastMsg({ text, type });
@@ -179,6 +190,44 @@ export default function AdminSuaraSkansagiri({ theme, onBack }: AdminSuaraProps)
         setFeedbackText(""); await loadArticles(); setSelected(null);
       } else toast("Aksi gagal.", "err");
     } finally { setActionLoading(null); }
+  }
+
+  function openEdit(karya: KaryaSiswa) {
+    setEditTitle(karya.title);
+    setEditContent(karya.content);
+    setEditCategory(karya.category);
+    setEditTags(karya.tags.join(", "));
+    setEditAuthorName(karya.authorName);
+    setEditAuthorClass(karya.authorClass);
+    setEditAuthorJurusan(karya.authorJurusan || "");
+    setEditError("");
+    setEditMode(true);
+  }
+
+  async function doEdit(e: FormEvent) {
+    e.preventDefault();
+    if (!selected) return;
+    setEditError("");
+    setEditSaving(true);
+    try {
+      const r = await fetch(`/api/suara/${selected.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify({
+          title: editTitle, content: editContent, category: editCategory,
+          tags: editTags, authorName: editAuthorName,
+          authorClass: editAuthorClass, authorJurusan: editAuthorJurusan,
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) { setEditError(d.error || "Gagal menyimpan."); return; }
+      toast("Karya berhasil diperbarui! ✓");
+      setEditMode(false);
+      await loadArticles();
+      setSelected(d.data);
+      setFeedbackText(d.data.feedback || "");
+    } catch { setEditError("Terjadi kesalahan jaringan."); }
+    finally { setEditSaving(false); }
   }
 
   async function doDelete(id: string) {
@@ -429,9 +478,17 @@ export default function AdminSuaraSkansagiri({ theme, onBack }: AdminSuaraProps)
                         {STATUS_CFG[selected.status]?.label}
                       </span>
                     </div>
-                    <button onClick={() => setSelected(null)} className="text-slate-600 hover:text-white transition-colors">
-                      <X className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => openEdit(selected)}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest border border-violet-500/30 text-violet-400 bg-violet-500/10 hover:bg-violet-500/20 transition-all"
+                      >
+                        <Pencil className="w-3 h-3" /> Edit
+                      </button>
+                      <button onClick={() => setSelected(null)} className="text-slate-600 hover:text-white transition-colors">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Scrollable Content */}
@@ -647,6 +704,141 @@ export default function AdminSuaraSkansagiri({ theme, onBack }: AdminSuaraProps)
         )}
 
       </div>
+
+      {/* ── EDIT MODAL ──────────────────────────────────────────── */}
+      <AnimatePresence>
+        {editMode && selected && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+            onClick={e => { if (e.target === e.currentTarget) setEditMode(false); }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 16 }}
+              transition={{ duration: 0.2 }}
+              className="w-full max-w-2xl bg-slate-900 border border-white/10 rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-white/8">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-violet-500/20 flex items-center justify-center">
+                    <Pencil className="w-4 h-4 text-violet-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white">Edit Karya</h3>
+                    <p className="text-[10px] font-mono text-slate-500 truncate max-w-xs">{selected.authorName} · {selected.authorClass}</p>
+                  </div>
+                </div>
+                <button onClick={() => setEditMode(false)} className="text-slate-600 hover:text-white transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Form */}
+              <form onSubmit={doEdit} className="overflow-y-auto flex-1">
+                <div className="p-6 space-y-4">
+
+                  {/* Judul */}
+                  <div>
+                    <label className="block text-[10px] font-mono tracking-widest uppercase text-slate-500 mb-1.5">Judul</label>
+                    <input
+                      type="text" value={editTitle} onChange={e => setEditTitle(e.target.value)} required
+                      className="w-full px-4 py-2.5 rounded-xl border bg-white/5 border-white/8 text-white text-sm outline-none focus:border-violet-500/50 transition-colors"
+                    />
+                  </div>
+
+                  {/* Kategori */}
+                  <div>
+                    <label className="block text-[10px] font-mono tracking-widest uppercase text-slate-500 mb-1.5">Kategori</label>
+                    <select
+                      value={editCategory} onChange={e => setEditCategory(e.target.value as KaryaSiswa["category"])}
+                      className="w-full px-4 py-2.5 rounded-xl border bg-slate-800 border-white/8 text-white text-sm outline-none focus:border-violet-500/50 transition-colors"
+                    >
+                      {(Object.keys(CAT_CFG) as Array<keyof typeof CAT_CFG>).map(k => (
+                        <option key={k} value={k}>{CAT_CFG[k].label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Penulis (baris) */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-mono tracking-widest uppercase text-slate-500 mb-1.5">Nama Penulis</label>
+                      <input
+                        type="text" value={editAuthorName} onChange={e => setEditAuthorName(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border bg-white/5 border-white/8 text-white text-xs outline-none focus:border-violet-500/50 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-mono tracking-widest uppercase text-slate-500 mb-1.5">Kelas</label>
+                      <input
+                        type="text" value={editAuthorClass} onChange={e => setEditAuthorClass(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border bg-white/5 border-white/8 text-white text-xs outline-none focus:border-violet-500/50 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-mono tracking-widest uppercase text-slate-500 mb-1.5">Jurusan</label>
+                      <input
+                        type="text" value={editAuthorJurusan} onChange={e => setEditAuthorJurusan(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border bg-white/5 border-white/8 text-white text-xs outline-none focus:border-violet-500/50 transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Tags */}
+                  <div>
+                    <label className="block text-[10px] font-mono tracking-widest uppercase text-slate-500 mb-1.5">
+                      Tags <span className="normal-case text-slate-600">(pisahkan dengan koma)</span>
+                    </label>
+                    <input
+                      type="text" value={editTags} onChange={e => setEditTags(e.target.value)}
+                      placeholder="contoh: teknologi, inovasi, vokasi"
+                      className="w-full px-4 py-2.5 rounded-xl border bg-white/5 border-white/8 text-white text-sm outline-none focus:border-violet-500/50 transition-colors placeholder:text-slate-700"
+                    />
+                  </div>
+
+                  {/* Konten */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-[10px] font-mono tracking-widest uppercase text-slate-500">Konten</label>
+                      <span className={`text-[9px] font-mono ${editContent.trim().length < 200 ? "text-rose-400" : "text-slate-600"}`}>
+                        {editContent.trim().length} karakter {editContent.trim().length < 200 && "(min. 200)"}
+                      </span>
+                    </div>
+                    <textarea
+                      value={editContent} onChange={e => setEditContent(e.target.value)} required rows={12}
+                      className="w-full px-4 py-3 rounded-xl border bg-white/5 border-white/8 text-white text-sm outline-none focus:border-violet-500/50 transition-colors resize-y leading-relaxed"
+                    />
+                  </div>
+
+                  {editError && (
+                    <div className="flex items-center gap-2 text-rose-400 text-xs bg-rose-500/10 border border-rose-500/20 px-3 py-2.5 rounded-xl">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />{editError}
+                    </div>
+                  )}
+                </div>
+
+                {/* Modal Footer */}
+                <div className="px-6 pb-6 flex items-center justify-end gap-3 border-t border-white/6 pt-4">
+                  <button
+                    type="button" onClick={() => setEditMode(false)}
+                    className="px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest text-slate-400 border border-white/8 hover:bg-white/5 hover:text-white transition-all"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit" disabled={editSaving || editContent.trim().length < 200}
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest text-white bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:shadow-[0_0_16px_rgba(139,92,246,0.4)] transition-all disabled:opacity-50"
+                  >
+                    {editSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                    Simpan Perubahan
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

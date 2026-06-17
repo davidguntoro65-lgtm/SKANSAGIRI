@@ -6,3 +6,9 @@ id = "itX9DmNT0XRxNOWQFInjK"
 uri = "file://dist-cpanel-fix.tar.gz"
 type = "unspecified"
 title = "dist-cpanel-fix.tar.gz — Build terbaru untuk cPanel"
+
+[[outputs]]
+id = "B4kmT3GPP--baaHYpRl_B"
+uri = "file://dist-cpanel-edit-suara.tar.gz"
+type = "unspecified"
+title = "dist-cpanel-edit-suara.tar.gz — Build dengan fitur Edit Karya"
