@@ -2,3 +2,4 @@
 - [Sub-page z-index rule](subpage-zindex.md) — All sub-page sections must use `relative z-10` to appear above GlobalPageBg (fixed inset-0 z-0).
 - [Server-side auth architecture](server-auth.md) — Auth moved fully server-side; all write endpoints protected; credentials from env vars.
 - [cPanel .htaccess Passenger API routing bug](htaccess-passenger-bug.md) — RewriteRule to a physical file (app.js) serves it as static, bypassing Passenger; use `RewriteRule ^ - [L]` for API routes.
+- [Image upload cPanel crash fix](image-upload-cpanel.md) — cPanel/Apache LimitRequestBody kills large base64 uploads; fix = client compress + server size guard + atomic writes.

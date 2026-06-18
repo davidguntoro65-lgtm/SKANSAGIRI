@@ -232,10 +232,61 @@ export default function AdminPanel({
     }
   }, [originalImageSrc, enhanceSettings, imageEnhanceOpen]);
 
+  // ── Image compression utility ─────────────────────────────────────────────
+  // Resizes + recompresses images client-side before upload so JSON files
+  // stay small enough for cPanel/Apache LimitRequestBody limits (~2-8 MB).
+  // SVG files are passed through as-is (already vector / tiny).
+  const compressImage = (
+    file: File,
+    maxWidth: number,
+    maxHeight: number,
+    quality: number,
+    maxKB: number
+  ): Promise<string> =>
+    new Promise((resolve, reject) => {
+      if (file.type === "image/svg+xml") {
+        const r = new FileReader();
+        r.onload = (e) => resolve(e.target!.result as string);
+        r.onerror = reject;
+        r.readAsDataURL(file);
+        return;
+      }
+      const r = new FileReader();
+      r.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > maxWidth || height > maxHeight) {
+            const ratio = Math.min(maxWidth / width, maxHeight / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d")!;
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+          ctx.drawImage(img, 0, 0, width, height);
+          let q = quality;
+          let dataUrl = canvas.toDataURL("image/jpeg", q);
+          while (dataUrl.length > maxKB * 1024 && q > 0.35) {
+            q = Math.max(0.35, q - 0.07);
+            dataUrl = canvas.toDataURL("image/jpeg", q);
+          }
+          resolve(dataUrl);
+        };
+        img.onerror = reject;
+        img.src = e.target!.result as string;
+      };
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    });
+
   const handleAvatarFileSelection = (file: File) => {
-    const MAX_SIZE = 10 * 1024 * 1024; // 10MB limit
+    const MAX_SIZE = 8 * 1024 * 1024; // 8MB input limit
     if (file.size > MAX_SIZE) {
-      showFeedback(`Ukuran file foto terlalu besar (${(file.size / 1024 / 1024).toFixed(2)}MB). Maksimal adalah 10MB!`, "error");
+      showFeedback(`Ukuran file foto terlalu besar (${(file.size / 1024 / 1024).toFixed(2)}MB). Maksimal 8MB.`, "error");
       return;
     }
     
@@ -2583,14 +2634,16 @@ export default function AdminPanel({
                   {/* BRANDING PANEL */}
                   {activeTab === "branding" && (() => {
                     const draft = brandingDraft ?? branding;
-                    const handleFileInput = (field: keyof Branding) => (e: React.ChangeEvent<HTMLInputElement>) => {
+                    const handleFileInput = (field: keyof Branding) => async (e: React.ChangeEvent<HTMLInputElement>) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      const reader = new FileReader();
-                      reader.onload = (ev) => {
-                        setBrandingDraft(prev => ({ ...(prev ?? branding), [field]: ev.target?.result as string }));
-                      };
-                      reader.readAsDataURL(file);
+                      try {
+                        showFeedback("Memproses gambar…", "success");
+                        const compressed = await compressImage(file, 600, 600, 0.86, 220);
+                        setBrandingDraft(prev => ({ ...(prev ?? branding), [field]: compressed }));
+                      } catch {
+                        showFeedback("Gagal memproses gambar. Coba file lain.", "error");
+                      }
                     };
                     const handleRemove = (field: keyof Branding) => {
                       setBrandingDraft(prev => ({ ...(prev ?? branding), [field]: null }));
@@ -2707,14 +2760,16 @@ export default function AdminPanel({
 
                   {/* ABOUT / FOTO GEDUNG PANEL */}
                   {activeTab === "about" && (() => {
-                    const handleAboutFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+                    const handleAboutFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      const reader = new FileReader();
-                      reader.onload = (ev) => {
-                        if (ev.target?.result) setAboutData(prev => ({ ...prev, foto: ev.target!.result as string }));
-                      };
-                      reader.readAsDataURL(file);
+                      try {
+                        showFeedback("Memproses gambar…", "success");
+                        const compressed = await compressImage(file, 1400, 1050, 0.82, 420);
+                        setAboutData(prev => ({ ...prev, foto: compressed }));
+                      } catch {
+                        showFeedback("Gagal memproses gambar. Coba file lain.", "error");
+                      }
                     };
                     const handleSaveAbout = async () => {
                       setAboutLoading(true);
@@ -2765,7 +2820,7 @@ export default function AdminPanel({
                                 </button>
                               )}
                               <p className={`text-[10px] font-mono ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>
-                                Format: JPG, PNG, WebP. Resolusi tinggi disarankan (min. 1200px). Maks 20MB.
+                                Format: JPG, PNG, WebP. Gambar otomatis dikompres untuk kestabilan server.
                               </p>
                             </div>
                           </div>
@@ -2845,14 +2900,16 @@ export default function AdminPanel({
 
                   {/* KEPALA SEKOLAH PANEL */}
                   {activeTab === "kepala-sekolah" && (() => {
-                    const handleKepalaFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+                    const handleKepalaFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      const reader = new FileReader();
-                      reader.onload = (ev) => {
-                        if (ev.target?.result) setKepalaSekolah(prev => ({ ...prev, foto: ev.target!.result as string }));
-                      };
-                      reader.readAsDataURL(file);
+                      try {
+                        showFeedback("Memproses gambar…", "success");
+                        const compressed = await compressImage(file, 700, 900, 0.85, 330);
+                        setKepalaSekolah(prev => ({ ...prev, foto: compressed }));
+                      } catch {
+                        showFeedback("Gagal memproses gambar. Coba file lain.", "error");
+                      }
                     };
                     const handleSaveKepala = async () => {
                       setKepalaLoading(true);
@@ -2889,7 +2946,7 @@ export default function AdminPanel({
                                   <Trash2 className="w-3.5 h-3.5" /> Hapus Foto
                                 </button>
                               )}
-                              <p className={`text-[10px] font-mono ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>Format: JPG, PNG, WebP. Ukuran maks 10MB.</p>
+                              <p className={`text-[10px] font-mono ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>Format: JPG, PNG, WebP. Gambar otomatis dikompres untuk kestabilan server.</p>
                             </div>
                           </div>
                         </div>
@@ -2942,16 +2999,16 @@ export default function AdminPanel({
 
                   {/* MANAJEMEN SEKOLAH PANEL */}
                   {activeTab === "manajemen-sekolah" && (() => {
-                    const handleManajemenFoto = (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
+                    const handleManajemenFoto = async (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      const reader = new FileReader();
-                      reader.onload = (ev) => {
-                        if (ev.target?.result) {
-                          setManajemenSekolah(prev => prev.map(p => p.id === id ? { ...p, foto: ev.target!.result as string } : p));
-                        }
-                      };
-                      reader.readAsDataURL(file);
+                      try {
+                        showFeedback("Memproses gambar…", "success");
+                        const compressed = await compressImage(file, 600, 800, 0.85, 295);
+                        setManajemenSekolah(prev => prev.map(p => p.id === id ? { ...p, foto: compressed } : p));
+                      } catch {
+                        showFeedback("Gagal memproses gambar. Coba file lain.", "error");
+                      }
                     };
                     const handleSaveManajemen = async () => {
                       setManajemenLoading(true);
