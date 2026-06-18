@@ -24728,8 +24728,17 @@ app.use((req, _res, next) => {
 app.use((req, res, next) => {
   const writeMethods = ["POST", "DELETE", "PUT", "PATCH"];
   if (!writeMethods.includes(req.method)) return next();
-  const publicPosts = ["/api/auth/login", "/api/tracer"];
-  if (publicPosts.includes(req.path)) return next();
+  const publicExact = ["/api/auth/login", "/api/tracer", "/api/contact", "/api/suara"];
+  if (publicExact.includes(req.path)) return next();
+  const publicPatterns = [
+    /^\/api\/suara\/[^/]+\/komentar$/,
+    // POST /api/suara/:id/komentar
+    /^\/api\/suara\/[^/]+\/like$/,
+    // PATCH /api/suara/:id/like
+    /^\/api\/suara\/[^/]+\/view$/
+    // PATCH /api/suara/:id/view
+  ];
+  if (publicPatterns.some((re) => re.test(req.path))) return next();
   return requireAuth(req, res, next);
 });
 function getAdminCredentials() {

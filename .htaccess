@@ -1,7 +1,7 @@
 # ─── 1. REWRITE ENGINE ───────────────────────────────────────────────────────
 # LiteSpeed + cPanel Node.js Selector (NO Passenger/Apache)
 # Static assets are served directly by LiteSpeed for performance.
-# API routes (/id/api/*) fall through to LiteSpeed's Node.js proxy (cPanel Selector).
+# API routes (/id/api/*) are passed to LiteSpeed's Node.js proxy (cPanel Selector).
 # SPA routes are caught by the catch-all and served as dist/index.html.
 <IfModule mod_rewrite.c>
     RewriteEngine On
@@ -24,15 +24,19 @@
     RewriteRule ^og-image\.svg$ dist/og-image.svg [L]
     RewriteRule ^sitemap\.xml$ sitemap.xml [L]
 
-    # [D] Real physical files → serve as-is
+    # [D] API routes — pass through to Node.js proxy WITHOUT serving as static files.
+    # CRITICAL: This rule MUST come before rule [E] (physical file check).
+    # Without this, LiteSpeed maps REQUEST_FILENAME to app.js for all /id/* requests,
+    # causing rule [E] to serve app.js as raw JS instead of routing to the Node.js app.
+    RewriteCond %{REQUEST_URI} ^/id/api/ [NC,OR]
+    RewriteCond %{REQUEST_URI} ^/api/ [NC]
+    RewriteRule ^ - [L]
+
+    # [E] Real physical files → serve as-is (but only after API passthrough above)
     RewriteCond %{REQUEST_FILENAME} -f
     RewriteRule ^ - [L]
 
-    # [E] SPA catch-all — serve dist/index.html ONLY for non-API routes.
-    # API routes (/id/api/*) deliberately fall through this rule so
-    # LiteSpeed's Node.js proxy (cPanel Node.js Selector) can handle them.
-    RewriteCond %{REQUEST_URI} !^/id/api/ [NC]
-    RewriteCond %{REQUEST_URI} !^/api/ [NC]
+    # [F] SPA catch-all — serve dist/index.html for all remaining (non-API) routes
     RewriteRule ^ dist/index.html [L]
 </IfModule>
 
@@ -44,6 +48,7 @@
 <IfModule mod_rewrite.c>
     RewriteRule ^src/.*$ - [F,L]
     RewriteRule ^data/.*$ - [F,L]
+    RewriteRule ^app\.js$ - [F,L]
 </IfModule>
 
 # ─── 3. EXPLICIT MIME TYPES ──────────────────────────────────────────────────
