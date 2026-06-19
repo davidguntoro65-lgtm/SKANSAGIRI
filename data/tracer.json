@@ -1,20 +1,5 @@
 [
   {
-    "id": "demo001",
-    "nama": "Budi Santoso",
-    "jurusan": "Akuntansi & Keuangan Lembaga (AKL)",
-    "tahunLulus": "2023",
-    "status": "bekerja",
-    "namaPerusahaan": "PT Astra International",
-    "posisi": "Staff Akuntansi",
-    "kota": "Jakarta",
-    "relevansiJurusan": "sangat_relevan",
-    "rentangGaji": "2-4",
-    "whatsapp": "081234567890",
-    "email": "budi@example.com",
-    "createdAt": "2026-01-05T08:00:00.000Z"
-  },
-  {
     "id": "demo002",
     "nama": "Dewi Rahayu",
     "jurusan": "Bisnis Daring dan Pemasaran",
@@ -176,5 +161,13 @@
     "relevansiJurusan": "cukup_relevan",
     "rentangGaji": "2-4",
     "createdAt": "2026-03-15T12:00:00.000Z"
+  },
+  {
+    "id": "mqks3ildjdud6",
+    "nama": "Test",
+    "angkatan": "2020",
+    "status": "Bekerja",
+    "perusahaan": "PT Test",
+    "createdAt": "2026-06-19T10:21:07.682Z"
   }
 ]

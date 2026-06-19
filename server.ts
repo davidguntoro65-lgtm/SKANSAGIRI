@@ -86,10 +86,10 @@ function removeSession(token: string) {
 }
 
 // Login rate limiter: max 5 attempts per IP, then 60s lockout
-const loginAttempts = new Map<string, { count: number; lockUntil: number }>();
+const loginAttempts = new Map<string, { count: number; lockUntil: number; lastSeen: number }>();
 function checkRateLimit(ip: string): { allowed: boolean; secondsLeft?: number } {
   const now = Date.now();
-  const entry = loginAttempts.get(ip) || { count: 0, lockUntil: 0 };
+  const entry = loginAttempts.get(ip) || { count: 0, lockUntil: 0, lastSeen: now };
   if (now < entry.lockUntil) {
     return { allowed: false, secondsLeft: Math.ceil((entry.lockUntil - now) / 1000) };
   }
@@ -97,8 +97,9 @@ function checkRateLimit(ip: string): { allowed: boolean; secondsLeft?: number } 
 }
 function recordFailedAttempt(ip: string) {
   const now = Date.now();
-  const entry = loginAttempts.get(ip) || { count: 0, lockUntil: 0 };
+  const entry = loginAttempts.get(ip) || { count: 0, lockUntil: 0, lastSeen: now };
   entry.count += 1;
+  entry.lastSeen = now;
   if (entry.count >= 5) {
     entry.lockUntil = now + 60_000;
     entry.count = 0;
@@ -108,6 +109,15 @@ function recordFailedAttempt(ip: string) {
 function clearAttempts(ip: string) {
   loginAttempts.delete(ip);
 }
+// Purge stale rate-limit entries every 10 minutes to prevent memory leak
+setInterval(() => {
+  const cutoff = Date.now() - 10 * 60 * 1000;
+  for (const [ip, entry] of loginAttempts.entries()) {
+    if (entry.lastSeen < cutoff && entry.lockUntil < Date.now()) {
+      loginAttempts.delete(ip);
+    }
+  }
+}, 10 * 60 * 1000).unref();
 
 // Auth middleware — protects all write endpoints
 function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
@@ -701,7 +711,7 @@ app.post("/api/tracer", (req, res) => {
       createdAt: new Date().toISOString(),
     };
     existing.push(entry);
-    fs.writeFileSync(tracerPath, JSON.stringify(existing, null, 2), "utf-8");
+    atomicWriteFile(tracerPath, JSON.stringify(existing, null, 2));
     res.json(entry);
   } catch (e: any) {
     res.status(500).json({ error: "Failed to save tracer entry: " + e.message });
@@ -715,7 +725,7 @@ app.delete("/api/tracer/:id", (req, res) => {
     if (updated.length === existing.length) {
       return res.status(404).json({ error: "Entry not found" });
     }
-    fs.writeFileSync(tracerPath, JSON.stringify(updated, null, 2), "utf-8");
+    atomicWriteFile(tracerPath, JSON.stringify(updated, null, 2));
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: "Failed to delete tracer entry: " + e.message });
@@ -724,12 +734,12 @@ app.delete("/api/tracer/:id", (req, res) => {
 
 app.post("/api/reset", (req, res) => {
   try {
-    fs.writeFileSync(filePaths.competencies, JSON.stringify(COMPETENCY_DATA, null, 2), "utf-8");
-    fs.writeFileSync(filePaths.milestones, JSON.stringify(TIMELINE_ACHIEVEMENTS, null, 2), "utf-8");
-    fs.writeFileSync(filePaths.gallery, JSON.stringify(CAMPUS_LIFE_GALLERY, null, 2), "utf-8");
-    fs.writeFileSync(filePaths.alumni, JSON.stringify(ALUMNI_TESTIMONIALS, null, 2), "utf-8");
-    fs.writeFileSync(filePaths.news, JSON.stringify(NEWS_COMPILATION, null, 2), "utf-8");
-    fs.writeFileSync(filePaths.partners, JSON.stringify(INDUSTRI_PARTNERS, null, 2), "utf-8");
+    atomicWriteFile(filePaths.competencies, JSON.stringify(COMPETENCY_DATA, null, 2));
+    atomicWriteFile(filePaths.milestones, JSON.stringify(TIMELINE_ACHIEVEMENTS, null, 2));
+    atomicWriteFile(filePaths.gallery, JSON.stringify(CAMPUS_LIFE_GALLERY, null, 2));
+    atomicWriteFile(filePaths.alumni, JSON.stringify(ALUMNI_TESTIMONIALS, null, 2));
+    atomicWriteFile(filePaths.news, JSON.stringify(NEWS_COMPILATION, null, 2));
+    atomicWriteFile(filePaths.partners, JSON.stringify(INDUSTRI_PARTNERS, null, 2));
     res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ error: "Failed to reset data: " + error.message });
@@ -769,7 +779,7 @@ app.post("/api/contact", (req, res) => {
       dibaca: false,
     };
     messages.unshift(newMsg);
-    fs.writeFileSync(CONTACT_FILE, JSON.stringify(messages, null, 2), "utf-8");
+    atomicWriteFile(CONTACT_FILE, JSON.stringify(messages, null, 2));
     res.json({ success: true, id: newMsg.id });
   } catch (error: any) {
     res.status(500).json({ error: "Gagal menyimpan pesan." });
@@ -786,7 +796,7 @@ app.patch("/api/contact/:id/baca", requireAuth, (req, res) => {
     const idx = messages.findIndex((m: any) => m.id === req.params.id);
     if (idx === -1) return res.status(404).json({ error: "Pesan tidak ditemukan." });
     messages[idx].dibaca = true;
-    fs.writeFileSync(CONTACT_FILE, JSON.stringify(messages, null, 2), "utf-8");
+    atomicWriteFile(CONTACT_FILE, JSON.stringify(messages, null, 2));
     res.json({ success: true });
   } catch {
     res.status(500).json({ error: "Gagal memperbarui status pesan." });
@@ -797,7 +807,7 @@ app.delete("/api/contact/:id", requireAuth, (req, res) => {
   try {
     const messages = readContactMessages();
     const filtered = messages.filter((m: any) => m.id !== req.params.id);
-    fs.writeFileSync(CONTACT_FILE, JSON.stringify(filtered, null, 2), "utf-8");
+    atomicWriteFile(CONTACT_FILE, JSON.stringify(filtered, null, 2));
     res.json({ success: true });
   } catch {
     res.status(500).json({ error: "Gagal menghapus pesan." });
@@ -832,7 +842,7 @@ function readSuara(): KaryaSiswa[] {
   try { return JSON.parse(fs.readFileSync(SUARA_FILE, "utf-8")); } catch { return []; }
 }
 function writeSuara(data: KaryaSiswa[]) {
-  fs.writeFileSync(SUARA_FILE, JSON.stringify(data, null, 2), "utf-8");
+  atomicWriteFile(SUARA_FILE, JSON.stringify(data, null, 2));
 }
 function slugify(text: string): string {
   return text.toLowerCase()
@@ -857,7 +867,7 @@ function readKomentar(): KomentarSuara[] {
   try { return JSON.parse(fs.readFileSync(KOMENTAR_FILE, "utf-8")); } catch { return []; }
 }
 function writeKomentar(data: KomentarSuara[]) {
-  fs.writeFileSync(KOMENTAR_FILE, JSON.stringify(data, null, 2), "utf-8");
+  atomicWriteFile(KOMENTAR_FILE, JSON.stringify(data, null, 2));
 }
 
 app.get("/api/suara", (req, res) => {

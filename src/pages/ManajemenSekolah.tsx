@@ -18,7 +18,7 @@ export default function ManajemenSekolah({ theme = "light" }: { theme?: "light" 
   useEffect(() => {
     fetch("/api/manajemen-sekolah")
       .then((r) => r.json())
-      .then((d) => { setData(d); setLoading(false); })
+      .then((d) => { setData(Array.isArray(d) ? d : []); setLoading(false); })
       .catch(() => setLoading(false));
   }, []);
 

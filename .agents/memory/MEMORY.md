@@ -3,3 +3,4 @@
 - [Server-side auth architecture](server-auth.md) — Auth moved fully server-side; all write endpoints protected; credentials from env vars.
 - [cPanel .htaccess Passenger API routing bug](htaccess-passenger-bug.md) — RewriteRule to a physical file (app.js) serves it as static, bypassing Passenger; use `RewriteRule ^ - [L]` for API routes.
 - [Image upload cPanel crash fix](image-upload-cpanel.md) — cPanel/Apache LimitRequestBody kills large base64 uploads; fix = client compress + server size guard + atomic writes.
+- [Backend atomic write & save handler audit](backend-audit.md) — All write ops must use atomicWriteFile; AdminPanel save handlers must check res.ok explicitly; default admin = jobenenterprise / KuraKuraNinja!0!.

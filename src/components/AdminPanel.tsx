@@ -2878,9 +2878,14 @@ export default function AdminPanel({
                     const handleSaveAbout = async () => {
                       setAboutLoading(true);
                       try {
-                        await fetch("/api/about", { method: "POST", headers: getAuthHeaders(), body: JSON.stringify(aboutData) });
-                        showFeedback("Foto gedung berhasil disimpan!", "success");
-                      } catch { showFeedback("Gagal menyimpan!", "error"); }
+                        const res = await fetch("/api/about", { method: "POST", headers: getAuthHeaders(), body: JSON.stringify(aboutData) });
+                        if (res.ok) {
+                          showFeedback("Foto gedung berhasil disimpan!", "success");
+                        } else {
+                          const err = await res.json().catch(() => ({}));
+                          showFeedback(err.error || `Gagal menyimpan (${res.status})`, "error");
+                        }
+                      } catch { showFeedback("Koneksi gagal. Periksa server!", "error"); }
                       setAboutLoading(false);
                     };
                     const fallbackSrc = "https://images.unsplash.com/photo-1562774053-701939374585?auto=format&fit=crop&w=1000&q=80";
@@ -3018,9 +3023,14 @@ export default function AdminPanel({
                     const handleSaveKepala = async () => {
                       setKepalaLoading(true);
                       try {
-                        await fetch("/api/kepala-sekolah", { method: "POST", headers: getAuthHeaders(), body: JSON.stringify(kepalaSekolah) });
-                        showFeedback("Data Kepala Sekolah berhasil disimpan!", "success");
-                      } catch { showFeedback("Gagal menyimpan data!", "error"); }
+                        const res = await fetch("/api/kepala-sekolah", { method: "POST", headers: getAuthHeaders(), body: JSON.stringify(kepalaSekolah) });
+                        if (res.ok) {
+                          showFeedback("Data Kepala Sekolah berhasil disimpan!", "success");
+                        } else {
+                          const err = await res.json().catch(() => ({}));
+                          showFeedback(err.error || `Gagal menyimpan (${res.status})`, "error");
+                        }
+                      } catch { showFeedback("Koneksi gagal. Periksa server!", "error"); }
                       setKepalaLoading(false);
                     };
                     return (
@@ -3117,9 +3127,14 @@ export default function AdminPanel({
                     const handleSaveManajemen = async () => {
                       setManajemenLoading(true);
                       try {
-                        await fetch("/api/manajemen-sekolah", { method: "POST", headers: getAuthHeaders(), body: JSON.stringify(manajemenSekolah) });
-                        showFeedback("Data Manajemen Sekolah berhasil disimpan!", "success");
-                      } catch { showFeedback("Gagal menyimpan data!", "error"); }
+                        const res = await fetch("/api/manajemen-sekolah", { method: "POST", headers: getAuthHeaders(), body: JSON.stringify(manajemenSekolah) });
+                        if (res.ok) {
+                          showFeedback("Data Manajemen Sekolah berhasil disimpan!", "success");
+                        } else {
+                          const err = await res.json().catch(() => ({}));
+                          showFeedback(err.error || `Gagal menyimpan (${res.status})`, "error");
+                        }
+                      } catch { showFeedback("Koneksi gagal. Periksa server!", "error"); }
                       setManajemenLoading(false);
                     };
                     return (
@@ -3182,9 +3197,14 @@ export default function AdminPanel({
                     const handleSaveVisiMisi = async () => {
                       setVisiMisiLoading(true);
                       try {
-                        await fetch("/api/visi-misi", { method: "POST", headers: getAuthHeaders(), body: JSON.stringify(visiMisi) });
-                        showFeedback("Visi & Misi berhasil disimpan!", "success");
-                      } catch { showFeedback("Gagal menyimpan data!", "error"); }
+                        const res = await fetch("/api/visi-misi", { method: "POST", headers: getAuthHeaders(), body: JSON.stringify(visiMisi) });
+                        if (res.ok) {
+                          showFeedback("Visi & Misi berhasil disimpan!", "success");
+                        } else {
+                          const err = await res.json().catch(() => ({}));
+                          showFeedback(err.error || `Gagal menyimpan (${res.status})`, "error");
+                        }
+                      } catch { showFeedback("Koneksi gagal. Periksa server!", "error"); }
                       setVisiMisiLoading(false);
                     };
                     const updateMisiItem = (i: number, val: string) => {
