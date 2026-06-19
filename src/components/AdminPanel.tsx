@@ -244,42 +244,78 @@ export default function AdminPanel({
     maxKB: number
   ): Promise<string> =>
     new Promise((resolve, reject) => {
+      // Safety timeout: if the Promise hangs for any reason, reject after 30s
+      const timer = setTimeout(() => reject(new Error("Timeout: pemrosesan gambar terlalu lama")), 30_000);
+      const done = (result: string) => { clearTimeout(timer); resolve(result); };
+      const fail = (err: unknown) => { clearTimeout(timer); reject(err); };
+
       if (file.type === "image/svg+xml") {
         const r = new FileReader();
-        r.onload = (e) => resolve(e.target!.result as string);
-        r.onerror = reject;
+        r.onload = (e) => {
+          try { done(e.target!.result as string); } catch (err) { fail(err); }
+        };
+        r.onerror = () => fail(new Error("Gagal membaca file SVG"));
         r.readAsDataURL(file);
         return;
       }
+
       const r = new FileReader();
       r.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          let { width, height } = img;
-          if (width > maxWidth || height > maxHeight) {
-            const ratio = Math.min(maxWidth / width, maxHeight / height);
-            width = Math.round(width * ratio);
-            height = Math.round(height * ratio);
-          }
-          const canvas = document.createElement("canvas");
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext("2d")!;
-          ctx.imageSmoothingEnabled = true;
-          ctx.imageSmoothingQuality = "high";
-          ctx.drawImage(img, 0, 0, width, height);
-          let q = quality;
-          let dataUrl = canvas.toDataURL("image/jpeg", q);
-          while (dataUrl.length > maxKB * 1024 && q > 0.35) {
-            q = Math.max(0.35, q - 0.07);
-            dataUrl = canvas.toDataURL("image/jpeg", q);
-          }
-          resolve(dataUrl);
-        };
-        img.onerror = reject;
-        img.src = e.target!.result as string;
+        // ── CRITICAL: wrap in try/catch so any throw here calls fail() ──
+        try {
+          const src = e.target?.result as string;
+          if (!src) { fail(new Error("FileReader tidak mengembalikan data")); return; }
+
+          const img = new Image();
+          img.onload = () => {
+            // ── CRITICAL: wrap in try/catch so canvas errors call fail() ──
+            try {
+              let { width, height } = img;
+              if (!width || !height) { fail(new Error("Dimensi gambar nol")); return; }
+              if (width > maxWidth || height > maxHeight) {
+                const ratio = Math.min(maxWidth / width, maxHeight / height);
+                width = Math.max(1, Math.round(width * ratio));
+                height = Math.max(1, Math.round(height * ratio));
+              }
+              const canvas = document.createElement("canvas");
+              canvas.width = width;
+              canvas.height = height;
+              const ctx = canvas.getContext("2d");
+              if (!ctx) {
+                // Canvas 2d unavailable in this environment — fall back to raw data URL
+                done(src);
+                return;
+              }
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = "high";
+              ctx.drawImage(img, 0, 0, width, height);
+              let q = quality;
+              // maxKB here matches the server's validateImageFields which uses val.length/1024
+              // (base64 string length in KB), so the comparison is chars vs chars, not bytes.
+              const targetLen = maxKB * 1024;
+              let dataUrl = canvas.toDataURL("image/jpeg", q);
+              while (dataUrl.length > targetLen && q > 0.35) {
+                q = Math.max(0.35, q - 0.07);
+                dataUrl = canvas.toDataURL("image/jpeg", q);
+              }
+              // Guard: empty canvas result → fall back to raw data URL
+              if (!dataUrl || dataUrl === "data:," || dataUrl.length < 100) {
+                done(src);
+                return;
+              }
+              done(dataUrl);
+            } catch {
+              // Canvas operations failed entirely → fall back to raw data URL so user sees the image
+              try { done(src); } catch (err2) { fail(err2); }
+            }
+          };
+          img.onerror = () => fail(new Error("Gambar gagal dimuat dari file"));
+          img.src = src;
+        } catch (err) {
+          fail(err);
+        }
       };
-      r.onerror = reject;
+      r.onerror = () => fail(new Error("FileReader gagal membaca file"));
       r.readAsDataURL(file);
     });
 
