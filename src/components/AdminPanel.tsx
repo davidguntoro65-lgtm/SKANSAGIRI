@@ -577,6 +577,12 @@ export default function AdminPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password })
       });
+      const ct = res.headers.get("content-type") || "";
+      if (!ct.includes("application/json")) {
+        setLoginError("Server belum siap atau sedang dalam pemeliharaan. Silakan coba beberapa saat lagi.");
+        setLoginLoading(false);
+        return;
+      }
       const data = await res.json();
       if (res.ok && data.token) {
         localStorage.setItem("smkn1_adm_token", data.token);
@@ -586,7 +592,7 @@ export default function AdminPanel({
         setLoginError(data.error || "Kombinasi User Name atau Sandi salah. Periksa kembali!");
       }
     } catch {
-      setLoginError("Gagal menghubungi server. Periksa koneksi Anda.");
+      setLoginError("Gagal menghubungi server. Periksa koneksi internet Anda.");
     }
     setLoginLoading(false);
   };

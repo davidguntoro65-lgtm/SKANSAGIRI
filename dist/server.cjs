@@ -24662,6 +24662,23 @@ function initJsonFile(filePath, initialData) {
     }
   }
 }
+function atomicWriteFile(filePath, data) {
+  const tmp = filePath + ".tmp";
+  import_fs.default.writeFileSync(tmp, data, "utf-8");
+  import_fs.default.renameSync(tmp, filePath);
+}
+function validateImageFields(obj, fields, maxKB) {
+  for (const field of fields) {
+    const val = obj?.[field];
+    if (val && typeof val === "string" && val.startsWith("data:")) {
+      const sizeKB = Math.ceil(val.length / 1024);
+      if (sizeKB > maxKB) {
+        return `Gambar pada field '${field}' terlalu besar (${sizeKB} KB). Maksimal ${maxKB} KB per gambar. Harap kompres gambar terlebih dahulu.`;
+      }
+    }
+  }
+  return null;
+}
 initJsonFile(filePaths.competencies, COMPETENCY_DATA);
 initJsonFile(filePaths.milestones, TIMELINE_ACHIEVEMENTS);
 initJsonFile(filePaths.gallery, CAMPUS_LIFE_GALLERY);
@@ -24871,7 +24888,7 @@ app.post("/api/competencies", (req, res) => {
     if (!Array.isArray(data)) {
       return res.status(400).json({ error: "Data must be an array of competencies" });
     }
-    import_fs.default.writeFileSync(filePaths.competencies, JSON.stringify(data, null, 2), "utf-8");
+    atomicWriteFile(filePaths.competencies, JSON.stringify(data, null, 2));
     res.json({ success: true, count: data.length });
   } catch (error) {
     res.status(500).json({ error: "Failed to save competencies: " + error.message });
@@ -24891,7 +24908,7 @@ app.post("/api/milestones", (req, res) => {
     if (!Array.isArray(data)) {
       return res.status(400).json({ error: "Data must be an array of milestones" });
     }
-    import_fs.default.writeFileSync(filePaths.milestones, JSON.stringify(data, null, 2), "utf-8");
+    atomicWriteFile(filePaths.milestones, JSON.stringify(data, null, 2));
     res.json({ success: true, count: data.length });
   } catch (error) {
     res.status(500).json({ error: "Failed to save milestones: " + error.message });
@@ -24911,7 +24928,11 @@ app.post("/api/gallery", (req, res) => {
     if (!Array.isArray(data)) {
       return res.status(400).json({ error: "Data must be an array of gallery items" });
     }
-    import_fs.default.writeFileSync(filePaths.gallery, JSON.stringify(data, null, 2), "utf-8");
+    for (const item of data) {
+      const imgErr = validateImageFields(item, ["image"], 420);
+      if (imgErr) return res.status(413).json({ error: imgErr });
+    }
+    atomicWriteFile(filePaths.gallery, JSON.stringify(data, null, 2));
     res.json({ success: true, count: data.length });
   } catch (error) {
     res.status(500).json({ error: "Failed to save gallery: " + error.message });
@@ -24931,7 +24952,11 @@ app.post("/api/alumni", (req, res) => {
     if (!Array.isArray(data)) {
       return res.status(400).json({ error: "Data must be an array of alumni" });
     }
-    import_fs.default.writeFileSync(filePaths.alumni, JSON.stringify(data, null, 2), "utf-8");
+    for (const item of data) {
+      const imgErr = validateImageFields(item, ["avatar"], 220);
+      if (imgErr) return res.status(413).json({ error: imgErr });
+    }
+    atomicWriteFile(filePaths.alumni, JSON.stringify(data, null, 2));
     res.json({ success: true, count: data.length });
   } catch (error) {
     res.status(500).json({ error: "Failed to save alumni: " + error.message });
@@ -24951,7 +24976,11 @@ app.post("/api/news", (req, res) => {
     if (!Array.isArray(data)) {
       return res.status(400).json({ error: "Data must be an array of news items" });
     }
-    import_fs.default.writeFileSync(filePaths.news, JSON.stringify(data, null, 2), "utf-8");
+    for (const item of data) {
+      const imgErr = validateImageFields(item, ["image"], 420);
+      if (imgErr) return res.status(413).json({ error: imgErr });
+    }
+    atomicWriteFile(filePaths.news, JSON.stringify(data, null, 2));
     res.json({ success: true, count: data.length });
   } catch (error) {
     res.status(500).json({ error: "Failed to save news: " + error.message });
@@ -24971,7 +25000,7 @@ app.post("/api/partners", (req, res) => {
     if (!Array.isArray(data)) {
       return res.status(400).json({ error: "Data must be an array of partners" });
     }
-    import_fs.default.writeFileSync(filePaths.partners, JSON.stringify(data, null, 2), "utf-8");
+    atomicWriteFile(filePaths.partners, JSON.stringify(data, null, 2));
     res.json({ success: true, count: data.length });
   } catch (error) {
     res.status(500).json({ error: "Failed to save partners: " + error.message });
@@ -24986,7 +25015,9 @@ app.get("/api/kepala-sekolah", (req, res) => {
 });
 app.post("/api/kepala-sekolah", (req, res) => {
   try {
-    import_fs.default.writeFileSync(filePaths.kepalaSekolah, JSON.stringify(req.body, null, 2), "utf-8");
+    const imgErr = validateImageFields(req.body, ["foto"], 360);
+    if (imgErr) return res.status(413).json({ error: imgErr });
+    atomicWriteFile(filePaths.kepalaSekolah, JSON.stringify(req.body, null, 2));
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: "Failed to save kepala sekolah: " + e.message });
@@ -25001,7 +25032,14 @@ app.get("/api/manajemen-sekolah", (req, res) => {
 });
 app.post("/api/manajemen-sekolah", (req, res) => {
   try {
-    import_fs.default.writeFileSync(filePaths.manajemenSekolah, JSON.stringify(req.body, null, 2), "utf-8");
+    const items = req.body;
+    if (Array.isArray(items)) {
+      for (const item of items) {
+        const imgErr = validateImageFields(item, ["foto"], 320);
+        if (imgErr) return res.status(413).json({ error: imgErr });
+      }
+    }
+    atomicWriteFile(filePaths.manajemenSekolah, JSON.stringify(req.body, null, 2));
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: "Failed to save manajemen sekolah: " + e.message });
@@ -25016,7 +25054,7 @@ app.get("/api/visi-misi", (req, res) => {
 });
 app.post("/api/visi-misi", (req, res) => {
   try {
-    import_fs.default.writeFileSync(filePaths.visiMisi, JSON.stringify(req.body, null, 2), "utf-8");
+    atomicWriteFile(filePaths.visiMisi, JSON.stringify(req.body, null, 2));
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: "Failed to save visi misi: " + e.message });
@@ -25031,7 +25069,7 @@ app.get("/api/social-media", (req, res) => {
 });
 app.post("/api/social-media", (req, res) => {
   try {
-    import_fs.default.writeFileSync(filePaths.socialMedia, JSON.stringify(req.body, null, 2), "utf-8");
+    atomicWriteFile(filePaths.socialMedia, JSON.stringify(req.body, null, 2));
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: "Failed to save social media: " + e.message });
@@ -25046,7 +25084,9 @@ app.get("/api/about", (req, res) => {
 });
 app.post("/api/about", (req, res) => {
   try {
-    import_fs.default.writeFileSync(aboutPath, JSON.stringify(req.body, null, 2), "utf-8");
+    const imgErr = validateImageFields(req.body, ["foto"], 450);
+    if (imgErr) return res.status(413).json({ error: imgErr });
+    atomicWriteFile(aboutPath, JSON.stringify(req.body, null, 2));
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: "Failed to save about: " + e.message });
@@ -25062,7 +25102,10 @@ app.get("/api/branding", (req, res) => {
 app.post("/api/branding", (req, res) => {
   try {
     const data = req.body;
-    import_fs.default.writeFileSync(filePaths.branding, JSON.stringify(data, null, 2), "utf-8");
+    const logoFields = ["schoolLogo", "schoolLogoDark", "schoolLogoLight", "schoolFavicon", "schoolAppIcon"];
+    const imgErr = validateImageFields(data, logoFields, 250);
+    if (imgErr) return res.status(413).json({ error: imgErr });
+    atomicWriteFile(filePaths.branding, JSON.stringify(data, null, 2));
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: "Failed to save branding: " + e.message });

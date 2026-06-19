@@ -1,7 +1,7 @@
 // Service Worker – SMKN 1 Wonogiri
 // Caches the app shell for fast loads and basic offline support.
 
-const CACHE_NAME = "smkn1wng-v1";
+const CACHE_NAME = "smkn1wng-v2";
 
 // Assets to pre-cache on install (app shell)
 const PRECACHE_URLS = [
@@ -40,8 +40,9 @@ self.addEventListener("fetch", (event) => {
   // Skip non-GET and cross-origin requests
   if (request.method !== "GET" || url.origin !== self.location.origin) return;
 
-  // API requests: network-only (never cache)
-  if (url.pathname.startsWith("/api/")) return;
+  // API requests: network-only (never cache).
+  // Use .includes("/api/") so it catches both /api/... and /id/api/... (BASE_PATH prefix).
+  if (url.pathname.includes("/api/")) return;
 
   // Static assets (JS, CSS, images): cache-first
   if (

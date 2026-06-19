@@ -25,12 +25,14 @@
     RewriteRule ^sitemap\.xml$ sitemap.xml [L]
 
     # [D] API routes — pass through to Node.js proxy WITHOUT serving as static files.
-    # CRITICAL: This rule MUST come before rule [E] (physical file check).
+    # CRITICAL: These rules MUST come before rule [E] (physical file check).
     # Without this, LiteSpeed maps REQUEST_FILENAME to app.js for all /id/* requests,
     # causing rule [E] to serve app.js as raw JS instead of routing to the Node.js app.
-    RewriteCond %{REQUEST_URI} ^/id/api/ [NC,OR]
+    # Two separate rules (not [OR]) for maximum LiteSpeed compatibility.
+    RewriteCond %{REQUEST_URI} ^/id/api/ [NC]
+    RewriteRule .* - [L]
     RewriteCond %{REQUEST_URI} ^/api/ [NC]
-    RewriteRule ^ - [L]
+    RewriteRule .* - [L]
 
     # [E] Real physical files → serve as-is (but only after API passthrough above)
     RewriteCond %{REQUEST_FILENAME} -f
