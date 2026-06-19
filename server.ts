@@ -485,7 +485,7 @@ app.post("/api/gallery", (req, res) => {
       return res.status(400).json({ error: "Data must be an array of gallery items" });
     }
     for (const item of data) {
-      const imgErr = validateImageFields(item, ["image"], 420);
+      const imgErr = validateImageFields(item, ["image"], 800);
       if (imgErr) return res.status(413).json({ error: imgErr });
     }
     atomicWriteFile(filePaths.gallery, JSON.stringify(data, null, 2));
@@ -512,7 +512,7 @@ app.post("/api/alumni", (req, res) => {
       return res.status(400).json({ error: "Data must be an array of alumni" });
     }
     for (const item of data) {
-      const imgErr = validateImageFields(item, ["avatar"], 220);
+      const imgErr = validateImageFields(item, ["avatar"], 500);
       if (imgErr) return res.status(413).json({ error: imgErr });
     }
     atomicWriteFile(filePaths.alumni, JSON.stringify(data, null, 2));
@@ -539,7 +539,7 @@ app.post("/api/news", (req, res) => {
       return res.status(400).json({ error: "Data must be an array of news items" });
     }
     for (const item of data) {
-      const imgErr = validateImageFields(item, ["image"], 420);
+      const imgErr = validateImageFields(item, ["image"], 800);
       if (imgErr) return res.status(413).json({ error: imgErr });
     }
     atomicWriteFile(filePaths.news, JSON.stringify(data, null, 2));
@@ -582,7 +582,7 @@ app.get("/api/kepala-sekolah", (req, res) => {
 });
 app.post("/api/kepala-sekolah", (req, res) => {
   try {
-    const imgErr = validateImageFields(req.body, ["foto"], 360);
+    const imgErr = validateImageFields(req.body, ["foto"], 800);
     if (imgErr) return res.status(413).json({ error: imgErr });
     atomicWriteFile(filePaths.kepalaSekolah, JSON.stringify(req.body, null, 2));
     res.json({ success: true });
@@ -604,7 +604,7 @@ app.post("/api/manajemen-sekolah", (req, res) => {
     const items = req.body;
     if (Array.isArray(items)) {
       for (const item of items) {
-        const imgErr = validateImageFields(item, ["foto"], 320);
+        const imgErr = validateImageFields(item, ["foto"], 800);
         if (imgErr) return res.status(413).json({ error: imgErr });
       }
     }
@@ -659,7 +659,7 @@ app.get("/api/about", (req, res) => {
 });
 app.post("/api/about", (req, res) => {
   try {
-    const imgErr = validateImageFields(req.body, ["foto"], 450);
+    const imgErr = validateImageFields(req.body, ["foto"], 800);
     if (imgErr) return res.status(413).json({ error: imgErr });
     atomicWriteFile(aboutPath, JSON.stringify(req.body, null, 2));
     res.json({ success: true });
@@ -681,7 +681,7 @@ app.post("/api/branding", (req, res) => {
   try {
     const data = req.body;
     const logoFields = ["schoolLogo", "schoolLogoDark", "schoolLogoLight", "schoolFavicon", "schoolAppIcon"];
-    const imgErr = validateImageFields(data, logoFields, 250);
+    const imgErr = validateImageFields(data, logoFields, 800);
     if (imgErr) return res.status(413).json({ error: imgErr });
     atomicWriteFile(filePaths.branding, JSON.stringify(data, null, 2));
     res.json({ success: true });

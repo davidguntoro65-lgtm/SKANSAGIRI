@@ -294,13 +294,39 @@ export default function AdminPanel({
               // (base64 string length in KB), so the comparison is chars vs chars, not bytes.
               const targetLen = maxKB * 1024;
               let dataUrl = canvas.toDataURL("image/jpeg", q);
-              while (dataUrl.length > targetLen && q > 0.35) {
-                q = Math.max(0.35, q - 0.07);
+              // Step 1: reduce quality down to 0.10 to hit the size target
+              while (dataUrl.length > targetLen && q > 0.10) {
+                q = Math.max(0.10, q - 0.06);
                 dataUrl = canvas.toDataURL("image/jpeg", q);
               }
-              // Guard: empty canvas result → fall back to raw data URL
+              // Step 2: if still over target, halve dimensions and retry
+              if (dataUrl.length > targetLen) {
+                const halfW = Math.max(1, Math.floor(width / 2));
+                const halfH = Math.max(1, Math.floor(height / 2));
+                const canvas2 = document.createElement("canvas");
+                canvas2.width = halfW; canvas2.height = halfH;
+                const ctx2 = canvas2.getContext("2d");
+                if (ctx2) {
+                  ctx2.imageSmoothingEnabled = true;
+                  ctx2.imageSmoothingQuality = "high";
+                  ctx2.drawImage(img, 0, 0, halfW, halfH);
+                  let q2 = 0.60;
+                  let dataUrl2 = canvas2.toDataURL("image/jpeg", q2);
+                  while (dataUrl2.length > targetLen && q2 > 0.10) {
+                    q2 = Math.max(0.10, q2 - 0.06);
+                    dataUrl2 = canvas2.toDataURL("image/jpeg", q2);
+                  }
+                  if (dataUrl2.length < dataUrl.length) dataUrl = dataUrl2;
+                }
+              }
+              // Guard: empty canvas result → reject so the catch handler shows an error
               if (!dataUrl || dataUrl === "data:," || dataUrl.length < 100) {
-                done(src);
+                fail(new Error("Canvas tidak menghasilkan data gambar. Coba file lain."));
+                return;
+              }
+              // If still over limit after all passes, warn the user
+              if (dataUrl.length > targetLen * 1.5) {
+                fail(new Error(`Gambar masih terlalu besar setelah kompresi. Coba foto berukuran lebih kecil.`));
                 return;
               }
               done(dataUrl);
@@ -351,7 +377,8 @@ export default function AdminPanel({
 
   useEffect(() => {
     if (feedback) {
-      const timer = setTimeout(() => setFeedback(null), 3000);
+      const duration = feedback.type === "error" ? 6000 : 3000;
+      const timer = setTimeout(() => setFeedback(null), duration);
       return () => clearTimeout(timer);
     }
   }, [feedback]);
@@ -2777,12 +2804,19 @@ export default function AdminPanel({
                     const handleFileInput = (field: keyof Branding) => async (e: React.ChangeEvent<HTMLInputElement>) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
+                      e.target.value = "";
+                      const MAX_INPUT_BYTES = 5 * 1024 * 1024;
+                      if (file.size > MAX_INPUT_BYTES) {
+                        showFeedback(`Ukuran file terlalu besar (${(file.size / 1024 / 1024).toFixed(1)} MB). Maksimal 5 MB.`, "error");
+                        return;
+                      }
                       try {
                         showFeedback("Memproses gambar…", "success");
-                        const compressed = await compressImage(file, 600, 600, 0.86, 220);
+                        const compressed = await compressImage(file, 600, 600, 0.86, 600);
                         setBrandingDraft(prev => ({ ...(prev ?? branding), [field]: compressed }));
-                      } catch {
-                        showFeedback("Gagal memproses gambar. Coba file lain.", "error");
+                        showFeedback("Gambar siap. Klik Simpan untuk menyimpan perubahan.", "success");
+                      } catch (err: any) {
+                        showFeedback(err?.message || "Gagal memproses gambar. Coba file lain.", "error");
                       }
                     };
                     const handleRemove = (field: keyof Branding) => {
@@ -2791,14 +2825,26 @@ export default function AdminPanel({
                     const handleSave = async () => {
                       if (!draft) return;
                       setBrandingLoading(true);
-                      const ok = await saveBranding(draft);
-                      setBrandingLoading(false);
-                      if (ok) {
-                        setBrandingDraft(null);
-                        showFeedback("Identitas visual berhasil disimpan!", "success");
-                      } else {
-                        showFeedback("Gagal menyimpan identitas visual.", "error");
+                      try {
+                        const token = localStorage.getItem("smkn1_adm_token") || "";
+                        const res = await fetch("/api/branding", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json", ...(token ? { "Authorization": `Bearer ${token}` } : {}) },
+                          body: JSON.stringify(draft),
+                        });
+                        if (res.ok) {
+                          await saveBranding(draft);
+                          setBrandingDraft(null);
+                          showFeedback("Identitas visual berhasil disimpan!", "success");
+                        } else {
+                          let msg = `Gagal menyimpan (${res.status})`;
+                          try { const j = await res.json(); if (j.error) msg = j.error; } catch {}
+                          showFeedback(msg, "error");
+                        }
+                      } catch {
+                        showFeedback("Koneksi gagal. Periksa server!", "error");
                       }
+                      setBrandingLoading(false);
                     };
                     const logoFields: { key: keyof Branding; label: string; desc: string }[] = [
                       { key: "schoolLogo", label: "Logo Utama (Universal)", desc: "Digunakan sebagai fallback di semua mode" },
@@ -2903,12 +2949,19 @@ export default function AdminPanel({
                     const handleAboutFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
+                      e.target.value = "";
+                      const MAX_INPUT_BYTES = 5 * 1024 * 1024;
+                      if (file.size > MAX_INPUT_BYTES) {
+                        showFeedback(`Ukuran file terlalu besar (${(file.size / 1024 / 1024).toFixed(1)} MB). Maksimal 5 MB.`, "error");
+                        return;
+                      }
                       try {
                         showFeedback("Memproses gambar…", "success");
-                        const compressed = await compressImage(file, 1400, 1050, 0.82, 420);
+                        const compressed = await compressImage(file, 1400, 1050, 0.82, 600);
                         setAboutData(prev => ({ ...prev, foto: compressed }));
-                      } catch {
-                        showFeedback("Gagal memproses gambar. Coba file lain.", "error");
+                        showFeedback("Foto siap. Klik Simpan untuk menyimpan perubahan.", "success");
+                      } catch (err: any) {
+                        showFeedback(err?.message || "Gagal memproses gambar. Coba file lain.", "error");
                       }
                     };
                     const handleSaveAbout = async () => {
@@ -2918,8 +2971,9 @@ export default function AdminPanel({
                         if (res.ok) {
                           showFeedback("Foto gedung berhasil disimpan!", "success");
                         } else {
-                          const err = await res.json().catch(() => ({}));
-                          showFeedback(err.error || `Gagal menyimpan (${res.status})`, "error");
+                          let errMsg = `Gagal menyimpan (${res.status})`;
+                          try { const j = await res.json(); if (j.error) errMsg = j.error; } catch {}
+                          showFeedback(errMsg, "error");
                         }
                       } catch { showFeedback("Koneksi gagal. Periksa server!", "error"); }
                       setAboutLoading(false);
@@ -3048,12 +3102,19 @@ export default function AdminPanel({
                     const handleKepalaFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
+                      e.target.value = "";
+                      const MAX_INPUT_BYTES = 5 * 1024 * 1024;
+                      if (file.size > MAX_INPUT_BYTES) {
+                        showFeedback(`Ukuran file terlalu besar (${(file.size / 1024 / 1024).toFixed(1)} MB). Maksimal 5 MB.`, "error");
+                        return;
+                      }
                       try {
                         showFeedback("Memproses gambar…", "success");
-                        const compressed = await compressImage(file, 700, 900, 0.85, 330);
+                        const compressed = await compressImage(file, 700, 900, 0.85, 600);
                         setKepalaSekolah(prev => ({ ...prev, foto: compressed }));
-                      } catch {
-                        showFeedback("Gagal memproses gambar. Coba file lain.", "error");
+                        showFeedback("Foto siap. Klik Simpan untuk menyimpan perubahan.", "success");
+                      } catch (err: any) {
+                        showFeedback(err?.message || "Gagal memproses gambar. Coba file lain.", "error");
                       }
                     };
                     const handleSaveKepala = async () => {
@@ -3063,8 +3124,9 @@ export default function AdminPanel({
                         if (res.ok) {
                           showFeedback("Data Kepala Sekolah berhasil disimpan!", "success");
                         } else {
-                          const err = await res.json().catch(() => ({}));
-                          showFeedback(err.error || `Gagal menyimpan (${res.status})`, "error");
+                          let errMsg = `Gagal menyimpan (${res.status})`;
+                          try { const j = await res.json(); if (j.error) errMsg = j.error; } catch {}
+                          showFeedback(errMsg, "error");
                         }
                       } catch { showFeedback("Koneksi gagal. Periksa server!", "error"); }
                       setKepalaLoading(false);
@@ -3096,7 +3158,7 @@ export default function AdminPanel({
                                   <Trash2 className="w-3.5 h-3.5" /> Hapus Foto
                                 </button>
                               )}
-                              <p className={`text-[10px] font-mono ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>Format: JPG, PNG, WebP. Gambar otomatis dikompres untuk kestabilan server.</p>
+                              <p className={`text-[10px] font-mono ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>Format: JPG, PNG, WebP. Maks. 5 MB. Gambar otomatis dikompres.</p>
                             </div>
                           </div>
                         </div>
@@ -3152,12 +3214,19 @@ export default function AdminPanel({
                     const handleManajemenFoto = async (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
+                      e.target.value = "";
+                      const MAX_INPUT_BYTES = 5 * 1024 * 1024;
+                      if (file.size > MAX_INPUT_BYTES) {
+                        showFeedback(`Ukuran file terlalu besar (${(file.size / 1024 / 1024).toFixed(1)} MB). Maksimal 5 MB.`, "error");
+                        return;
+                      }
                       try {
                         showFeedback("Memproses gambar…", "success");
-                        const compressed = await compressImage(file, 600, 800, 0.85, 295);
+                        const compressed = await compressImage(file, 600, 800, 0.85, 600);
                         setManajemenSekolah(prev => prev.map(p => p.id === id ? { ...p, foto: compressed } : p));
-                      } catch {
-                        showFeedback("Gagal memproses gambar. Coba file lain.", "error");
+                        showFeedback("Foto siap. Klik Simpan untuk menyimpan perubahan.", "success");
+                      } catch (err: any) {
+                        showFeedback(err?.message || "Gagal memproses gambar. Coba file lain.", "error");
                       }
                     };
                     const handleSaveManajemen = async () => {
@@ -3167,8 +3236,9 @@ export default function AdminPanel({
                         if (res.ok) {
                           showFeedback("Data Manajemen Sekolah berhasil disimpan!", "success");
                         } else {
-                          const err = await res.json().catch(() => ({}));
-                          showFeedback(err.error || `Gagal menyimpan (${res.status})`, "error");
+                          let errMsg = `Gagal menyimpan (${res.status})`;
+                          try { const j = await res.json(); if (j.error) errMsg = j.error; } catch {}
+                          showFeedback(errMsg, "error");
                         }
                       } catch { showFeedback("Koneksi gagal. Periksa server!", "error"); }
                       setManajemenLoading(false);
