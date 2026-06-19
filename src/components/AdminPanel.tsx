@@ -376,20 +376,48 @@ export default function AdminPanel({
   const [healthError, setHealthError] = useState("");
   const [healthLastFetched, setHealthLastFetched] = useState<Date | null>(null);
 
+  type ServerStatus = "checking" | "online" | "degraded" | "misconfigured" | "unreachable";
+  const [serverStatus, setServerStatus] = useState<ServerStatus>("checking");
+  const [serverDiagnosis, setServerDiagnosis] = useState("");
+
+  const diagnoseServer = async (): Promise<{ status: ServerStatus; diagnosis: string; data?: HealthData }> => {
+    try {
+      const res = await fetch("/api/health");
+      const ct = res.headers.get("content-type") || "";
+      if (!ct.includes("application/json")) {
+        return {
+          status: "misconfigured",
+          diagnosis: "Server mengembalikan konten bukan-JSON (kemungkinan .htaccess di cPanel belum diperbarui — request API diarahkan ke file app.js sebagai file statis, bukan ke proxy Node.js)."
+        };
+      }
+      const data: HealthData = await res.json();
+      return {
+        status: data.status === "ok" ? "online" : "degraded",
+        diagnosis: data.status === "degraded" ? "Server aktif namun beberapa file data perlu perhatian. Buka tab Monitor Server untuk detail." : "",
+        data
+      };
+    } catch {
+      return {
+        status: "unreachable",
+        diagnosis: "Server tidak dapat dijangkau. Pastikan aplikasi Node.js sudah dijalankan di cPanel Node.js Selector, atau periksa koneksi internet Anda."
+      };
+    }
+  };
+
   const fetchHealthData = () => {
     setHealthLoading(true);
     setHealthError("");
-    fetch("/api/health")
-      .then(r => r.json())
-      .then((d: HealthData) => {
-        setHealthData(d);
+    diagnoseServer().then(({ status, diagnosis, data }) => {
+      setServerStatus(status);
+      setServerDiagnosis(diagnosis);
+      if (data) {
+        setHealthData(data);
         setHealthLastFetched(new Date());
-        setHealthLoading(false);
-      })
-      .catch(() => {
-        setHealthError("Gagal terhubung ke server. Periksa koneksi Anda.");
-        setHealthLoading(false);
-      });
+      } else {
+        setHealthError(diagnosis);
+      }
+      setHealthLoading(false);
+    });
   };
 
   useEffect(() => {
@@ -399,6 +427,13 @@ export default function AdminPanel({
       return () => clearInterval(interval);
     }
   }, [activeTab, isLoggedIn]);
+
+  useEffect(() => {
+    diagnoseServer().then(({ status, diagnosis }) => {
+      setServerStatus(status);
+      setServerDiagnosis(diagnosis);
+    });
+  }, []);
 
   // --- Tracer Study State & Export ---
   interface TracerEntry {
@@ -1044,6 +1079,69 @@ export default function AdminPanel({
               <p className={`text-xs ${isDarkTheme ? "text-slate-400" : "text-slate-500"} font-light max-w-[280px]`}>
                 Silakan masuk dengan kredensial otorisasi terenkripsi untuk mengelola modul SMKN 1 Wonogiri.
               </p>
+            </div>
+
+            {/* ── Server health indicator ─────────────────────────────── */}
+            <div className="mb-5">
+              <AnimatePresence mode="wait">
+                {serverStatus === "checking" && (
+                  <motion.div key="chk" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                    className={`flex items-center gap-2.5 px-4 py-3 rounded-xl border text-xs ${isDarkTheme ? "bg-slate-800/60 border-white/5 text-slate-500" : "bg-slate-50 border-slate-200 text-slate-400"}`}>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
+                    <span>Memeriksa koneksi backend…</span>
+                  </motion.div>
+                )}
+                {serverStatus === "online" && (
+                  <motion.div key="ok" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                    className={`flex items-center gap-2.5 px-4 py-3 rounded-xl border text-xs ${isDarkTheme ? "bg-emerald-500/8 border-emerald-500/20 text-emerald-400" : "bg-emerald-50 border-emerald-200 text-emerald-700"}`}>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse" />
+                    <span>Backend tersambung dan beroperasi normal</span>
+                  </motion.div>
+                )}
+                {serverStatus === "degraded" && (
+                  <motion.div key="deg" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                    className={`flex items-center gap-2.5 px-4 py-3 rounded-xl border text-xs ${isDarkTheme ? "bg-amber-500/8 border-amber-500/20 text-amber-400" : "bg-amber-50 border-amber-200 text-amber-700"}`}>
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>Server aktif — beberapa file data perlu perhatian. Buka <strong>Monitor Server</strong> setelah masuk.</span>
+                  </motion.div>
+                )}
+                {(serverStatus === "misconfigured" || serverStatus === "unreachable") && (
+                  <motion.div key="err" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                    className={`rounded-xl border text-xs ${isDarkTheme ? "bg-red-500/8 border-red-500/20" : "bg-red-50 border-red-200"}`}>
+                    <div className={`flex items-center justify-between gap-2 px-4 pt-3 pb-2 ${isDarkTheme ? "text-red-400" : "text-red-700"}`}>
+                      <div className="flex items-center gap-2">
+                        <WifiOff className="w-3.5 h-3.5 shrink-0" />
+                        <span className="font-semibold">
+                          {serverStatus === "misconfigured" ? "Konfigurasi server bermasalah" : "Server tidak dapat dijangkau"}
+                        </span>
+                      </div>
+                      <button onClick={() => { setServerStatus("checking"); diagnoseServer().then(r => { setServerStatus(r.status); setServerDiagnosis(r.diagnosis); }); }}
+                        className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-mono uppercase tracking-wide transition-all ${isDarkTheme ? "border-red-500/20 hover:bg-red-500/10" : "border-red-200 hover:bg-red-100"}`}>
+                        <RefreshCw className="w-2.5 h-2.5" /> Coba Lagi
+                      </button>
+                    </div>
+                    <p className={`px-4 pb-3 text-[11px] leading-relaxed ${isDarkTheme ? "text-red-400/70" : "text-red-600/80"}`}>{serverDiagnosis}</p>
+                    <div className={`px-4 pb-3 border-t pt-2 space-y-1 ${isDarkTheme ? "border-red-500/10" : "border-red-100"}`}>
+                      <p className={`text-[10px] font-bold uppercase tracking-widest mb-1.5 ${isDarkTheme ? "text-red-400/60" : "text-red-500/70"}`}>Langkah Perbaikan cPanel:</p>
+                      {serverStatus === "misconfigured" ? (
+                        <ol className={`text-[10px] leading-relaxed space-y-0.5 list-decimal list-inside ${isDarkTheme ? "text-red-400/60" : "text-red-500/70"}`}>
+                          <li>Upload <code className="font-mono">.htaccess</code> terbaru ke folder <code className="font-mono">/id/</code> di File Manager</li>
+                          <li>Pastikan rule API menggunakan <code className="font-mono">RewriteRule .* - [L]</code></li>
+                          <li>Upload <code className="font-mono">dist/</code> terbaru (termasuk <code className="font-mono">server.cjs</code>)</li>
+                          <li>Restart aplikasi Node.js di cPanel → Node.js Selector</li>
+                        </ol>
+                      ) : (
+                        <ol className={`text-[10px] leading-relaxed space-y-0.5 list-decimal list-inside ${isDarkTheme ? "text-red-400/60" : "text-red-500/70"}`}>
+                          <li>Buka <strong>cPanel → Node.js Selector</strong></li>
+                          <li>Pastikan status aplikasi <strong>Running</strong> (klik Restart jika tidak)</li>
+                          <li>Pastikan file startup adalah <code className="font-mono">app.js</code></li>
+                          <li>Periksa error log di cPanel untuk detail kesalahan</li>
+                        </ol>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             {loginError && (
@@ -3794,11 +3892,38 @@ export default function AdminPanel({
                         </button>
                       </div>
 
-                      {/* Error state */}
-                      {healthError && (
-                        <div className="flex items-center gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-                          <WifiOff className="w-4 h-4 shrink-0" />
-                          {healthError}
+                      {/* Error / diagnosis state */}
+                      {(healthError || serverStatus === "misconfigured" || serverStatus === "unreachable") && (
+                        <div className={`rounded-2xl border ${isDarkTheme ? "bg-red-500/8 border-red-500/20" : "bg-red-50 border-red-200"}`}>
+                          <div className={`flex items-center gap-3 p-4 ${isDarkTheme ? "text-red-400" : "text-red-700"}`}>
+                            <WifiOff className="w-4 h-4 shrink-0" />
+                            <div>
+                              <p className="font-semibold text-sm">
+                                {serverStatus === "misconfigured" ? "Konfigurasi server bermasalah" : "Server tidak dapat dijangkau"}
+                              </p>
+                              <p className={`text-xs mt-0.5 leading-relaxed ${isDarkTheme ? "text-red-400/70" : "text-red-600/80"}`}>{serverDiagnosis || healthError}</p>
+                            </div>
+                          </div>
+                          <div className={`px-4 pb-4 border-t pt-3 space-y-2 ${isDarkTheme ? "border-red-500/10" : "border-red-100"}`}>
+                            <p className={`text-[10px] font-bold uppercase tracking-widest ${isDarkTheme ? "text-red-400/50" : "text-red-500/60"}`}>Langkah Perbaikan cPanel:</p>
+                            {serverStatus === "misconfigured" ? (
+                              <ol className={`text-xs leading-relaxed space-y-1.5 list-decimal list-inside ${isDarkTheme ? "text-red-400/70" : "text-red-600/80"}`}>
+                                <li>Upload <code className={`px-1 py-0.5 rounded text-[11px] font-mono ${isDarkTheme ? "bg-red-500/10" : "bg-red-100"}`}>.htaccess</code> terbaru dari repositori ke folder <code className={`px-1 py-0.5 rounded text-[11px] font-mono ${isDarkTheme ? "bg-red-500/10" : "bg-red-100"}`}>/id/</code> di cPanel File Manager</li>
+                                <li>Pastikan rule API menggunakan <code className={`px-1 py-0.5 rounded text-[11px] font-mono ${isDarkTheme ? "bg-red-500/10" : "bg-red-100"}`}>RewriteRule .* - [L]</code>, bukan <code className={`px-1 py-0.5 rounded text-[11px] font-mono ${isDarkTheme ? "bg-red-500/10" : "bg-red-100"}`}>app.js</code></li>
+                                <li>Upload seluruh folder <code className={`px-1 py-0.5 rounded text-[11px] font-mono ${isDarkTheme ? "bg-red-500/10" : "bg-red-100"}`}>dist/</code> terbaru (termasuk <code className={`px-1 py-0.5 rounded text-[11px] font-mono ${isDarkTheme ? "bg-red-500/10" : "bg-red-100"}`}>server.cjs</code>)</li>
+                                <li>Restart aplikasi Node.js di <strong>cPanel → Node.js Selector</strong></li>
+                                <li>Buka halaman di tab incognito untuk memastikan service worker lama tidak aktif</li>
+                              </ol>
+                            ) : (
+                              <ol className={`text-xs leading-relaxed space-y-1.5 list-decimal list-inside ${isDarkTheme ? "text-red-400/70" : "text-red-600/80"}`}>
+                                <li>Buka <strong>cPanel → Node.js Selector</strong></li>
+                                <li>Pastikan status aplikasi <strong>Running</strong> — klik <strong>Restart</strong> jika perlu</li>
+                                <li>Pastikan file startup adalah <code className={`px-1 py-0.5 rounded text-[11px] font-mono ${isDarkTheme ? "bg-red-500/10" : "bg-red-100"}`}>app.js</code> dan direktori aplikasi sudah benar</li>
+                                <li>Periksa error log di cPanel untuk detail crash</li>
+                                <li>Pastikan <code className={`px-1 py-0.5 rounded text-[11px] font-mono ${isDarkTheme ? "bg-red-500/10" : "bg-red-100"}`}>dist/server.cjs</code> ada di folder aplikasi (jalankan <code className={`px-1 py-0.5 rounded text-[11px] font-mono ${isDarkTheme ? "bg-red-500/10" : "bg-red-100"}`}>npm run build</code> terlebih dahulu)</li>
+                              </ol>
+                            )}
+                          </div>
                         </div>
                       )}
 
