@@ -7,6 +7,10 @@
     RewriteEngine On
     RewriteBase /id/
 
+    # [A0] Redirect /id (no trailing slash) → /id/ so Apache/LiteSpeed enters this .htaccess
+    RewriteCond %{REQUEST_URI} ^/id$
+    RewriteRule ^ /id/ [R=301,L]
+
     # [A] Root request → dist/index.html
     RewriteRule ^$ dist/index.html [L]
     RewriteRule ^index\.html$ dist/index.html [L]

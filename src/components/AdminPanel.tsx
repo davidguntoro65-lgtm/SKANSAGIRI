@@ -340,7 +340,7 @@ export default function AdminPanel({
       setPartners(DataStore.getPartners());
       fetch("/api/about").then(r => r.json()).then(d => setAboutData(d)).catch(() => {});
       fetch("/api/kepala-sekolah").then(r => r.json()).then(d => setKepalaSekolah(d)).catch(() => {});
-      fetch("/api/manajemen-sekolah").then(r => r.json()).then(d => setManajemenSekolah(d)).catch(() => {});
+      fetch("/api/manajemen-sekolah").then(r => r.json()).then(d => setManajemenSekolah(Array.isArray(d) ? d : [])).catch(() => {});
       fetch("/api/visi-misi").then(r => r.json()).then(d => setVisiMisi(d)).catch(() => {});
       fetch("/api/social-media").then(r => r.json()).then(d => setSocialMedia(d)).catch(() => {});
     }
@@ -3125,7 +3125,7 @@ export default function AdminPanel({
                     return (
                       <div className="space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                          {manajemenSekolah.map((person) => (
+                          {(Array.isArray(manajemenSekolah) ? manajemenSekolah : []).map((person) => (
                             <div key={person.id} className={`p-5 rounded-2xl border space-y-4 ${isDarkTheme ? "bg-slate-900 border-white/5" : "bg-white border-slate-200"}`}>
                               <div className={`text-[9px] font-mono uppercase tracking-widest font-bold px-2.5 py-1 rounded-full inline-flex ${isDarkTheme ? "bg-amber-500/10 text-amber-400" : "bg-amber-50 text-amber-600"}`}>
                                 {person.jabatan}

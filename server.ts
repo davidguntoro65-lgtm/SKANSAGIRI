@@ -241,13 +241,20 @@ app.use((_req, res, next) => {
   next();
 });
 
-// Path normalisation — strip the BASE_PATH prefix (/id) when Passenger passes the
+// Path normalisation — strip the BASE_PATH prefix (/id) when Passenger/LiteSpeed passes the
 // full URI to Express (e.g. /id/api/auth/login → /api/auth/login).
+// Also handles /id (exact, no trailing slash) → 302 redirect to /id/ so the SPA loads.
 // Harmless when the frontend calls /api/… directly (no /id prefix present).
-app.use((req, _res, next) => {
+app.use((req, res, next) => {
   const BASE = (process.env.BASE_PATH || "").replace(/\/$/, ""); // e.g. "/id"
-  if (BASE && req.url.startsWith(BASE + "/")) {
-    req.url = req.url.slice(BASE.length); // strip prefix; req.path updates automatically
+  if (BASE) {
+    if (req.url === BASE) {
+      // /id → /id/  (missing trailing slash would cause Express to return "Cannot GET /id")
+      return res.redirect(302, BASE + "/");
+    }
+    if (req.url.startsWith(BASE + "/")) {
+      req.url = req.url.slice(BASE.length); // strip prefix; req.path updates automatically
+    }
   }
   next();
 });
