@@ -275,7 +275,7 @@ export default function AdminPanel({
           const src = e.target?.result as string;
           if (!src) { fail(new Error("FileReader tidak mengembalikan data")); return; }
 
-          const img = new Image();
+          const img = new window.Image();
           img.onload = () => {
             // ── CRITICAL: wrap in try/catch so canvas errors call fail() ──
             try {

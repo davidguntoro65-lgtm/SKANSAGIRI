@@ -21,3 +21,6 @@ Additionally, a branding.json holding 5 uncompressed logos can exceed 20 MB; `JS
 2. **Backend (server.ts)** — `validateImageFields(obj, fields, maxKB)` returns an error string if any base64 field exceeds limit; endpoint returns HTTP 413. Limits mirror frontend.
 3. **Backend (server.ts)** — `atomicWriteFile(path, data)` writes to `.tmp` then renames, preventing JSON corruption if the process crashes mid-write.
 4. All data-writing endpoints updated to use `atomicWriteFile`.
+
+## Critical: lucide-react `Image` shadows the DOM Image constructor
+`Image` is imported from lucide-react at the top of AdminPanel.tsx. Any `new Image()` inside `compressImage` resolves to the lucide-react forwardRef component, not `HTMLImageElement`. In the minified production bundle this surfaces as "Ay is not a constructor" — the error was caught by the try/catch and shown as a toast. **Fix:** always use `new window.Image()` inside compressImage (and any canvas-based helper) to bypass the import shadow. This affects ALL upload handlers that call compressImage (kepala sekolah, manajemen, about/gedung, etc.).
