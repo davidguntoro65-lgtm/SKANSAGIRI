@@ -107,6 +107,15 @@ export default function AdminPanel({
   const [compareSplit, setCompareSplit] = useState(false); // comparison slider toggle
   const [dragActive, setDragActive] = useState(false);
 
+  // Logo crop/zoom modal state
+  const [logoCropOpen, setLogoCropOpen] = useState(false);
+  const [logoCropField, setLogoCropField] = useState<keyof Branding | null>(null);
+  const [logoCropSrc, setLogoCropSrc] = useState<string | null>(null);
+  const [logoCropX, setLogoCropX] = useState(50);
+  const [logoCropY, setLogoCropY] = useState(50);
+  const [logoCropScale, setLogoCropScale] = useState(100);
+  const [logoCropApplying, setLogoCropApplying] = useState(false);
+
   const processImage = (src: string, settings: typeof enhanceSettings) => {
     setIsProcessing(true);
     const img = new window.Image();
@@ -2801,7 +2810,7 @@ export default function AdminPanel({
                   {/* BRANDING PANEL */}
                   {activeTab === "branding" && (() => {
                     const draft = brandingDraft ?? branding;
-                    const handleFileInput = (field: keyof Branding) => async (e: React.ChangeEvent<HTMLInputElement>) => {
+                    const handleFileInput = (field: keyof Branding) => (e: React.ChangeEvent<HTMLInputElement>) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
                       e.target.value = "";
@@ -2810,14 +2819,72 @@ export default function AdminPanel({
                         showFeedback(`Ukuran file terlalu besar (${(file.size / 1024 / 1024).toFixed(1)} MB). Maksimal 5 MB.`, "error");
                         return;
                       }
-                      try {
-                        showFeedback("Memproses gambar…", "success");
-                        const compressed = await compressImage(file, 600, 600, 0.86, 600);
-                        setBrandingDraft(prev => ({ ...(prev ?? branding), [field]: compressed }));
-                        showFeedback("Gambar siap. Klik Simpan untuk menyimpan perubahan.", "success");
-                      } catch (err: any) {
-                        showFeedback(err?.message || "Gagal memproses gambar. Coba file lain.", "error");
-                      }
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        const src = ev.target?.result as string;
+                        if (!src) { showFeedback("Gagal membaca file.", "error"); return; }
+                        setLogoCropSrc(src);
+                        setLogoCropField(field);
+                        setLogoCropX(50);
+                        setLogoCropY(50);
+                        setLogoCropScale(100);
+                        setLogoCropOpen(true);
+                        setFeedback(null);
+                      };
+                      reader.onerror = () => showFeedback("Gagal membaca file.", "error");
+                      reader.readAsDataURL(file);
+                    };
+                    const applyLogoCrop = () => {
+                      if (!logoCropSrc || !logoCropField) return;
+                      setLogoCropApplying(true);
+                      const img = new window.Image();
+                      img.onload = () => {
+                        const OUTPUT_SIZE = 600;
+                        const canvas = document.createElement("canvas");
+                        canvas.width = OUTPUT_SIZE;
+                        canvas.height = OUTPUT_SIZE;
+                        const ctx = canvas.getContext("2d");
+                        if (!ctx) {
+                          showFeedback("Canvas tidak tersedia di browser ini.", "error");
+                          setLogoCropApplying(false);
+                          return;
+                        }
+                        ctx.imageSmoothingEnabled = true;
+                        ctx.imageSmoothingQuality = "high";
+                        const imgAspect = img.width / img.height;
+                        let containW: number, containH: number;
+                        if (imgAspect >= 1) { containW = OUTPUT_SIZE; containH = OUTPUT_SIZE / imgAspect; }
+                        else { containH = OUTPUT_SIZE; containW = OUTPUT_SIZE * imgAspect; }
+                        const scale = logoCropScale / 100;
+                        const scaledW = containW * scale;
+                        const scaledH = containH * scale;
+                        const originX = (logoCropX / 100) * OUTPUT_SIZE;
+                        const originY = (logoCropY / 100) * OUTPUT_SIZE;
+                        const drawX = originX - scaledW * (logoCropX / 100);
+                        const drawY = originY - scaledH * (logoCropY / 100);
+                        ctx.drawImage(img, drawX, drawY, scaledW, scaledH);
+                        const TARGET_LEN = 600 * 1024;
+                        let dataUrl = canvas.toDataURL("image/png");
+                        if (dataUrl.length > TARGET_LEN) {
+                          let q = 0.88;
+                          dataUrl = canvas.toDataURL("image/jpeg", q);
+                          while (dataUrl.length > TARGET_LEN && q > 0.10) {
+                            q = Math.max(0.10, q - 0.06);
+                            dataUrl = canvas.toDataURL("image/jpeg", q);
+                          }
+                        }
+                        setBrandingDraft(prev => ({ ...(prev ?? branding), [logoCropField!]: dataUrl }));
+                        setLogoCropOpen(false);
+                        setLogoCropSrc(null);
+                        setLogoCropField(null);
+                        showFeedback("Logo diterapkan. Klik Simpan Identitas Visual untuk menyimpan.", "success");
+                        setLogoCropApplying(false);
+                      };
+                      img.onerror = () => {
+                        showFeedback("Gagal memuat gambar untuk penyesuaian.", "error");
+                        setLogoCropApplying(false);
+                      };
+                      img.src = logoCropSrc;
                     };
                     const handleRemove = (field: keyof Branding) => {
                       setBrandingDraft(prev => ({ ...(prev ?? branding), [field]: null }));
@@ -2917,6 +2984,165 @@ export default function AdminPanel({
                             </div>
                           ))}
                         </div>
+
+                        {/* Logo Crop / Zoom Studio — appears inline when a file is chosen */}
+                        {logoCropOpen && logoCropSrc && logoCropField && (() => {
+                          const fieldLabel = logoFields.find(f => f.key === logoCropField)?.label ?? "Logo";
+                          const previewStyle = (size: number): React.CSSProperties => ({
+                            position: "absolute",
+                            maxWidth: "none", maxHeight: "none",
+                            width: "auto", height: "100%",
+                            transform: `translate(-50%, -50%) scale(${logoCropScale / 100})`,
+                            top: `${logoCropY}%`, left: `${logoCropX}%`,
+                            transformOrigin: "center center",
+                          });
+                          return (
+                            <div className={`rounded-2xl border overflow-hidden shadow-2xl ${isDarkTheme ? "bg-slate-950 border-amber-500/30" : "bg-white border-amber-400/40 shadow-amber-100"}`}>
+                              {/* Header */}
+                              <div className={`flex items-center justify-between px-5 py-3 border-b ${isDarkTheme ? "border-amber-500/20 bg-amber-500/5" : "border-amber-200 bg-amber-50"}`}>
+                                <div className="flex items-center gap-2">
+                                  <Crop className="w-4 h-4 text-amber-500" />
+                                  <span className="text-xs font-bold font-mono text-amber-500 uppercase tracking-widest">Studio Penyesuaian — {fieldLabel}</span>
+                                </div>
+                                <button type="button" onClick={() => { setLogoCropOpen(false); setLogoCropSrc(null); setLogoCropField(null); }}
+                                  className={`p-1.5 rounded-lg transition-colors ${isDarkTheme ? "hover:bg-white/10 text-slate-400" : "hover:bg-slate-100 text-slate-400"}`}>
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+
+                              <div className="p-5 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                {/* === LEFT: Live Previews === */}
+                                <div className="space-y-4">
+                                  <p className={`text-[10px] font-mono uppercase tracking-widest font-bold ${isDarkTheme ? "text-slate-400" : "text-slate-500"}`}>Pratinjau Langsung</p>
+
+                                  {/* Dark navbar preview */}
+                                  <div>
+                                    <p className={`text-[9px] font-mono mb-1.5 ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>Navbar — Mode Gelap</p>
+                                    <div className="bg-slate-900 rounded-xl px-4 h-12 flex items-center gap-3 border border-white/5 overflow-hidden">
+                                      <div style={{ position: "relative", width: 140, height: 36, overflow: "hidden", flexShrink: 0 }}>
+                                        <img src={logoCropSrc} alt="preview" style={previewStyle(140)} />
+                                      </div>
+                                      <span className="text-[10px] text-white/30 font-mono tracking-widest shrink-0">SMKN 1 WONOGIRI</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Light navbar preview */}
+                                  <div>
+                                    <p className={`text-[9px] font-mono mb-1.5 ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>Navbar — Mode Terang</p>
+                                    <div className="bg-white rounded-xl px-4 h-12 flex items-center gap-3 border border-slate-200 shadow-sm overflow-hidden">
+                                      <div style={{ position: "relative", width: 140, height: 36, overflow: "hidden", flexShrink: 0 }}>
+                                        <img src={logoCropSrc} alt="preview" style={previewStyle(140)} />
+                                      </div>
+                                      <span className="text-[10px] text-slate-400 font-mono tracking-widest shrink-0">SMKN 1 WONOGIRI</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Square crop preview */}
+                                  <div>
+                                    <p className={`text-[9px] font-mono mb-1.5 ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>Area yang Disimpan (600×600)</p>
+                                    <div style={{ position: "relative", width: 200, height: 200, overflow: "hidden" }}
+                                      className={`rounded-xl border-2 border-amber-500/40 ${isDarkTheme ? "bg-slate-800" : "bg-slate-50"}`}>
+                                      <img src={logoCropSrc} alt="full preview"
+                                        style={{
+                                          position: "absolute", maxWidth: "none", maxHeight: "none",
+                                          width: "auto", height: "100%",
+                                          transform: `translate(-50%, -50%) scale(${logoCropScale / 100})`,
+                                          top: `${logoCropY}%`, left: `${logoCropX}%`,
+                                          transformOrigin: "center center",
+                                        }}
+                                      />
+                                      {/* Grid crosshair overlay */}
+                                      <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: "linear-gradient(rgba(245,158,11,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(245,158,11,0.08) 1px, transparent 1px)", backgroundSize: "50px 50px" }} />
+                                      <div className="absolute inset-x-0 top-1/2 h-px bg-amber-500/20" />
+                                      <div className="absolute inset-y-0 left-1/2 w-px bg-amber-500/20" />
+                                      <div className="absolute bottom-2 right-2 text-[8px] font-mono text-amber-400 bg-slate-950/80 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                        {logoCropScale}% · {logoCropX}%·{logoCropY}%
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* === RIGHT: Controls === */}
+                                <div className="space-y-5">
+                                  {/* Scale slider */}
+                                  <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                      <label className={`text-[10px] font-mono uppercase tracking-widest ${isDarkTheme ? "text-slate-400" : "text-slate-500"}`}>Zoom / Skala</label>
+                                      <span className="text-xs font-mono font-bold text-amber-500">{logoCropScale}%</span>
+                                    </div>
+                                    <input type="range" min="20" max="300" step="1" value={logoCropScale}
+                                      onChange={e => setLogoCropScale(parseInt(e.target.value))}
+                                      className="w-full accent-amber-500 h-1.5 rounded" />
+                                    <div className={`flex justify-between text-[9px] font-mono mt-1 ${isDarkTheme ? "text-slate-600" : "text-slate-400"}`}>
+                                      <span>Kecil</span><span>Normal</span><span>Besar</span>
+                                    </div>
+                                  </div>
+
+                                  {/* X position slider */}
+                                  <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                      <label className={`text-[10px] font-mono uppercase tracking-widest ${isDarkTheme ? "text-slate-400" : "text-slate-500"}`}>Posisi Horizontal</label>
+                                      <span className="text-xs font-mono font-bold text-amber-500">{logoCropX}%</span>
+                                    </div>
+                                    <input type="range" min="0" max="100" step="1" value={logoCropX}
+                                      onChange={e => setLogoCropX(parseInt(e.target.value))}
+                                      className="w-full accent-amber-500 h-1.5 rounded" />
+                                    <div className={`flex justify-between text-[9px] font-mono mt-1 ${isDarkTheme ? "text-slate-600" : "text-slate-400"}`}>
+                                      <span>← Kiri</span><span>Tengah</span><span>Kanan →</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Y position slider */}
+                                  <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                      <label className={`text-[10px] font-mono uppercase tracking-widest ${isDarkTheme ? "text-slate-400" : "text-slate-500"}`}>Posisi Vertikal</label>
+                                      <span className="text-xs font-mono font-bold text-amber-500">{logoCropY}%</span>
+                                    </div>
+                                    <input type="range" min="0" max="100" step="1" value={logoCropY}
+                                      onChange={e => setLogoCropY(parseInt(e.target.value))}
+                                      className="w-full accent-amber-500 h-1.5 rounded" />
+                                    <div className={`flex justify-between text-[9px] font-mono mt-1 ${isDarkTheme ? "text-slate-600" : "text-slate-400"}`}>
+                                      <span>↑ Atas</span><span>Tengah</span><span>Bawah ↓</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Quick presets */}
+                                  <div>
+                                    <label className={`text-[10px] font-mono uppercase tracking-widest block mb-2 ${isDarkTheme ? "text-slate-400" : "text-slate-500"}`}>Preset Cepat</label>
+                                    <div className="flex flex-wrap gap-2">
+                                      {([
+                                        { label: "Tengah (Default)", x: 50, y: 50, scale: 100 },
+                                        { label: "Penuhi Area", x: 50, y: 50, scale: 180 },
+                                        { label: "Kecil & Rapi", x: 50, y: 50, scale: 65 },
+                                        { label: "Atas Kiri", x: 0, y: 0, scale: 80 },
+                                      ] as { label: string; x: number; y: number; scale: number }[]).map(p => (
+                                        <button key={p.label} type="button"
+                                          onClick={() => { setLogoCropX(p.x); setLogoCropY(p.y); setLogoCropScale(p.scale); }}
+                                          className={`px-2.5 py-1 rounded text-[10px] font-mono border transition-all active:scale-95 ${isDarkTheme ? "border-white/10 text-slate-300 hover:bg-white/5" : "border-slate-200 text-slate-600 hover:bg-slate-100"}`}>
+                                          {p.label}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+
+                                  {/* Action buttons */}
+                                  <div className="flex items-center gap-3 pt-2 border-t border-white/5">
+                                    <button type="button" onClick={applyLogoCrop} disabled={logoCropApplying}
+                                      className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-slate-950 text-xs font-bold tracking-wider active:scale-95 duration-150 transition-all">
+                                      {logoCropApplying
+                                        ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /><span>Memproses…</span></>
+                                        : <><Check className="w-3.5 h-3.5" /><span>Terapkan Logo</span></>}
+                                    </button>
+                                    <button type="button" onClick={() => { setLogoCropOpen(false); setLogoCropSrc(null); setLogoCropField(null); }}
+                                      className={`px-4 py-2.5 rounded-xl border text-xs font-mono transition-all active:scale-95 ${isDarkTheme ? "border-white/10 text-slate-400 hover:bg-white/5" : "border-slate-200 text-slate-500 hover:bg-slate-100"}`}>
+                                      Batal
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
 
                         {/* Save button */}
                         <div className="flex items-center gap-4">
