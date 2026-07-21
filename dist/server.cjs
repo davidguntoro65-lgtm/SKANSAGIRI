@@ -24605,7 +24605,7 @@ function removeSession(token) {
 var loginAttempts = /* @__PURE__ */ new Map();
 function checkRateLimit(ip) {
   const now = Date.now();
-  const entry = loginAttempts.get(ip) || { count: 0, lockUntil: 0 };
+  const entry = loginAttempts.get(ip) || { count: 0, lockUntil: 0, lastSeen: now };
   if (now < entry.lockUntil) {
     return { allowed: false, secondsLeft: Math.ceil((entry.lockUntil - now) / 1e3) };
   }
@@ -24613,8 +24613,9 @@ function checkRateLimit(ip) {
 }
 function recordFailedAttempt(ip) {
   const now = Date.now();
-  const entry = loginAttempts.get(ip) || { count: 0, lockUntil: 0 };
+  const entry = loginAttempts.get(ip) || { count: 0, lockUntil: 0, lastSeen: now };
   entry.count += 1;
+  entry.lastSeen = now;
   if (entry.count >= 5) {
     entry.lockUntil = now + 6e4;
     entry.count = 0;
@@ -24624,6 +24625,14 @@ function recordFailedAttempt(ip) {
 function clearAttempts(ip) {
   loginAttempts.delete(ip);
 }
+setInterval(() => {
+  const cutoff = Date.now() - 10 * 60 * 1e3;
+  for (const [ip, entry] of loginAttempts.entries()) {
+    if (entry.lastSeen < cutoff && entry.lockUntil < Date.now()) {
+      loginAttempts.delete(ip);
+    }
+  }
+}, 10 * 60 * 1e3).unref();
 function requireAuth(req, res, next) {
   const authHeader = req.headers.authorization || "";
   const token = authHeader.replace("Bearer ", "").trim();
@@ -24735,17 +24744,22 @@ app.use((_req, res, next) => {
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   next();
 });
-app.use((req, _res, next) => {
+app.use((req, res, next) => {
   const BASE = (process.env.BASE_PATH || "").replace(/\/$/, "");
-  if (BASE && req.url.startsWith(BASE + "/")) {
-    req.url = req.url.slice(BASE.length);
+  if (BASE) {
+    if (req.url === BASE) {
+      return res.redirect(302, BASE + "/");
+    }
+    if (req.url.startsWith(BASE + "/")) {
+      req.url = req.url.slice(BASE.length);
+    }
   }
   next();
 });
 app.use((req, res, next) => {
   const writeMethods = ["POST", "DELETE", "PUT", "PATCH"];
   if (!writeMethods.includes(req.method)) return next();
-  const publicExact = ["/api/auth/login", "/api/tracer", "/api/contact", "/api/suara"];
+  const publicExact = ["/api/auth/login", "/api/tracer", "/api/contact", "/api/suara", "/api/aduan"];
   if (publicExact.includes(req.path)) return next();
   const publicPatterns = [
     /^\/api\/suara\/[^/]+\/komentar$/,
@@ -24929,7 +24943,7 @@ app.post("/api/gallery", (req, res) => {
       return res.status(400).json({ error: "Data must be an array of gallery items" });
     }
     for (const item of data) {
-      const imgErr = validateImageFields(item, ["image"], 420);
+      const imgErr = validateImageFields(item, ["image"], 800);
       if (imgErr) return res.status(413).json({ error: imgErr });
     }
     atomicWriteFile(filePaths.gallery, JSON.stringify(data, null, 2));
@@ -24953,7 +24967,7 @@ app.post("/api/alumni", (req, res) => {
       return res.status(400).json({ error: "Data must be an array of alumni" });
     }
     for (const item of data) {
-      const imgErr = validateImageFields(item, ["avatar"], 220);
+      const imgErr = validateImageFields(item, ["avatar"], 500);
       if (imgErr) return res.status(413).json({ error: imgErr });
     }
     atomicWriteFile(filePaths.alumni, JSON.stringify(data, null, 2));
@@ -24977,7 +24991,7 @@ app.post("/api/news", (req, res) => {
       return res.status(400).json({ error: "Data must be an array of news items" });
     }
     for (const item of data) {
-      const imgErr = validateImageFields(item, ["image"], 420);
+      const imgErr = validateImageFields(item, ["image"], 800);
       if (imgErr) return res.status(413).json({ error: imgErr });
     }
     atomicWriteFile(filePaths.news, JSON.stringify(data, null, 2));
@@ -25015,7 +25029,7 @@ app.get("/api/kepala-sekolah", (req, res) => {
 });
 app.post("/api/kepala-sekolah", (req, res) => {
   try {
-    const imgErr = validateImageFields(req.body, ["foto"], 360);
+    const imgErr = validateImageFields(req.body, ["foto"], 800);
     if (imgErr) return res.status(413).json({ error: imgErr });
     atomicWriteFile(filePaths.kepalaSekolah, JSON.stringify(req.body, null, 2));
     res.json({ success: true });
@@ -25035,7 +25049,7 @@ app.post("/api/manajemen-sekolah", (req, res) => {
     const items = req.body;
     if (Array.isArray(items)) {
       for (const item of items) {
-        const imgErr = validateImageFields(item, ["foto"], 320);
+        const imgErr = validateImageFields(item, ["foto"], 800);
         if (imgErr) return res.status(413).json({ error: imgErr });
       }
     }
@@ -25084,7 +25098,7 @@ app.get("/api/about", (req, res) => {
 });
 app.post("/api/about", (req, res) => {
   try {
-    const imgErr = validateImageFields(req.body, ["foto"], 450);
+    const imgErr = validateImageFields(req.body, ["foto"], 800);
     if (imgErr) return res.status(413).json({ error: imgErr });
     atomicWriteFile(aboutPath, JSON.stringify(req.body, null, 2));
     res.json({ success: true });
@@ -25103,7 +25117,7 @@ app.post("/api/branding", (req, res) => {
   try {
     const data = req.body;
     const logoFields = ["schoolLogo", "schoolLogoDark", "schoolLogoLight", "schoolFavicon", "schoolAppIcon"];
-    const imgErr = validateImageFields(data, logoFields, 250);
+    const imgErr = validateImageFields(data, logoFields, 800);
     if (imgErr) return res.status(413).json({ error: imgErr });
     atomicWriteFile(filePaths.branding, JSON.stringify(data, null, 2));
     res.json({ success: true });
@@ -25129,7 +25143,7 @@ app.post("/api/tracer", (req, res) => {
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     existing.push(entry);
-    import_fs.default.writeFileSync(tracerPath, JSON.stringify(existing, null, 2), "utf-8");
+    atomicWriteFile(tracerPath, JSON.stringify(existing, null, 2));
     res.json(entry);
   } catch (e) {
     res.status(500).json({ error: "Failed to save tracer entry: " + e.message });
@@ -25142,7 +25156,7 @@ app.delete("/api/tracer/:id", (req, res) => {
     if (updated.length === existing.length) {
       return res.status(404).json({ error: "Entry not found" });
     }
-    import_fs.default.writeFileSync(tracerPath, JSON.stringify(updated, null, 2), "utf-8");
+    atomicWriteFile(tracerPath, JSON.stringify(updated, null, 2));
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: "Failed to delete tracer entry: " + e.message });
@@ -25150,12 +25164,12 @@ app.delete("/api/tracer/:id", (req, res) => {
 });
 app.post("/api/reset", (req, res) => {
   try {
-    import_fs.default.writeFileSync(filePaths.competencies, JSON.stringify(COMPETENCY_DATA, null, 2), "utf-8");
-    import_fs.default.writeFileSync(filePaths.milestones, JSON.stringify(TIMELINE_ACHIEVEMENTS, null, 2), "utf-8");
-    import_fs.default.writeFileSync(filePaths.gallery, JSON.stringify(CAMPUS_LIFE_GALLERY, null, 2), "utf-8");
-    import_fs.default.writeFileSync(filePaths.alumni, JSON.stringify(ALUMNI_TESTIMONIALS, null, 2), "utf-8");
-    import_fs.default.writeFileSync(filePaths.news, JSON.stringify(NEWS_COMPILATION, null, 2), "utf-8");
-    import_fs.default.writeFileSync(filePaths.partners, JSON.stringify(INDUSTRI_PARTNERS, null, 2), "utf-8");
+    atomicWriteFile(filePaths.competencies, JSON.stringify(COMPETENCY_DATA, null, 2));
+    atomicWriteFile(filePaths.milestones, JSON.stringify(TIMELINE_ACHIEVEMENTS, null, 2));
+    atomicWriteFile(filePaths.gallery, JSON.stringify(CAMPUS_LIFE_GALLERY, null, 2));
+    atomicWriteFile(filePaths.alumni, JSON.stringify(ALUMNI_TESTIMONIALS, null, 2));
+    atomicWriteFile(filePaths.news, JSON.stringify(NEWS_COMPILATION, null, 2));
+    atomicWriteFile(filePaths.partners, JSON.stringify(INDUSTRI_PARTNERS, null, 2));
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: "Failed to reset data: " + error.message });
@@ -25191,7 +25205,7 @@ app.post("/api/contact", (req, res) => {
       dibaca: false
     };
     messages.unshift(newMsg);
-    import_fs.default.writeFileSync(CONTACT_FILE, JSON.stringify(messages, null, 2), "utf-8");
+    atomicWriteFile(CONTACT_FILE, JSON.stringify(messages, null, 2));
     res.json({ success: true, id: newMsg.id });
   } catch (error) {
     res.status(500).json({ error: "Gagal menyimpan pesan." });
@@ -25206,7 +25220,7 @@ app.patch("/api/contact/:id/baca", requireAuth, (req, res) => {
     const idx = messages.findIndex((m) => m.id === req.params.id);
     if (idx === -1) return res.status(404).json({ error: "Pesan tidak ditemukan." });
     messages[idx].dibaca = true;
-    import_fs.default.writeFileSync(CONTACT_FILE, JSON.stringify(messages, null, 2), "utf-8");
+    atomicWriteFile(CONTACT_FILE, JSON.stringify(messages, null, 2));
     res.json({ success: true });
   } catch {
     res.status(500).json({ error: "Gagal memperbarui status pesan." });
@@ -25216,10 +25230,91 @@ app.delete("/api/contact/:id", requireAuth, (req, res) => {
   try {
     const messages = readContactMessages();
     const filtered = messages.filter((m) => m.id !== req.params.id);
-    import_fs.default.writeFileSync(CONTACT_FILE, JSON.stringify(filtered, null, 2), "utf-8");
+    atomicWriteFile(CONTACT_FILE, JSON.stringify(filtered, null, 2));
     res.json({ success: true });
   } catch {
     res.status(500).json({ error: "Gagal menghapus pesan." });
+  }
+});
+var ADUAN_FILE = import_path.default.join(DATA_DIR, "aduan-publik.json");
+function readAduan() {
+  try {
+    if (!import_fs.default.existsSync(ADUAN_FILE)) return [];
+    return JSON.parse(import_fs.default.readFileSync(ADUAN_FILE, "utf-8"));
+  } catch {
+    return [];
+  }
+}
+app.post("/api/aduan", (req, res) => {
+  try {
+    const { namaLengkap, noHp, alamat, judul, isi, tanggal, lokasi, lokasiLainnya, kategori, anonim, rahasia } = req.body;
+    if (!judul || !isi || !tanggal || !lokasi || !kategori) {
+      return res.status(400).json({ error: "Field wajib tidak lengkap." });
+    }
+    if (isi.trim().length < 30) {
+      return res.status(400).json({ error: "Isi laporan minimal 30 karakter." });
+    }
+    const list = readAduan();
+    const entry = {
+      id: import_crypto.default.randomUUID(),
+      namaLengkap: anonim ? "Anonim" : String(namaLengkap || "").trim(),
+      noHp: anonim ? "" : String(noHp || "").trim(),
+      alamat: anonim ? "" : String(alamat || "").trim(),
+      judul: String(judul).trim(),
+      isi: String(isi).trim(),
+      tanggal: String(tanggal).trim(),
+      lokasi: lokasi === "Lokasi Lainnya" ? String(lokasiLainnya || lokasi).trim() : String(lokasi).trim(),
+      kategori: String(kategori).trim(),
+      anonim: !!anonim,
+      rahasia: !!rahasia,
+      status: "BARU",
+      catatan: "",
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    list.unshift(entry);
+    atomicWriteFile(ADUAN_FILE, JSON.stringify(list, null, 2));
+    res.json({ success: true, id: entry.id });
+  } catch (err) {
+    res.status(500).json({ error: "Gagal menyimpan aduan." });
+  }
+});
+app.get("/api/aduan", requireAuth, (req, res) => {
+  res.json(readAduan());
+});
+app.patch("/api/aduan/:id/status", requireAuth, (req, res) => {
+  try {
+    const list = readAduan();
+    const idx = list.findIndex((m) => m.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: "Aduan tidak ditemukan." });
+    const { status, catatan } = req.body;
+    if (status) list[idx].status = String(status).trim();
+    if (catatan !== void 0) list[idx].catatan = String(catatan).trim();
+    list[idx].updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+    atomicWriteFile(ADUAN_FILE, JSON.stringify(list, null, 2));
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: "Gagal memperbarui status." });
+  }
+});
+app.delete("/api/aduan/:id", requireAuth, (req, res) => {
+  try {
+    const filtered = readAduan().filter((m) => m.id !== req.params.id);
+    atomicWriteFile(ADUAN_FILE, JSON.stringify(filtered, null, 2));
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: "Gagal menghapus aduan." });
+  }
+});
+app.post("/api/aduan/bulk-delete", requireAuth, (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids)) return res.status(400).json({ error: "ids harus array." });
+    const filtered = readAduan().filter((m) => !ids.includes(m.id));
+    atomicWriteFile(ADUAN_FILE, JSON.stringify(filtered, null, 2));
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: "Gagal menghapus aduan." });
   }
 });
 var SUARA_FILE = import_path.default.join(DATA_DIR, "suara-skansagiri.json");
@@ -25232,7 +25327,7 @@ function readSuara() {
   }
 }
 function writeSuara(data) {
-  import_fs.default.writeFileSync(SUARA_FILE, JSON.stringify(data, null, 2), "utf-8");
+  atomicWriteFile(SUARA_FILE, JSON.stringify(data, null, 2));
 }
 function slugify(text) {
   return text.toLowerCase().replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "-").replace(/^-+|-+$/g, "").substring(0, 80);
@@ -25247,7 +25342,7 @@ function readKomentar() {
   }
 }
 function writeKomentar(data) {
-  import_fs.default.writeFileSync(KOMENTAR_FILE, JSON.stringify(data, null, 2), "utf-8");
+  atomicWriteFile(KOMENTAR_FILE, JSON.stringify(data, null, 2));
 }
 app.get("/api/suara", (req, res) => {
   try {
