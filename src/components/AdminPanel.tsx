@@ -2403,15 +2403,60 @@ export default function AdminPanel({
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div>
-                          <label className="block text-xs font-mono uppercase tracking-wider text-slate-400 mb-2">Tautan Gambar Berita Utama</label>
+                          <label className="block text-xs font-mono uppercase tracking-wider text-slate-400 mb-2">Tautan / Gambar Berita Utama</label>
+                          {/* Image preview */}
+                          {editingItem.image && (
+                            <div className="mb-2 rounded-lg overflow-hidden border border-white/10 h-28 bg-slate-900">
+                              <img
+                                src={editingItem.image}
+                                alt="preview"
+                                className="w-full h-full object-cover"
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                              />
+                            </div>
+                          )}
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={editingItem.image}
+                              onChange={(e) => setEditingItem({ ...editingItem, image: e.target.value })}
+                              placeholder="https://... atau upload gambar →"
+                              className={`flex-1 text-xs p-3 rounded-lg border outline-none ${
+                                isDarkTheme ? "bg-slate-950 border-white/5 text-white focus:border-amber-500" : "bg-slate-50 border-slate-200 focus:border-amber-600"
+                              }`}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => document.getElementById("news-image-upload")?.click()}
+                              className="px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold whitespace-nowrap active:scale-95 transition-transform flex items-center gap-1"
+                              title="Upload gambar dari perangkat"
+                            >
+                              <Upload className="w-3.5 h-3.5" />
+                              <span>Upload</span>
+                            </button>
+                          </div>
                           <input
-                            type="text"
-                            value={editingItem.image}
-                            onChange={(e) => setEditingItem({ ...editingItem, image: e.target.value })}
-                            placeholder="https://..."
-                            className={`w-full text-xs p-3 rounded-lg border outline-none ${
-                              isDarkTheme ? "bg-slate-950 border-white/5 text-white focus:border-amber-500" : "bg-slate-50 border-slate-200 focus:border-amber-600"
-                            }`}
+                            id="news-image-upload"
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              e.target.value = "";
+                              if (file.size > 5 * 1024 * 1024) {
+                                showFeedback("Ukuran file terlalu besar (maks 5 MB).", "error");
+                                return;
+                              }
+                              try {
+                                showFeedback("Memproses gambar berita…", "success");
+                                const compressed = await compressImage(file, 1200, 800, 0.82, 600);
+                                setEditingItem(prev => prev ? { ...prev, image: compressed } : prev);
+                                showFeedback("Gambar siap. Klik Simpan untuk menyimpan.", "success");
+                              } catch (err: any) {
+                                showFeedback(err?.message || "Gagal memproses gambar. Coba file lain.", "error");
+                              }
+                            }}
                           />
                         </div>
                         <div>
