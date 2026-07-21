@@ -89,6 +89,7 @@ const LOKASI_OPTIONS = [
   "Parkiran",
   "Lingkungan Sekolah Lainnya",
   "Di Luar Lingkungan Sekolah",
+  "Lokasi Lainnya",
 ];
 
 interface FormState {
@@ -96,6 +97,7 @@ interface FormState {
   isi: string;
   tanggal: string;
   lokasi: string;
+  lokasiLainnya: string;
   kategori: string;
   anonim: boolean;
   rahasia: boolean;
@@ -106,6 +108,7 @@ const INITIAL_FORM: FormState = {
   isi: "",
   tanggal: "",
   lokasi: "",
+  lokasiLainnya: "",
   kategori: "",
   anonim: false,
   rahasia: false,
@@ -138,6 +141,8 @@ export default function AduanPublik({ theme }: AduanPublikProps) {
     if (!form.isi.trim() || form.isi.trim().length < 30) e.isi = "Isi laporan minimal 30 karakter.";
     if (!form.tanggal) e.tanggal = "Tanggal kejadian wajib diisi.";
     if (!form.lokasi) e.lokasi = "Lokasi kejadian wajib dipilih.";
+    if (form.lokasi === "Lokasi Lainnya" && !form.lokasiLainnya.trim())
+      e.lokasiLainnya = "Mohon tuliskan lokasi kejadian.";
     if (!form.kategori) e.kategori = "Kategori laporan wajib dipilih.";
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -477,7 +482,11 @@ export default function AduanPublik({ theme }: AduanPublikProps) {
                       </label>
                       <select
                         value={form.lokasi}
-                        onChange={set("lokasi")}
+                        onChange={(e) => {
+                          set("lokasi")(e);
+                          if (e.target.value !== "Lokasi Lainnya")
+                            setForm((p) => ({ ...p, lokasiLainnya: "" }));
+                        }}
                         className={`${inputBase} appearance-none cursor-pointer ${errors.lokasi ? "border-red-500/60 focus:border-red-500" : ""}`}
                       >
                         <option value="">— Pilih lokasi kejadian —</option>
@@ -487,6 +496,21 @@ export default function AduanPublik({ theme }: AduanPublikProps) {
                       </select>
                       {errors.lokasi && (
                         <p className={errClass}><AlertTriangle className="w-3 h-3" />{errors.lokasi}</p>
+                      )}
+                      {form.lokasi === "Lokasi Lainnya" && (
+                        <div className="mt-2">
+                          <input
+                            type="text"
+                            value={form.lokasiLainnya}
+                            onChange={set("lokasiLainnya")}
+                            placeholder="Tuliskan lokasi kejadian secara spesifik..."
+                            maxLength={120}
+                            className={`${inputBase} ${errors.lokasiLainnya ? "border-red-500/60 focus:border-red-500" : ""}`}
+                          />
+                          {errors.lokasiLainnya && (
+                            <p className={errClass}><AlertTriangle className="w-3 h-3" />{errors.lokasiLainnya}</p>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
