@@ -107,3 +107,118 @@ model KomentarSuara {
   createdAt    DateTime   @default(now())
   karya        KaryaSiswa @relation(fields: [artikelId], references: [id], onDelete: Cascade)
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ── OSIS "Skansagiri Student Parliament" ──────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Kabinet info, visi misi OSIS ──────────────────────────────────────────────
+model OsisInfo {
+  id           Int      @id @default(1)
+  namaKabinet  String   @default("OSIS SKANSAGIRI")
+  masaBakti    String   @default("")
+  tagline      String   @default("")
+  visi         String   @default("")
+  misi         String[] @default([])
+  sejarah      String   @default("")
+  quoteKetua   String   @default("")
+  namaKetua    String   @default("")
+  jumlahProker Int      @default(0)
+  jumlahMember Int      @default(0)
+  jumlahEkskul Int      @default(0)
+  updatedAt    DateTime @updatedAt
+}
+
+// ── Pengurus OSIS ──────────────────────────────────────────────────────────────
+model OsisPengurus {
+  id          String   @id @default(uuid())
+  nama        String
+  jabatan     String
+  bidang      String   @default("")
+  foto        String?
+  tugasPokok  String   @default("")
+  instagram   String   @default("")
+  email       String   @default("")
+  urutan      Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ── Program Kerja OSIS ────────────────────────────────────────────────────────
+model OsisProgramKerja {
+  id          String   @id @default(uuid())
+  nama        String
+  bidang      String
+  deskripsi   String   @default("")
+  status      String   @default("DIRENCANAKAN") // DIRENCANAKAN | BERLANGSUNG | SELESAI
+  progress    Int      @default(0)  // 0-100
+  targetDate  String   @default("")
+  penanggungJawab String @default("")
+  urutan      Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ── Agenda / Event ────────────────────────────────────────────────────────────
+model OsisAgenda {
+  id          String   @id @default(uuid())
+  nama        String
+  tanggal     String
+  waktu       String   @default("")
+  tempat      String   @default("")
+  deskripsi   String   @default("")
+  jenis       String   @default("RUTIN") // RUTIN | BESAR | KOLABORASI
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ── Ekstrakurikuler ───────────────────────────────────────────────────────────
+model OsisEkskul {
+  id           String   @id @default(uuid())
+  nama         String
+  kategori     String   @default("AKADEMIK") // AKADEMIK | SENI | OLAHRAGA | KEAGAMAAN | TEKNOLOGI
+  deskripsi    String   @default("")
+  jadwal       String   @default("")
+  pembina      String   @default("")
+  jumlahAnggota Int     @default(0)
+  foto         String?
+  urutan       Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// ── Galeri Kegiatan OSIS ──────────────────────────────────────────────────────
+model OsisGaleri {
+  id        String   @id @default(uuid())
+  judul     String
+  kategori  String   @default("KEGIATAN")
+  foto      String   // base64 or URL
+  createdAt DateTime @default(now())
+}
+
+// ── Prestasi OSIS & Ekskul ────────────────────────────────────────────────────
+model OsisPrestasi {
+  id        String   @id @default(uuid())
+  judul     String
+  deskripsi String   @default("")
+  tingkat   String   @default("SEKOLAH") // SEKOLAH | KECAMATAN | KABUPATEN | PROVINSI | NASIONAL
+  tanggal   String
+  foto      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ── Aspirasi Siswa ─────────────────────────────────────────────────────────────
+model OsisAspirasi {
+  id        String   @id @default(uuid())
+  nama      String   @default("Anonim")
+  kelas     String   @default("")
+  kategori  String   @default("KEGIATAN") // FASILITAS | KEGIATAN | KEBIJAKAN | SARAN
+  isi       String
+  anonim    Boolean  @default(false)
+  status    String   @default("BARU") // BARU | DITINJAU | DIJAWAB
+  balasan   String   @default("")
+  publik    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

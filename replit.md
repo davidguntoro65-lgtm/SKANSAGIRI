@@ -62,6 +62,16 @@ Starts the Express server on **port 5000**, which also serves the Vite dev clien
 - `KaryaSiswa` — student work articles (Suara Skansagiri)
 - `KomentarSuara` — comments on student articles
 
+### OSIS Skansagiri tables
+- `OsisInfo` — kabinet identity, visi misi, sejarah, quote ketua
+- `OsisPengurus` — board members with photo, jabatan, tugas pokok, socials
+- `OsisProgramKerja` — work programs with bidang, status, progress bar, target date
+- `OsisAgenda` — events/schedule (RUTIN / BESAR / KOLABORASI)
+- `OsisEkskul` — extracurricular activities with category, schedule, coach
+- `OsisGaleri` — OSIS activity gallery photos
+- `OsisPrestasi` — achievements with level badge (SEKOLAH→NASIONAL)
+- `OsisAspirasi` — student aspirations with admin reply + public toggle
+
 ## Prisma commands
 
 ```bash

@@ -91,7 +91,8 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
   const aktifitasLinks = [
     { name: "Prestasi", href: "#prestasi", icon: Award, desc: "Penghargaan & Capaian Sekolah" },
     { name: "Warta", href: "#news", icon: Newspaper, desc: "Berita & Agenda Terbaru" },
-    { name: "Kehidupan Kampus", href: "#gallery", icon: Camera, desc: "Galeri & Kegiatan Siswa" }
+    { name: "Kehidupan Kampus", href: "#gallery", icon: Camera, desc: "Galeri & Kegiatan Siswa" },
+    { name: "OSIS Skansagiri", href: "/osis", icon: Users, desc: "Organisasi Siswa Intra Sekolah" },
   ];
 
   // Check active states

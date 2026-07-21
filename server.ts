@@ -912,6 +912,398 @@ app.get("/sitemap.xml", async (req, res) => {
   res.send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${staticXml}${newsUrls}\n</urlset>`);
 });
 
+// ════════════════════════════════════════════════════════════════════════════
+// ── OSIS "Skansagiri Student Parliament" API ──────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Default OSIS Info ──────────────────────────────────────────────────────
+const DEFAULT_OSIS_INFO = {
+  namaKabinet: "OSIS SKANSAGIRI",
+  masaBakti: "",
+  tagline: "Bersatu, Bergerak, Berprestasi untuk Skansagiri",
+  visi: "",
+  misi: [] as string[],
+  sejarah: "",
+  quoteKetua: "",
+  namaKetua: "",
+  jumlahProker: 0,
+  jumlahMember: 0,
+  jumlahEkskul: 0,
+};
+
+// Helper: ensure OsisInfo row exists
+async function ensureOsisInfo() {
+  const row = await db.osisInfo.findUnique({ where: { id: 1 } });
+  if (!row) {
+    await db.osisInfo.create({ data: { ...DEFAULT_OSIS_INFO, id: 1 } });
+  }
+}
+
+// ── GET /api/osis/info ─────────────────────────────────────────────────────
+app.get("/api/osis/info", async (_req, res) => {
+  try {
+    await ensureOsisInfo();
+    const info = await db.osisInfo.findUnique({ where: { id: 1 } });
+    res.json(info || DEFAULT_OSIS_INFO);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ── POST /api/osis/info ────────────────────────────────────────────────────
+app.post("/api/osis/info", requireAuth as any, async (req, res) => {
+  try {
+    const { namaKabinet, masaBakti, tagline, visi, misi, sejarah, quoteKetua, namaKetua, jumlahProker, jumlahMember, jumlahEkskul } = req.body;
+    const data = {
+      namaKabinet: String(namaKabinet || DEFAULT_OSIS_INFO.namaKabinet).trim(),
+      masaBakti: String(masaBakti || "").trim(),
+      tagline: String(tagline || "").trim(),
+      visi: String(visi || "").trim(),
+      misi: Array.isArray(misi) ? misi.map(String) : [],
+      sejarah: String(sejarah || "").trim(),
+      quoteKetua: String(quoteKetua || "").trim(),
+      namaKetua: String(namaKetua || "").trim(),
+      jumlahProker: parseInt(jumlahProker) || 0,
+      jumlahMember: parseInt(jumlahMember) || 0,
+      jumlahEkskul: parseInt(jumlahEkskul) || 0,
+    };
+    const info = await db.osisInfo.upsert({ where: { id: 1 }, create: { id: 1, ...data }, update: data });
+    res.json(info);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ── PENGURUS ──────────────────────────────────────────────────────────────
+
+app.get("/api/osis/pengurus", async (_req, res) => {
+  try {
+    const list = await db.osisPengurus.findMany({ orderBy: { urutan: "asc" } });
+    res.json(list);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.post("/api/osis/pengurus", requireAuth as any, async (req, res) => {
+  try {
+    const { nama, jabatan, bidang, foto, tugasPokok, instagram, email, urutan } = req.body;
+    if (!nama || !jabatan) return res.status(400).json({ error: "Nama dan jabatan wajib diisi." });
+    const item = await db.osisPengurus.create({
+      data: { nama: nama.trim(), jabatan: jabatan.trim(), bidang: String(bidang||"").trim(), foto: foto || null, tugasPokok: String(tugasPokok||"").trim(), instagram: String(instagram||"").trim(), email: String(email||"").trim(), urutan: parseInt(urutan)||0 },
+    });
+    res.json(item);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.put("/api/osis/pengurus/:id", requireAuth as any, async (req, res) => {
+  try {
+    const { nama, jabatan, bidang, foto, tugasPokok, instagram, email, urutan } = req.body;
+    if (!nama || !jabatan) return res.status(400).json({ error: "Nama dan jabatan wajib diisi." });
+    const item = await db.osisPengurus.update({
+      where: { id: req.params.id },
+      data: { nama: nama.trim(), jabatan: jabatan.trim(), bidang: String(bidang||"").trim(), foto: foto || null, tugasPokok: String(tugasPokok||"").trim(), instagram: String(instagram||"").trim(), email: String(email||"").trim(), urutan: parseInt(urutan)||0 },
+    });
+    res.json(item);
+  } catch (e: any) {
+    if (e.code === "P2025") return res.status(404).json({ error: "Pengurus tidak ditemukan." });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete("/api/osis/pengurus/:id", requireAuth as any, async (req, res) => {
+  try {
+    await db.osisPengurus.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (e: any) {
+    if (e.code === "P2025") return res.status(404).json({ error: "Pengurus tidak ditemukan." });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── PROGRAM KERJA ─────────────────────────────────────────────────────────
+
+app.get("/api/osis/proker", async (_req, res) => {
+  try {
+    const list = await db.osisProgramKerja.findMany({ orderBy: { urutan: "asc" } });
+    res.json(list);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.post("/api/osis/proker", requireAuth as any, async (req, res) => {
+  try {
+    const { nama, bidang, deskripsi, status, progress, targetDate, penanggungJawab, urutan } = req.body;
+    if (!nama || !bidang) return res.status(400).json({ error: "Nama dan bidang wajib diisi." });
+    const item = await db.osisProgramKerja.create({
+      data: { nama: nama.trim(), bidang: bidang.trim(), deskripsi: String(deskripsi||"").trim(), status: status || "DIRENCANAKAN", progress: Math.min(100, Math.max(0, parseInt(progress)||0)), targetDate: String(targetDate||"").trim(), penanggungJawab: String(penanggungJawab||"").trim(), urutan: parseInt(urutan)||0 },
+    });
+    res.json(item);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.put("/api/osis/proker/:id", requireAuth as any, async (req, res) => {
+  try {
+    const { nama, bidang, deskripsi, status, progress, targetDate, penanggungJawab, urutan } = req.body;
+    if (!nama || !bidang) return res.status(400).json({ error: "Nama dan bidang wajib diisi." });
+    const item = await db.osisProgramKerja.update({
+      where: { id: req.params.id },
+      data: { nama: nama.trim(), bidang: bidang.trim(), deskripsi: String(deskripsi||"").trim(), status: status || "DIRENCANAKAN", progress: Math.min(100, Math.max(0, parseInt(progress)||0)), targetDate: String(targetDate||"").trim(), penanggungJawab: String(penanggungJawab||"").trim(), urutan: parseInt(urutan)||0 },
+    });
+    res.json(item);
+  } catch (e: any) {
+    if (e.code === "P2025") return res.status(404).json({ error: "Program kerja tidak ditemukan." });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete("/api/osis/proker/:id", requireAuth as any, async (req, res) => {
+  try {
+    await db.osisProgramKerja.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (e: any) {
+    if (e.code === "P2025") return res.status(404).json({ error: "Program kerja tidak ditemukan." });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── AGENDA ────────────────────────────────────────────────────────────────
+
+app.get("/api/osis/agenda", async (_req, res) => {
+  try {
+    const list = await db.osisAgenda.findMany({ orderBy: { tanggal: "asc" } });
+    res.json(list);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.post("/api/osis/agenda", requireAuth as any, async (req, res) => {
+  try {
+    const { nama, tanggal, waktu, tempat, deskripsi, jenis } = req.body;
+    if (!nama || !tanggal) return res.status(400).json({ error: "Nama dan tanggal wajib diisi." });
+    const item = await db.osisAgenda.create({
+      data: { nama: nama.trim(), tanggal: String(tanggal).trim(), waktu: String(waktu||"").trim(), tempat: String(tempat||"").trim(), deskripsi: String(deskripsi||"").trim(), jenis: ["RUTIN","BESAR","KOLABORASI"].includes(jenis) ? jenis : "RUTIN" },
+    });
+    res.json(item);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.put("/api/osis/agenda/:id", requireAuth as any, async (req, res) => {
+  try {
+    const { nama, tanggal, waktu, tempat, deskripsi, jenis } = req.body;
+    if (!nama || !tanggal) return res.status(400).json({ error: "Nama dan tanggal wajib diisi." });
+    const item = await db.osisAgenda.update({
+      where: { id: req.params.id },
+      data: { nama: nama.trim(), tanggal: String(tanggal).trim(), waktu: String(waktu||"").trim(), tempat: String(tempat||"").trim(), deskripsi: String(deskripsi||"").trim(), jenis: ["RUTIN","BESAR","KOLABORASI"].includes(jenis) ? jenis : "RUTIN" },
+    });
+    res.json(item);
+  } catch (e: any) {
+    if (e.code === "P2025") return res.status(404).json({ error: "Agenda tidak ditemukan." });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete("/api/osis/agenda/:id", requireAuth as any, async (req, res) => {
+  try {
+    await db.osisAgenda.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (e: any) {
+    if (e.code === "P2025") return res.status(404).json({ error: "Agenda tidak ditemukan." });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── EKSKUL ────────────────────────────────────────────────────────────────
+
+app.get("/api/osis/ekskul", async (_req, res) => {
+  try {
+    const list = await db.osisEkskul.findMany({ orderBy: { urutan: "asc" } });
+    res.json(list);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.post("/api/osis/ekskul", requireAuth as any, async (req, res) => {
+  try {
+    const { nama, kategori, deskripsi, jadwal, pembina, jumlahAnggota, foto, urutan } = req.body;
+    if (!nama) return res.status(400).json({ error: "Nama ekskul wajib diisi." });
+    const validKat = ["AKADEMIK","SENI","OLAHRAGA","KEAGAMAAN","TEKNOLOGI"];
+    const item = await db.osisEkskul.create({
+      data: { nama: nama.trim(), kategori: validKat.includes(kategori) ? kategori : "AKADEMIK", deskripsi: String(deskripsi||"").trim(), jadwal: String(jadwal||"").trim(), pembina: String(pembina||"").trim(), jumlahAnggota: parseInt(jumlahAnggota)||0, foto: foto || null, urutan: parseInt(urutan)||0 },
+    });
+    res.json(item);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.put("/api/osis/ekskul/:id", requireAuth as any, async (req, res) => {
+  try {
+    const { nama, kategori, deskripsi, jadwal, pembina, jumlahAnggota, foto, urutan } = req.body;
+    if (!nama) return res.status(400).json({ error: "Nama ekskul wajib diisi." });
+    const validKat = ["AKADEMIK","SENI","OLAHRAGA","KEAGAMAAN","TEKNOLOGI"];
+    const item = await db.osisEkskul.update({
+      where: { id: req.params.id },
+      data: { nama: nama.trim(), kategori: validKat.includes(kategori) ? kategori : "AKADEMIK", deskripsi: String(deskripsi||"").trim(), jadwal: String(jadwal||"").trim(), pembina: String(pembina||"").trim(), jumlahAnggota: parseInt(jumlahAnggota)||0, foto: foto || null, urutan: parseInt(urutan)||0 },
+    });
+    res.json(item);
+  } catch (e: any) {
+    if (e.code === "P2025") return res.status(404).json({ error: "Ekskul tidak ditemukan." });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete("/api/osis/ekskul/:id", requireAuth as any, async (req, res) => {
+  try {
+    await db.osisEkskul.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (e: any) {
+    if (e.code === "P2025") return res.status(404).json({ error: "Ekskul tidak ditemukan." });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── GALERI ────────────────────────────────────────────────────────────────
+
+app.get("/api/osis/galeri", async (_req, res) => {
+  try {
+    const list = await db.osisGaleri.findMany({ orderBy: { createdAt: "desc" } });
+    res.json(list);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.post("/api/osis/galeri", requireAuth as any, async (req, res) => {
+  try {
+    const { judul, kategori, foto } = req.body;
+    if (!judul || !foto) return res.status(400).json({ error: "Judul dan foto wajib diisi." });
+    if (foto.length > 3_000_000) return res.status(413).json({ error: "Ukuran foto terlalu besar (maks ~2.5MB setelah kompresi)." });
+    const item = await db.osisGaleri.create({
+      data: { judul: String(judul).trim(), kategori: String(kategori||"KEGIATAN").trim(), foto: String(foto) },
+    });
+    res.json(item);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete("/api/osis/galeri/:id", requireAuth as any, async (req, res) => {
+  try {
+    await db.osisGaleri.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (e: any) {
+    if (e.code === "P2025") return res.status(404).json({ error: "Foto tidak ditemukan." });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── PRESTASI ──────────────────────────────────────────────────────────────
+
+app.get("/api/osis/prestasi", async (_req, res) => {
+  try {
+    const list = await db.osisPrestasi.findMany({ orderBy: { tanggal: "desc" } });
+    res.json(list);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.post("/api/osis/prestasi", requireAuth as any, async (req, res) => {
+  try {
+    const { judul, deskripsi, tingkat, tanggal, foto } = req.body;
+    if (!judul || !tanggal) return res.status(400).json({ error: "Judul dan tanggal wajib diisi." });
+    const validTingkat = ["SEKOLAH","KECAMATAN","KABUPATEN","PROVINSI","NASIONAL"];
+    const item = await db.osisPrestasi.create({
+      data: { judul: String(judul).trim(), deskripsi: String(deskripsi||"").trim(), tingkat: validTingkat.includes(tingkat) ? tingkat : "SEKOLAH", tanggal: String(tanggal).trim(), foto: foto || null },
+    });
+    res.json(item);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.put("/api/osis/prestasi/:id", requireAuth as any, async (req, res) => {
+  try {
+    const { judul, deskripsi, tingkat, tanggal, foto } = req.body;
+    if (!judul || !tanggal) return res.status(400).json({ error: "Judul dan tanggal wajib diisi." });
+    const validTingkat = ["SEKOLAH","KECAMATAN","KABUPATEN","PROVINSI","NASIONAL"];
+    const item = await db.osisPrestasi.update({
+      where: { id: req.params.id },
+      data: { judul: String(judul).trim(), deskripsi: String(deskripsi||"").trim(), tingkat: validTingkat.includes(tingkat) ? tingkat : "SEKOLAH", tanggal: String(tanggal).trim(), foto: foto || null },
+    });
+    res.json(item);
+  } catch (e: any) {
+    if (e.code === "P2025") return res.status(404).json({ error: "Prestasi tidak ditemukan." });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete("/api/osis/prestasi/:id", requireAuth as any, async (req, res) => {
+  try {
+    await db.osisPrestasi.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (e: any) {
+    if (e.code === "P2025") return res.status(404).json({ error: "Prestasi tidak ditemukan." });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── ASPIRASI ──────────────────────────────────────────────────────────────
+
+// Public: submit aspirasi
+app.post("/api/osis/aspirasi", async (req, res) => {
+  try {
+    const { nama, kelas, kategori, isi, anonim } = req.body;
+    if (!isi || String(isi).trim().length < 20) return res.status(400).json({ error: "Isi aspirasi minimal 20 karakter." });
+    const validKat = ["FASILITAS","KEGIATAN","KEBIJAKAN","SARAN"];
+    const item = await db.osisAspirasi.create({
+      data: {
+        nama: anonim ? "Anonim" : String(nama||"Anonim").trim(),
+        kelas: anonim ? "" : String(kelas||"").trim(),
+        kategori: validKat.includes(kategori) ? kategori : "KEGIATAN",
+        isi: String(isi).trim(),
+        anonim: !!anonim,
+        status: "BARU",
+        balasan: "",
+        publik: false,
+      },
+    });
+    res.json({ success: true, id: item.id });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// Public: list only answered+public aspirasi
+app.get("/api/osis/aspirasi/publik", async (_req, res) => {
+  try {
+    const list = await db.osisAspirasi.findMany({
+      where: { publik: true, status: "DIJAWAB" },
+      orderBy: { createdAt: "desc" },
+    });
+    res.json(list);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// Admin: list all aspirasi
+app.get("/api/osis/aspirasi", requireAuth as any, async (_req, res) => {
+  try {
+    const list = await db.osisAspirasi.findMany({ orderBy: { createdAt: "desc" } });
+    res.json(list);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// Admin: update aspirasi (balasan, status, publik)
+app.patch("/api/osis/aspirasi/:id", requireAuth as any, async (req, res) => {
+  try {
+    const { balasan, status, publik } = req.body;
+    const validStatus = ["BARU","DITINJAU","DIJAWAB"];
+    const item = await db.osisAspirasi.update({
+      where: { id: req.params.id },
+      data: {
+        balasan: String(balasan||"").trim(),
+        status: validStatus.includes(status) ? status : "BARU",
+        publik: !!publik,
+      },
+    });
+    res.json(item);
+  } catch (e: any) {
+    if (e.code === "P2025") return res.status(404).json({ error: "Aspirasi tidak ditemukan." });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Admin: delete aspirasi
+app.delete("/api/osis/aspirasi/:id", requireAuth as any, async (req, res) => {
+  try {
+    await db.osisAspirasi.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (e: any) {
+    if (e.code === "P2025") return res.status(404).json({ error: "Aspirasi tidak ditemukan." });
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Vite / Static serving ────────────────────────────────────────────────────
 async function main() {
   // Connect to DB and seed defaults
