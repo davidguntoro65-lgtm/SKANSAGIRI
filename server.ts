@@ -181,6 +181,12 @@ const DEFAULT_SOCIAL_MEDIA = {
   facebook: "", tiktok: "", twitter: ""
 };
 const DEFAULT_ABOUT = { foto: null, fotoX: 50, fotoY: 50, fotoScale: 100 };
+const DEFAULT_SUARA_CATEGORIES = [
+  { key: "JURNAL_VOKASI", label: "Jurnal Vokasi" },
+  { key: "ESAI_INOVASI",  label: "Esai & Inovasi" },
+  { key: "SASTRA",        label: "Sastra & Kreasi" },
+  { key: "OPINI",         label: "Opini & Refleksi" },
+];
 
 // ─── Seed defaults into DB on startup ─────────────────────────────────────────
 async function seedDefaults() {
@@ -197,6 +203,7 @@ async function seedDefaults() {
     ["visi-misi", DEFAULT_VISI_MISI],
     ["social-media", DEFAULT_SOCIAL_MEDIA],
     ["about", DEFAULT_ABOUT],
+    ["suara-categories", DEFAULT_SUARA_CATEGORIES],
   ];
   for (const [key, value] of seeds) {
     const exists = await db.setting.findUnique({ where: { key } });
@@ -675,13 +682,33 @@ app.get("/api/suara/:id", async (req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+app.get("/api/suara-categories", async (_req, res) => {
+  try { res.json(await getSetting("suara-categories", DEFAULT_SUARA_CATEGORIES)); }
+  catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.put("/api/suara-categories", requireAuth as any, async (req, res) => {
+  try {
+    const cats = req.body;
+    if (!Array.isArray(cats)) return res.status(400).json({ error: "Format tidak valid: array diperlukan." });
+    const validated = (cats as any[])
+      .filter(c => c?.key && c?.label && typeof c.key === "string" && typeof c.label === "string")
+      .map(c => ({ key: (c.key as string).trim().toUpperCase().replace(/\s+/g, "_"), label: (c.label as string).trim() }))
+      .filter(c => c.key && c.label);
+    if (validated.length === 0) return res.status(400).json({ error: "Minimal satu kategori diperlukan." });
+    await setSetting("suara-categories", validated);
+    res.json({ success: true, data: validated });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 app.post("/api/suara", async (req, res) => {
   try {
     const { title, content, category, authorName, authorClass, authorJurusan, tags } = req.body;
     if (!title || !content || !category || !authorName || !authorClass)
       return res.status(400).json({ error: "Field wajib tidak lengkap." });
     if (content.trim().length < 200) return res.status(400).json({ error: "Konten minimal 200 karakter." });
-    const validCats = ["JURNAL_VOKASI", "ESAI_INOVASI", "SASTRA", "OPINI"];
+    const cats = await getSetting<{ key: string }[]>("suara-categories", DEFAULT_SUARA_CATEGORIES);
+    const validCats = cats.map(c => c.key);
     if (!validCats.includes(category)) return res.status(400).json({ error: "Kategori tidak valid." });
 
     const baseSlug = slugify(title);
@@ -712,7 +739,8 @@ app.put("/api/suara/:id", requireAuth as any, async (req, res) => {
     const { title, content, category, tags, authorName, authorClass, authorJurusan } = req.body;
     if (!title || !content || !category) return res.status(400).json({ error: "Judul, konten, dan kategori wajib diisi." });
     if (content.trim().length < 200) return res.status(400).json({ error: "Konten minimal 200 karakter." });
-    const validCats = ["JURNAL_VOKASI", "ESAI_INOVASI", "SASTRA", "OPINI"];
+    const cats = await getSetting<{ key: string }[]>("suara-categories", DEFAULT_SUARA_CATEGORIES);
+    const validCats = cats.map(c => c.key);
     if (!validCats.includes(category)) return res.status(400).json({ error: "Kategori tidak valid." });
 
     const existing = await db.karyaSiswa.findUnique({ where: { id: req.params.id } });

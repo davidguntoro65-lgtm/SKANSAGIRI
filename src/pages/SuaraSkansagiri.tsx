@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type FormEvent } from "react";
+import { useState, useEffect, useRef, type FormEvent, type ComponentType } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   PenLine, Heart, Eye, BookOpen, Lightbulb, Feather, MessageCircle,
@@ -29,37 +29,40 @@ interface KomentarSuara {
 
 interface SuaraSkansagiriProps { theme: "light" | "dark"; }
 
-const CATEGORIES = {
-  ALL:          { label: "Semua Karya",       icon: BookOpen,      color: "amber",   hex: "#f59e0b" },
-  JURNAL_VOKASI:{ label: "Jurnal Vokasi",     icon: TrendingUp,    color: "orange",  hex: "#f97316" },
-  ESAI_INOVASI: { label: "Esai & Inovasi",    icon: Lightbulb,     color: "sky",     hex: "#0ea5e9" },
-  SASTRA:       { label: "Sastra & Kreasi",   icon: Feather,       color: "violet",  hex: "#8b5cf6" },
-  OPINI:        { label: "Opini & Refleksi",  icon: MessageCircle, color: "emerald", hex: "#10b981" },
-} as const;
+interface DbCategory { key: string; label: string; }
 
-type CatKey = keyof typeof CATEGORIES;
+type CatKey = string;
 
-const CAT_BADGE: Record<CatKey, string> = {
+// Style lookup by known category key — falls back for custom categories added via admin panel
+const CAT_ICON: Record<string, ComponentType<{ className?: string }>> = {
+  ALL: BookOpen, JURNAL_VOKASI: TrendingUp, ESAI_INOVASI: Lightbulb, SASTRA: Feather, OPINI: MessageCircle,
+};
+const DEFAULT_CAT_ICON: ComponentType<{ className?: string }> = BookOpen;
+
+const CAT_BADGE: Record<string, string> = {
   ALL:           "bg-amber-500/15 text-amber-600 border-amber-400/30",
   JURNAL_VOKASI: "bg-orange-500/15 text-orange-600 border-orange-400/30",
   ESAI_INOVASI:  "bg-sky-500/15 text-sky-600 border-sky-400/30",
   SASTRA:        "bg-violet-500/15 text-violet-600 border-violet-400/30",
   OPINI:         "bg-emerald-500/15 text-emerald-600 border-emerald-400/30",
 };
-const CAT_BADGE_DARK: Record<CatKey, string> = {
+const CAT_BADGE_DARK: Record<string, string> = {
   ALL:           "bg-amber-500/15 text-amber-400 border-amber-500/30",
   JURNAL_VOKASI: "bg-orange-500/15 text-orange-400 border-orange-500/30",
   ESAI_INOVASI:  "bg-sky-500/15 text-sky-400 border-sky-500/30",
   SASTRA:        "bg-violet-500/15 text-violet-400 border-violet-500/30",
   OPINI:         "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
 };
-const CAT_TOP: Record<CatKey, string> = {
+const CAT_TOP: Record<string, string> = {
   ALL:           "from-amber-400 to-yellow-500",
   JURNAL_VOKASI: "from-orange-400 to-amber-500",
   ESAI_INOVASI:  "from-sky-400 to-blue-500",
   SASTRA:        "from-violet-400 to-purple-500",
   OPINI:         "from-emerald-400 to-teal-500",
 };
+const CAT_BADGE_FALLBACK       = "bg-slate-500/15 text-slate-500 border-slate-500/30";
+const CAT_BADGE_DARK_FALLBACK  = "bg-slate-500/15 text-slate-400 border-slate-500/30";
+const CAT_TOP_FALLBACK         = "from-slate-400 to-slate-500";
 
 const JURUSAN_OPTIONS = [
   "Rekayasa Perangkat Lunak (RPL)", "Akuntansi & Keuangan Lembaga (AKL)",
@@ -84,7 +87,7 @@ function renderContent(text: string) {
   ));
 }
 
-const INIT_FORM = { title: "", authorName: "", authorClass: "", authorJurusan: "", category: "" as CatKey | "", content: "", tags: "" };
+const INIT_FORM = { title: "", authorName: "", authorClass: "", authorJurusan: "", category: "" as CatKey, content: "", tags: "" };
 
 export default function SuaraSkansagiri({ theme }: SuaraSkansagiriProps) {
   const isDark = theme === "dark";
@@ -108,12 +111,32 @@ export default function SuaraSkansagiri({ theme }: SuaraSkansagiriProps) {
   const [lbLoading, setLbLoading] = useState(false);
   const detailRef = useRef<HTMLDivElement>(null);
 
+  const [dbCategories, setDbCategories] = useState<DbCategory[]>([]);
+
   const [comments, setComments] = useState<KomentarSuara[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [commentForm, setCommentForm] = useState({ authorName: "", authorClass: "", content: "" });
   const [commentSubmitting, setCommentSubmitting] = useState(false);
   const [commentSuccess, setCommentSuccess] = useState(false);
   const [commentError, setCommentError] = useState("");
+
+  const FALLBACK_CATS: DbCategory[] = [
+    { key: "ALL", label: "Semua Karya" },
+    { key: "JURNAL_VOKASI", label: "Jurnal Vokasi" },
+    { key: "ESAI_INOVASI", label: "Esai & Inovasi" },
+    { key: "SASTRA", label: "Sastra & Kreasi" },
+    { key: "OPINI", label: "Opini & Refleksi" },
+  ];
+
+  useEffect(() => {
+    fetch("/api/suara-categories")
+      .then(r => r.ok ? r.json() : null)
+      .then((cats: DbCategory[] | null) => {
+        if (cats && cats.length > 0) setDbCategories([{ key: "ALL", label: "Semua Karya" }, ...cats]);
+        else setDbCategories(FALLBACK_CATS);
+      })
+      .catch(() => setDbCategories(FALLBACK_CATS));
+  }, []);
 
   useEffect(() => { loadArticles(); }, [activeCategory, search]);
 
@@ -267,9 +290,9 @@ export default function SuaraSkansagiri({ theme }: SuaraSkansagiriProps) {
               {/* Category + Status */}
               <div className="flex items-center gap-3 mb-4 flex-wrap">
                 <span className={`text-[10px] font-mono tracking-widest uppercase px-3 py-1 rounded-full border ${
-                  isDark ? CAT_BADGE_DARK[selected.category as CatKey] : CAT_BADGE[selected.category as CatKey]
+                  isDark ? (CAT_BADGE_DARK[selected.category] || CAT_BADGE_DARK_FALLBACK) : (CAT_BADGE[selected.category] || CAT_BADGE_FALLBACK)
                 }`}>
-                  {CATEGORIES[selected.category as CatKey]?.label}
+                  {dbCategories.find(c => c.key === selected.category)?.label ?? selected.category}
                 </span>
                 {selected.tags.slice(0, 3).map(t => (
                   <span key={t} className={`text-[9px] font-mono tracking-widest px-2 py-0.5 rounded-full border ${
@@ -788,22 +811,22 @@ export default function SuaraSkansagiri({ theme }: SuaraSkansagiriProps) {
           <div className="px-6 md:px-12 mb-8">
             <div className="max-w-7xl mx-auto">
               <div className="flex gap-2 flex-wrap">
-                {(Object.keys(CATEGORIES) as CatKey[]).map(k => {
-                  const c = CATEGORIES[k]; const Icon = c.icon;
-                  const isActive = activeCategory === k;
+                {dbCategories.map(cat => {
+                  const Icon = CAT_ICON[cat.key] || DEFAULT_CAT_ICON;
+                  const isActive = activeCategory === cat.key;
                   return (
                     <button
-                      key={k}
-                      onClick={() => setActiveCategory(k)}
+                      key={cat.key}
+                      onClick={() => setActiveCategory(cat.key)}
                       className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-[10px] font-mono tracking-widest uppercase border transition-all duration-200 ${
                         isActive
-                          ? `bg-gradient-to-r ${CAT_TOP[k]} text-white border-transparent shadow-lg`
+                          ? `bg-gradient-to-r ${CAT_TOP[cat.key] || CAT_TOP_FALLBACK} text-white border-transparent shadow-lg`
                           : isDark
                             ? "bg-white/4 border-white/8 text-slate-400 hover:bg-white/8 hover:text-white"
                             : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900"
                       }`}
                     >
-                      <Icon className="w-3 h-3" /> {c.label}
+                      <Icon className="w-3 h-3" /> {cat.label}
                     </button>
                   );
                 })}
@@ -839,7 +862,6 @@ export default function SuaraSkansagiri({ theme }: SuaraSkansagiriProps) {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                   {articles.map((a, i) => {
-                    const cat = a.category as CatKey;
                     return (
                       <motion.div
                         key={a.id}
@@ -850,13 +872,13 @@ export default function SuaraSkansagiri({ theme }: SuaraSkansagiriProps) {
                         onClick={() => handleArticleClick(a)}
                       >
                         {/* Top color bar */}
-                        <div className={`h-[3px] bg-gradient-to-r ${CAT_TOP[cat]} opacity-70 group-hover:opacity-100 transition-opacity`} />
+                        <div className={`h-[3px] bg-gradient-to-r ${CAT_TOP[a.category] || CAT_TOP_FALLBACK} opacity-70 group-hover:opacity-100 transition-opacity`} />
 
                         <div className="p-5 flex flex-col gap-3 flex-1">
                           {/* Category + read time */}
                           <div className="flex items-center justify-between">
-                            <span className={`text-[9px] font-mono tracking-widest uppercase px-2.5 py-0.5 rounded-full border ${isDark ? CAT_BADGE_DARK[cat] : CAT_BADGE[cat]}`}>
-                              {CATEGORIES[cat]?.label}
+                            <span className={`text-[9px] font-mono tracking-widest uppercase px-2.5 py-0.5 rounded-full border ${isDark ? (CAT_BADGE_DARK[a.category] || CAT_BADGE_DARK_FALLBACK) : (CAT_BADGE[a.category] || CAT_BADGE_FALLBACK)}`}>
+                              {dbCategories.find(c => c.key === a.category)?.label ?? a.category}
                             </span>
                             <span className={`text-[9px] font-mono flex items-center gap-1 ${isDark ? "text-slate-600" : "text-slate-400"}`}>
                               <Clock className="w-2.5 h-2.5" />{readTime(a.content)} mnt
@@ -977,22 +999,22 @@ export default function SuaraSkansagiri({ theme }: SuaraSkansagiriProps) {
                       Kategori Karya <span className="text-rose-500">*</span>
                     </label>
                     <div className="grid grid-cols-2 gap-2">
-                      {(["JURNAL_VOKASI", "ESAI_INOVASI", "SASTRA", "OPINI"] as const).map(k => {
-                        const c = CATEGORIES[k]; const Icon = c.icon;
+                      {dbCategories.filter(c => c.key !== "ALL").map(cat => {
+                        const Icon = CAT_ICON[cat.key] || DEFAULT_CAT_ICON;
                         return (
                           <button
-                            key={k} type="button"
-                            onClick={() => setForm(f => ({ ...f, category: k }))}
+                            key={cat.key} type="button"
+                            onClick={() => setForm(f => ({ ...f, category: cat.key }))}
                             className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-left transition-all ${
-                              form.category === k
-                                ? `bg-gradient-to-r ${CAT_TOP[k]} text-white border-transparent shadow-md`
+                              form.category === cat.key
+                                ? `bg-gradient-to-r ${CAT_TOP[cat.key] || CAT_TOP_FALLBACK} text-white border-transparent shadow-md`
                                 : isDark
                                   ? "bg-white/4 border-white/8 text-slate-400 hover:bg-white/8"
                                   : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
                             }`}
                           >
                             <Icon className="w-3.5 h-3.5 shrink-0" />
-                            <span className="text-xs font-semibold">{c.label}</span>
+                            <span className="text-xs font-semibold">{cat.label}</span>
                           </button>
                         );
                       })}

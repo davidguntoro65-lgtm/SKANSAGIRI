@@ -1,15 +1,18 @@
-import { useState, useEffect, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent, type ComponentType } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowLeft, CheckCircle2, XCircle, Archive, Trash2, Eye, Clock,
   RefreshCw, Loader2, AlertCircle, BookOpen, MessageSquare, Send,
   Filter, Search, X, User, TrendingUp, Lightbulb, Feather, Heart,
-  FileText, ChevronRight, LogOut, Lock, EyeOff, LayoutDashboard, Pencil
+  FileText, ChevronRight, LogOut, Lock, EyeOff, LayoutDashboard, Pencil,
+  Tag, Plus, GripVertical
 } from "lucide-react";
+
+interface DbCategory { key: string; label: string; }
 
 interface KaryaSiswa {
   id: string; title: string; slug: string; content: string; excerpt: string;
-  category: "JURNAL_VOKASI" | "ESAI_INOVASI" | "SASTRA" | "OPINI";
+  category: string;
   status: "REVIEW" | "PUBLISHED" | "REVISION" | "ARCHIVED";
   feedback: string | null; views: number; likes: number;
   authorName: string; authorClass: string; authorJurusan: string;
@@ -34,12 +37,13 @@ const STATUS_CFG = {
   ARCHIVED:  { label: "Diarsipkan",    cls: "bg-slate-500/15 text-slate-400 border-slate-500/30" },
 };
 
-const CAT_CFG = {
-  JURNAL_VOKASI: { label: "Jurnal Vokasi",   cls: "bg-orange-500/15 text-orange-400 border-orange-500/30", icon: TrendingUp },
-  ESAI_INOVASI:  { label: "Esai & Inovasi",  cls: "bg-sky-500/15 text-sky-400 border-sky-500/30",         icon: Lightbulb },
-  SASTRA:        { label: "Sastra & Kreasi", cls: "bg-violet-500/15 text-violet-400 border-violet-500/30", icon: Feather },
-  OPINI:         { label: "Opini & Refleksi",cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30", icon: MessageSquare },
+const CAT_CFG_STYLE: Record<string, { cls: string; icon: ComponentType<{ className?: string }> }> = {
+  JURNAL_VOKASI: { cls: "bg-orange-500/15 text-orange-400 border-orange-500/30", icon: TrendingUp },
+  ESAI_INOVASI:  { cls: "bg-sky-500/15 text-sky-400 border-sky-500/30",         icon: Lightbulb },
+  SASTRA:        { cls: "bg-violet-500/15 text-violet-400 border-violet-500/30", icon: Feather },
+  OPINI:         { cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30", icon: MessageSquare },
 };
+const CAT_CFG_DEFAULT = { cls: "bg-slate-500/15 text-slate-400 border-slate-500/30", icon: BookOpen };
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
@@ -65,7 +69,12 @@ export default function AdminSuaraSkansagiri({ theme, onBack }: AdminSuaraProps)
   const [loginLoading, setLoginLoading] = useState(false);
   const [showPass, setShowPass] = useState(false);
 
-  const [adminView, setAdminView] = useState<"articles" | "komentar">("articles");
+  const [adminView, setAdminView] = useState<"articles" | "komentar" | "categories">("articles");
+  const [dbCategories, setDbCategories] = useState<DbCategory[]>([]);
+  const [catSaving, setCatSaving] = useState(false);
+  const [catError, setCatError] = useState("");
+  const [newCatKey, setNewCatKey] = useState("");
+  const [newCatLabel, setNewCatLabel] = useState("");
 
   const [articles, setArticles] = useState<KaryaSiswa[]>([]);
   const [loading, setLoading] = useState(false);
@@ -83,7 +92,7 @@ export default function AdminSuaraSkansagiri({ theme, onBack }: AdminSuaraProps)
   const [editMode, setEditMode] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
-  const [editCategory, setEditCategory] = useState<KaryaSiswa["category"]>("JURNAL_VOKASI");
+  const [editCategory, setEditCategory] = useState<string>("JURNAL_VOKASI");
   const [editTags, setEditTags] = useState("");
   const [editAuthorName, setEditAuthorName] = useState("");
   const [editAuthorClass, setEditAuthorClass] = useState("");
@@ -107,8 +116,56 @@ export default function AdminSuaraSkansagiri({ theme, onBack }: AdminSuaraProps)
   }, []);
 
   useEffect(() => {
-    if (isAuthed) { loadArticles(); loadKomentar(); }
+    if (isAuthed) { loadArticles(); loadKomentar(); loadCategories(); }
   }, [isAuthed]);
+
+  async function loadCategories() {
+    try {
+      const r = await fetch("/api/suara-categories");
+      if (r.ok) setDbCategories(await r.json());
+    } catch {}
+  }
+
+  async function saveCategories(cats: DbCategory[]) {
+    setCatSaving(true); setCatError("");
+    try {
+      const r = await fetch("/api/suara-categories", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify(cats),
+      });
+      const d = await r.json();
+      if (!r.ok) { setCatError(d.error || "Gagal menyimpan."); return; }
+      setDbCategories(d.data);
+      toast("Kategori berhasil disimpan! ✓");
+    } catch { setCatError("Terjadi kesalahan jaringan."); }
+    finally { setCatSaving(false); }
+  }
+
+  function addCategory() {
+    const key = newCatKey.trim().toUpperCase().replace(/\s+/g, "_");
+    const label = newCatLabel.trim();
+    if (!key || !label) { setCatError("Key dan label wajib diisi."); return; }
+    if (dbCategories.some(c => c.key === key)) { setCatError(`Key "${key}" sudah ada.`); return; }
+    saveCategories([...dbCategories, { key, label }]);
+    setNewCatKey(""); setNewCatLabel("");
+  }
+
+  function removeCategory(key: string) {
+    saveCategories(dbCategories.filter(c => c.key !== key));
+  }
+
+  function updateCategoryLabel(key: string, label: string) {
+    setDbCategories(prev => prev.map(c => c.key === key ? { ...c, label } : c));
+  }
+
+  function moveCategory(idx: number, dir: -1 | 1) {
+    const next = [...dbCategories];
+    const swap = idx + dir;
+    if (swap < 0 || swap >= next.length) return;
+    [next[idx], next[swap]] = [next[swap], next[idx]];
+    setDbCategories(next);
+  }
 
   async function loadKomentar() {
     setKomentarLoading(true);
@@ -368,6 +425,16 @@ export default function AdminSuaraSkansagiri({ theme, onBack }: AdminSuaraProps)
               </span>
             )}
           </button>
+          <button
+            onClick={() => { setAdminView("categories"); setCatError(""); }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold tracking-widest uppercase border transition-all ${
+              adminView === "categories"
+                ? "bg-gradient-to-r from-violet-600 to-fuchsia-600 border-transparent text-white shadow-[0_0_12px_rgba(139,92,246,0.3)]"
+                : "bg-white/4 border-white/8 text-slate-400 hover:bg-white/6 hover:text-slate-200"
+            }`}
+          >
+            <Tag className="w-3.5 h-3.5" /> Kategori
+          </button>
         </div>
 
         {adminView === "articles" && (
@@ -417,8 +484,8 @@ export default function AdminSuaraSkansagiri({ theme, onBack }: AdminSuaraProps)
             ) : (
               <div className="space-y-3">
                 {filtered.map((a, i) => {
-                  const cat = CAT_CFG[a.category];
-                  const CatIcon = cat?.icon;
+                  const cat = CAT_CFG_STYLE[a.category] || CAT_CFG_DEFAULT;
+                  const CatIcon = cat.icon;
                   const isSelected = selected?.id === a.id;
                   return (
                     <motion.div
@@ -471,8 +538,8 @@ export default function AdminSuaraSkansagiri({ theme, onBack }: AdminSuaraProps)
                   {/* Panel Header */}
                   <div className="flex items-center justify-between px-5 py-4 border-b border-white/6">
                     <div className="flex items-center gap-2">
-                      <span className={`text-[9px] font-mono tracking-widest uppercase px-2.5 py-1 rounded-full border ${CAT_CFG[selected.category]?.cls}`}>
-                        {CAT_CFG[selected.category]?.label}
+                      <span className={`text-[9px] font-mono tracking-widest uppercase px-2.5 py-1 rounded-full border ${(CAT_CFG_STYLE[selected.category] || CAT_CFG_DEFAULT).cls}`}>
+                        {dbCategories.find(c => c.key === selected.category)?.label ?? selected.category}
                       </span>
                       <span className={`text-[9px] font-mono tracking-widest uppercase px-2.5 py-1 rounded-full border ${STATUS_CFG[selected.status]?.cls}`}>
                         {STATUS_CFG[selected.status]?.label}
@@ -703,6 +770,93 @@ export default function AdminSuaraSkansagiri({ theme, onBack }: AdminSuaraProps)
           </div>
         )}
 
+        {/* ── CATEGORIES MANAGEMENT VIEW ───────────────────────── */}
+        {adminView === "categories" && (
+          <div className="max-w-xl">
+            <div className="mb-6">
+              <h2 className="text-sm font-bold text-white mb-1">Kelola Kategori Artikel</h2>
+              <p className="text-[11px] text-slate-500 font-mono">Tambah, ubah label, urutkan, atau hapus kategori. Perubahan langsung berlaku untuk form kirim karya dan filter.</p>
+            </div>
+
+            {catError && (
+              <div className="flex items-center gap-2 text-rose-400 text-xs bg-rose-500/10 border border-rose-500/20 px-3 py-2.5 rounded-xl mb-4">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />{catError}
+              </div>
+            )}
+
+            {/* Existing categories */}
+            <div className="space-y-2 mb-6">
+              {dbCategories.map((cat, idx) => (
+                <div key={cat.key} className="flex items-center gap-3 p-3 rounded-xl border border-white/8 bg-white/3">
+                  <div className="flex flex-col gap-0.5">
+                    <button
+                      onClick={() => moveCategory(idx, -1)} disabled={idx === 0 || catSaving}
+                      className="text-slate-600 hover:text-slate-300 disabled:opacity-20 transition-colors"
+                    >
+                      <svg className="w-3 h-3" viewBox="0 0 12 12" fill="none"><path d="M6 2L10 8H2L6 2Z" fill="currentColor"/></svg>
+                    </button>
+                    <button
+                      onClick={() => moveCategory(idx, 1)} disabled={idx === dbCategories.length - 1 || catSaving}
+                      className="text-slate-600 hover:text-slate-300 disabled:opacity-20 transition-colors"
+                    >
+                      <svg className="w-3 h-3" viewBox="0 0 12 12" fill="none"><path d="M6 10L10 4H2L6 10Z" fill="currentColor"/></svg>
+                    </button>
+                  </div>
+                  <span className="text-[9px] font-mono text-slate-600 bg-white/5 px-2 py-0.5 rounded border border-white/8 shrink-0 w-36 truncate">{cat.key}</span>
+                  <input
+                    type="text"
+                    value={cat.label}
+                    onChange={e => updateCategoryLabel(cat.key, e.target.value)}
+                    onBlur={() => saveCategories(dbCategories)}
+                    className="flex-1 px-3 py-1.5 rounded-lg border bg-white/5 border-white/8 text-white text-xs outline-none focus:border-violet-500/50 transition-colors"
+                  />
+                  <button
+                    onClick={() => { if (window.confirm(`Hapus kategori "${cat.label}"?`)) removeCategory(cat.key); }}
+                    disabled={catSaving}
+                    className="text-slate-600 hover:text-rose-400 transition-colors disabled:opacity-50 shrink-0"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Add new category */}
+            <div className="border border-white/8 rounded-xl p-4 bg-white/2">
+              <p className="text-[10px] font-mono tracking-widest uppercase text-slate-500 mb-3">Tambah Kategori Baru</p>
+              <div className="flex gap-2 mb-3">
+                <div className="flex-1">
+                  <label className="block text-[9px] font-mono text-slate-600 mb-1">Key (huruf kapital, garis bawah)</label>
+                  <input
+                    type="text" placeholder="Contoh: CERPEN"
+                    value={newCatKey} onChange={e => setNewCatKey(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ""))}
+                    className="w-full px-3 py-2 rounded-lg border bg-white/5 border-white/8 text-white text-xs outline-none focus:border-violet-500/50 transition-colors placeholder:text-slate-700 font-mono"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-[9px] font-mono text-slate-600 mb-1">Label (tampil di UI)</label>
+                  <input
+                    type="text" placeholder="Contoh: Cerpen & Fiksi"
+                    value={newCatLabel} onChange={e => setNewCatLabel(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border bg-white/5 border-white/8 text-white text-xs outline-none focus:border-violet-500/50 transition-colors placeholder:text-slate-700"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={addCategory} disabled={catSaving || !newCatKey || !newCatLabel}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest text-white bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:shadow-[0_0_12px_rgba(139,92,246,0.3)] transition-all disabled:opacity-50"
+              >
+                {catSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                Tambah Kategori
+              </button>
+            </div>
+
+            <p className="text-[10px] text-slate-600 font-mono mt-4">
+              * Mengubah atau menghapus kategori tidak mempengaruhi artikel yang sudah ada — artikel tetap menyimpan key kategori lamanya.
+            </p>
+          </div>
+        )}
+
       </div>
 
       {/* ── EDIT MODAL ──────────────────────────────────────────── */}
@@ -751,11 +905,11 @@ export default function AdminSuaraSkansagiri({ theme, onBack }: AdminSuaraProps)
                   <div>
                     <label className="block text-[10px] font-mono tracking-widest uppercase text-slate-500 mb-1.5">Kategori</label>
                     <select
-                      value={editCategory} onChange={e => setEditCategory(e.target.value as KaryaSiswa["category"])}
+                      value={editCategory} onChange={e => setEditCategory(e.target.value)}
                       className="w-full px-4 py-2.5 rounded-xl border bg-slate-800 border-white/8 text-white text-sm outline-none focus:border-violet-500/50 transition-colors"
                     >
-                      {(Object.keys(CAT_CFG) as Array<keyof typeof CAT_CFG>).map(k => (
-                        <option key={k} value={k}>{CAT_CFG[k].label}</option>
+                      {dbCategories.map(c => (
+                        <option key={c.key} value={c.key}>{c.label}</option>
                       ))}
                     </select>
                   </div>

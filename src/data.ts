@@ -7,7 +7,7 @@ export interface Competency {
   badgeColor: string;
   stats: { label: string; value: string }[];
   careers: string[];
-  image: string;
+  image: string | null;
   curriculum: string[];
 }
 
@@ -24,7 +24,7 @@ export interface GalleryItem {
   id: string;
   title: string;
   category: "Kuliner" | "Fashion" | "Kelas" | "Praktik Industri" | "Prestasi";
-  image: string;
+  image: string | null;
   aspect: "portrait" | "landscape";
   caption: string;
 }
@@ -36,7 +36,7 @@ export interface Alumnus {
   location: string;
   gradYear: string;
   quote: string;
-  avatar: string;
+  avatar: string | null;
 }
 
 export interface IndustriPartner {
@@ -65,7 +65,7 @@ export interface NewsArticle {
   excerpt: string;
   date: string;
   readTime: string;
-  image: string;
+  image: string | null;
   author: string;
   authorRole: string;
 }
@@ -84,7 +84,7 @@ export const COMPETENCY_DATA: Competency[] = [
       { label: "Mitra Perbankan Tetap", value: "7 Bank" }
     ],
     careers: ["Corporate Accountant", "Tax Consultant Specialist", "Financial Analyst Apprentice", "Bank Administrator"],
-    image: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=700&q=80",
+    image: null,
     curriculum: ["Sistem Akuntansi Pajak", "Auditing Korporat", "Spreadsheet Advanced Professional", "Digital Ledger Technology"]
   },
   {
@@ -100,7 +100,7 @@ export const COMPETENCY_DATA: Competency[] = [
       { label: "Mitra Kemitraan", value: "BUMN & Kemenkeu" }
     ],
     careers: ["Executive Administrative Assistant", "Corporate Protocol Specialist", "Human Resource Administrator", "Front Office Leader"],
-    image: "https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&w=700&q=80",
+    image: null,
     curriculum: ["Manajemen Arsip Digital", "Komunikasi Publik & Keprotokolan", "Aplikasi Otomatisasi Kantor", "English for Business"]
   },
   {
@@ -116,7 +116,7 @@ export const COMPETENCY_DATA: Competency[] = [
       { label: "Sertifikat Google", value: "Ads & Commerce" }
     ],
     careers: ["Social Media Specialist", "E-commerce Manager", "Digital Performance Marketer", "Creative Entrepreneur"],
-    image: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=700&q=80",
+    image: null,
     curriculum: ["Strategi SEO & SEM", "Social Media Advertising", "E-commerce Operations", "Videografi & Content Creation"]
   },
   {
@@ -132,7 +132,7 @@ export const COMPETENCY_DATA: Competency[] = [
       { label: "Sertifikasi BNSP", value: "Garuda Emas" }
     ],
     careers: ["Chef de Partie", "Professional Pastry Artist", "Restaurant Operations Manager", "Culinary Business Owner"],
-    image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?auto=format&fit=crop&w=700&q=80",
+    image: null,
     curriculum: ["Seni Pastry & Bakery", "Continental Cooking Methods", "Garnish & Food Plating", "Sanitasi & Keamanan Pangan"]
   },
   {
@@ -148,7 +148,7 @@ export const COMPETENCY_DATA: Competency[] = [
       { label: "Software Ilustrasi", value: "CAD Marvelous" }
     ],
     careers: ["Fashion Designer Executive", "Fashion Illustrator Consultant", "High-End Pattern Maker", "Boutique Owner & Fashion Curator"],
-    image: "https://images.unsplash.com/photo-1541099649105-f69ad21f3246?auto=format&fit=crop&w=700&q=80",
+    image: null,
     curriculum: ["Konstruksi Pola Tingkat Lanjut", "Desain Busana 3D Digital", "Sejarah Mode & Tekstil", "Pemasaran Butik Mewah"]
   }
 ];
@@ -201,7 +201,7 @@ export const CAMPUS_LIFE_GALLERY: GalleryItem[] = [
     id: "g1",
     title: "Seni Plating Gastronomi Tingkat Tinggi",
     category: "Kuliner",
-    image: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=800&q=80",
+    image: null,
     aspect: "landscape",
     caption: "Kelas praktik Kuliner melatih siswa menata hidangan berkelas bintang 5 demi memenuhi estetika gastronomi dunia."
   },
@@ -209,7 +209,7 @@ export const CAMPUS_LIFE_GALLERY: GalleryItem[] = [
     id: "g2",
     title: "Produksi Busana Eksklusif - Wonogiri Runway",
     category: "Fashion",
-    image: "https://images.unsplash.com/photo-1441984969893-c5a710c48ef7?auto=format&fit=crop&w=800&q=80",
+    image: null,
     aspect: "portrait",
     caption: "Para siswa Tata Busana di atelier konveksi sedang melakukan fitting model untuk karya tahunan Wonogiri Runway."
   },
@@ -217,7 +217,7 @@ export const CAMPUS_LIFE_GALLERY: GalleryItem[] = [
     id: "g3",
     title: "Studio Kolaborasi Bisnis & Pemasaran Digital",
     category: "Kelas",
-    image: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=800&q=80",
+    image: null,
     aspect: "landscape",
     caption: "Berbagi ide promosi global dan manajemen marketplace di dalam lab ruang kreatif modern interaktif."
   },
@@ -225,7 +225,7 @@ export const CAMPUS_LIFE_GALLERY: GalleryItem[] = [
     id: "g4",
     title: "Penyerahan Sertifikat Kompetensi Akurat",
     category: "Prestasi",
-    image: "https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=800&q=80",
+    image: null,
     aspect: "landscape",
     caption: "Siswa akuntansi yang lulus ujian profesional merayakan sertifikasi industri bergengsi berlabel nasional."
   },
@@ -233,7 +233,7 @@ export const CAMPUS_LIFE_GALLERY: GalleryItem[] = [
     id: "g5",
     title: "Kunjungan Industri & Magang Kerja Asing",
     category: "Praktik Industri",
-    image: "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=800&q=80",
+    image: null,
     aspect: "portrait",
     caption: "Uji lapangan keprotokolan dan asisten administrasi bisnis langsung di kantor pusat mitra korporat Jakarta."
   },
@@ -241,7 +241,7 @@ export const CAMPUS_LIFE_GALLERY: GalleryItem[] = [
     id: "g6",
     title: "Grand Champion Desain Kreatif Nasional",
     category: "Prestasi",
-    image: "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&w=800&q=80",
+    image: null,
     aspect: "landscape",
     caption: "Trofi bergengsi Kejuaraan Desain Modis diletakkan di lemari display lobi kehormatan sekolah."
   }
@@ -255,7 +255,7 @@ export const ALUMNI_TESTIMONIALS: Alumnus[] = [
     location: "Jakarta, Indonesia",
     gradYear: "2019",
     quote: "SMKN 1 Wonogiri mengajarkan saya kematangan mental dan keahlian riil. Saat kuliah dan mulai bekerja, sertifikasi software Akurat yang saya peroleh semasa SMK langsung membedakan saya dari kandidat universitas top sekalipun.",
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80"
+    avatar: null
   },
   {
     name: "Cynthia Laurentia",
@@ -264,7 +264,7 @@ export const ALUMNI_TESTIMONIALS: Alumnus[] = [
     location: "Melbourne, Australia",
     gradYear: "2021",
     quote: "Sekolah ini bukan sekadar memberikan ijazah, namun mempersiapkan portfolio desain berskala global. Berkat pameran Busana tahunan sekolah, karya saya dilirik agensi kriya mode luar negeri.",
-    avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80"
+    avatar: null
   },
   {
     name: "Rendy Prasetyo",
@@ -273,7 +273,7 @@ export const ALUMNI_TESTIMONIALS: Alumnus[] = [
     location: "Bali, Indonesia",
     gradYear: "2020",
     quote: "Pusat Dapur standar industri di SMK ini adalah pondasi terbaik yang pernah saya rasakan. Pengetahuan sanitasi, teknik memasak continental, dan ketepatan plating menuntut saya sukses profesional di industri kuliner mewah.",
-    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80"
+    avatar: null
   },
   {
     name: "Viona Paramitha",
@@ -282,7 +282,7 @@ export const ALUMNI_TESTIMONIALS: Alumnus[] = [
     location: "Jakarta, Indonesia",
     gradYear: "2022",
     quote: "Materi pemasaran yang diajarkan sangat visioner. Kami didorong mengelola toko online nyata dengan target omset nyata. Kelekatan dunia bisnis murni inilah rahasia melesatnya kompetensi siswa Wonogiri.",
-    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80"
+    avatar: null
   }
 ];
 
@@ -294,7 +294,7 @@ export const NEWS_COMPILATION: NewsArticle[] = [
     excerpt: "Di ajang penganugerahan bakat nasional, siswa kami berhasil mengalahkan ratusan peserta dari seluruh Indonesia lewat prototipe AI Finansial Asisten untuk industri UMKM kreatif Jateng.",
     date: "10 Juni 22026",
     readTime: "4 min read",
-    image: "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=800&q=80",
+    image: null,
     author: "Drs. Heri Widyastono",
     authorRole: "Humas & Urusan Industri"
   },
@@ -305,7 +305,7 @@ export const NEWS_COMPILATION: NewsArticle[] = [
     excerpt: "Merupakan komitmen nyata peningkatan kompetensi riil, sekolah meresmikan restoran berstandar d'hotes mewah yang dapat diakses oleh masyarakat umum dengan kualitas pengolahan bintang lima.",
     date: "02 Juni 22026",
     readTime: "3 min read",
-    image: "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=400&q=80",
+    image: null,
     author: "Retno Palupi, M.Pd",
     authorRole: "Kepala Jurusan Kuliner"
   },
@@ -316,7 +316,7 @@ export const NEWS_COMPILATION: NewsArticle[] = [
     excerpt: "Sebanyak 30 siswa terbaik terpilih mengikuti program intensif lintas budaya dan akselerasi keahlian manajemen bisnis ritel modern Jepang dengan beasiswa penuh kelulusan.",
     date: "28 Mei 22026",
     readTime: "5 min read",
-    image: "https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?auto=format&fit=crop&w=400&q=80",
+    image: null,
     author: "Wahyudi Susanto, S.Pd",
     authorRole: "Koordinator Hubungan Internasional"
   },
@@ -327,7 +327,7 @@ export const NEWS_COMPILATION: NewsArticle[] = [
     excerpt: "Mengangkat khasanah tenun tradisional dengan konsep urban ready-to-wear, koleksi bertajuk 'Echo of Wonogiri' mendapat apresiasi luar biasa dan review terbaik kritikus mode nasional.",
     date: "15 Mei 22026",
     readTime: "6 min read",
-    image: "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=400&q=80",
+    image: null,
     author: "Endah Sulistyowati",
     authorRole: "Supervisor Studio Desain Tata Busana"
   }
