@@ -1,0 +1,59 @@
+[public_html/id (22)] [smknwon2@tirtonirmolo id]$ bash deploy.sh[2026-07-21 15:41:36] [INFO] ══════════════════════════════════════════════════
+[2026-07-21 15:41:36] [INFO] DEPLOY DIMULAI — 21 July 2026 15:41:36
+[2026-07-21 15:41:36] [INFO] Branch  : main
+[2026-07-21 15:41:36] [INFO] App dir : /home/smknwon2/public_html/id
+[2026-07-21 15:41:36] [INFO] ══════════════════════════════════════════════════
+[2026-07-21 15:41:36] [INFO] [1/5] Memeriksa prasyarat...
+[2026-07-21 15:41:38] [ OK ] node=v22.23.0  git=2.48.2
+[2026-07-21 15:41:38] [ OK ] Prasyarat OK.
+[2026-07-21 15:41:38] [INFO] [2/5] Backup file yang dilindungi...
+[2026-07-21 15:41:39] [INFO]   Backup: data
+[2026-07-21 15:41:39] [INFO]   Backup: .env
+[2026-07-21 15:41:39] [INFO]   Backup: app.js
+[2026-07-21 15:41:39] [INFO]   Backup: .htaccess
+[2026-07-21 15:41:39] [INFO] Commit saat ini: 9631f25
+[2026-07-21 15:41:39] [INFO] [3/5] Menarik perubahan dari GitHub (branch: main)...
+  [git] From https://github.com/davidguntoro65-lgtm/SKANSAGIRI
+  [git]  * branch            main       -> FETCH_HEAD
+  [git]    9631f25..431ef8c  main       -> origin/main
+  [git] HEAD is now at 431ef8c Remove built distribution files from version control
+[2026-07-21 15:41:42] [ OK ] 9631f25 → 431ef8c (13 file berubah)
+[2026-07-21 15:41:42] [INFO]   changelog: 431ef8c Remove built distribution files from version control
+[2026-07-21 15:41:42] [INFO]   changelog: 2c44665 Add public HTML asset file for ID 22
+[2026-07-21 15:41:42] [INFO]   changelog: 0f57990 Add deployment script and reference images to attached assets
+[2026-07-21 15:41:42] [INFO]   changelog: cd79f51 Fix deploy: two-phase exec to avoid stale inode after git reset
+[2026-07-21 15:41:42] [INFO] [4/5] Memulihkan file yang dilindungi...
+[2026-07-21 15:41:42] [INFO]   Dipulihkan: data
+[2026-07-21 15:41:42] [INFO]   Dipulihkan: .env
+[2026-07-21 15:41:42] [INFO]   Dipulihkan: app.js
+[2026-07-21 15:41:42] [INFO]   Dipulihkan: .htaccess
+[2026-07-21 15:41:42] [ OK ] data/, .env, app.js aman — tidak tersentuh git.
+[2026-07-21 15:41:42] [INFO] Membersihkan file aset usang dari dist/assets/...
+[2026-07-21 15:41:43] [INFO]   Removing dist/assets/index.es-DtGq81ZG.js
+[2026-07-21 15:41:43] [INFO]   Removing dist/assets/purify.es-CPrKKeqe.js
+[2026-07-21 15:41:43] [ OK ] Aset usang dibersihkan.
+[2026-07-21 15:41:43] [INFO] Memverifikasi dist/ dari repo...
+[2026-07-21 15:41:43] [ OK ]   ✓ dist/server.cjs  (1.3M)
+[2026-07-21 15:41:43] [ OK ]   ✓ dist/index.html  (12K)
+[2026-07-21 15:41:43] [ OK ]   ✓ dist/assets  (2.9M)
+[2026-07-21 15:41:43] [ OK ]   ✓ Base path /id/ terdeteksi di index.html
+[2026-07-21 15:41:43] [ OK ]   ✓ dist/server.cjs ukuran OK (1244KB)
+[2026-07-21 15:41:43] [INFO] [5/5] Merestart aplikasi Node.js di cPanel...
+[2026-07-21 15:41:43] [ OK ] tmp/restart.txt diperbarui.
+[2026-07-21 15:41:43] [WARN] uapi NodeJS restart_app tidak tersedia — mencoba metode lain...
+[2026-07-21 15:41:43] [ OK ] Proses Node.js (PID: 2260722) dikirim SIGTERM.
+[2026-07-21 15:41:46] [INFO] ══════════════════════════════════════════════════
+[2026-07-21 15:41:46] [ OK ] DEPLOY BERHASIL ✓
+[2026-07-21 15:41:46] [INFO] Commit  : 431ef8c211c576a5856f98b8f86d66bda293a74e
+[2026-07-21 15:41:46] [INFO] Branch  : main
+[2026-07-21 15:41:46] [INFO] Data DB   : TIDAK DIUBAH
+[2026-07-21 15:41:46] [INFO] app.js    : TIDAK DIUBAH (dari cPanel)
+[2026-07-21 15:41:46] [INFO] .htaccess : DIPERBARUI dari repo
+[2026-07-21 15:41:46] [INFO] Log     : /home/smknwon2/public_html/id/deploy.log
+[2026-07-21 15:41:46] [INFO] ══════════════════════════════════════════════════
+[2026-07-21 15:41:46] [INFO]
+[2026-07-21 15:41:46] [INFO] Jika site belum merespons dalam 30 detik:
+[2026-07-21 15:41:46] [INFO]   cPanel → Node.js App → klik RESTART secara manual.
+[2026-07-21 15:41:46] [INFO] Test: curl https://smkn1wonogiri.sch.id/id/api/health
+[2026-07-21 15:41:46] [INFO] ══════════════════════════════════════════════════
+[public_html/id (22)] [smknwon2@tirtonirmolo id]$
