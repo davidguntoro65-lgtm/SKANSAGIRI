@@ -206,68 +206,20 @@ if [ "${1:-}" = "--post-reset" ]; then
   # Tandai restore berhasil — backup boleh dihapus saat cleanup
   RESTORE_DONE=1
 
-  # ── Install dependencies (termasuk @prisma/client yang di-externalize) ───
-  # CloudLinux NodeJS Selector menyimpan node_modules sebagai symlink ke virtual
-  # environment di ~/nodevenv/. npm install HARUS dijalankan lewat npm biner
-  # yang ada di dalam venv itu — bukan npm sistem — agar symlink tidak konflik.
-  log_info "[3.5a/6] Menginstall dependencies Node.js..."
+  # ── npm install DIHAPUS ───────────────────────────────────────────────────
+  # dist/server.cjs sudah di-bundle lengkap di Replit (termasuk @prisma/client,
+  # @prisma/adapter-pg, pg). cPanel tidak perlu npm install sama sekali.
+  # Ini menghindari masalah CloudLinux nproc limit dan symlink node_modules.
+  log_info "[3.5a/6] Melewati npm install — semua deps sudah ter-bundle di dist/server.cjs"
+  log_ok "npm install tidak diperlukan (zero-dependency deployment)."
 
-  # Cari npm biner dari venv cPanel: ~/nodevenv/<app_rel_path>/<node_major>/bin/npm
-  VENV_NPM=""
-  APP_REL="$(realpath --relative-to="$HOME" "$APP_DIR" 2>/dev/null || echo "")"
-  if [ -n "$APP_REL" ]; then
-    NODE_MAJOR="$(node --version | sed 's/v\([0-9]*\).*/\1/')"
-    CANDIDATE="$HOME/nodevenv/$APP_REL/$NODE_MAJOR/bin/npm"
-    [ -x "$CANDIDATE" ] && VENV_NPM="$CANDIDATE"
-  fi
-
-  if [ -n "$VENV_NPM" ]; then
-    log_info "  Menggunakan CloudLinux venv npm: $VENV_NPM"
-
-    # CloudLinux mengharuskan node_modules berupa SYMLINK ke venv, bukan folder biasa.
-    # Jika ada folder real (sisa install lama), hapus dulu agar venv bisa membuat symlink.
-    if [ -d "$APP_DIR/node_modules" ] && [ ! -L "$APP_DIR/node_modules" ]; then
-      log_warn "  node_modules adalah folder biasa (bukan symlink) — menghapus..."
-      rm -rf "$APP_DIR/node_modules"
-      log_ok "  node_modules folder dihapus — venv akan membuat symlink baru."
-    fi
-
-    if (cd "$APP_DIR" && "$VENV_NPM" install --omit=dev 2>&1 | sed 's/^/  [npm] /' | tee -a "$LOG_FILE"); then
-      log_ok "npm install (venv) berhasil."
-    else
-      log_err "npm install GAGAL — deploy dibatalkan."
-      log_err "Coba manual: cPanel → Setup Node.js App → app '/id' → klik 'Run NPM Install'"
-      exit 1
-    fi
-  else
-    # venv tidak ditemukan — bisa terjadi saat pertama kali setup atau path berbeda
-    log_warn "  Virtual environment cPanel tidak ditemukan di: ~/nodevenv/$APP_REL/$NODE_MAJOR/bin/npm"
-    log_warn "  Langkah WAJIB sebelum deploy pertama:"
-    log_warn "    1. cPanel → Setup Node.js App"
-    log_warn "    2. Pilih app '/id' → klik 'Run NPM Install'"
-    log_warn "    3. Setelah selesai, jalankan ulang: bash deploy.sh"
-    log_warn "  Melewati npm install — menggunakan node_modules yang sudah ada..."
-    # Cek apakah node_modules ada (symlink atau dir) — jika tidak ada sama sekali, hentikan
-    if [ ! -e "$APP_DIR/node_modules" ]; then
-      log_err "node_modules tidak ada! Wajib klik 'Run NPM Install' di cPanel dulu."
-      exit 1
-    fi
-    log_warn "  node_modules ada — melanjutkan deploy tanpa install ulang."
-  fi
-
-  # ── Jalankan Prisma migrate deploy ───────────────────────────────────────
-  log_info "[3.5b/6] Menjalankan prisma migrate deploy..."
-  if command -v npx >/dev/null 2>&1; then
-    if (cd "$APP_DIR" && npx prisma migrate deploy 2>&1 | sed 's/^/  [prisma] /' | tee -a "$LOG_FILE"); then
-      log_ok "Prisma migrate deploy berhasil."
-    else
-      log_err "Prisma migrate deploy GAGAL — periksa DATABASE_URL di .env"
-      log_err "Pastikan DATABASE_URL diset di environment variables cPanel."
-      exit 1
-    fi
-  else
-    log_warn "npx tidak ditemukan — skip prisma migrate."
-  fi
+  # ── Prisma migrate deploy (opsional) ─────────────────────────────────────
+  # node_modules tidak ada di cPanel (deps sudah ter-bundle di dist/server.cjs).
+  # Migrations cukup dijalankan SEKALI saat pertama deploy atau saat schema berubah.
+  # Cara manual: jalankan SQL di prisma/migrations/*/migration.sql via phpMyAdmin/psql.
+  log_info "[3.5b/6] Skip prisma migrate — schema sudah di-apply via setup awal."
+  log_info "  Jika schema baru belum di-apply, jalankan manual:"
+  log_info "  psql \$DATABASE_URL -f prisma/migrations/20260721114333_init/migration.sql"
 
   # ── Bersihkan file aset usang yang tidak terlacak git ────────────────────
   # git reset --hard tidak menghapus file untracked; ini wajib untuk mencegah
