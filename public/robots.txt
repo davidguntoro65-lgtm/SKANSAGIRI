@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://smkn1wonogiri.sch.id/sitemap.xml
+Sitemap: https://smkn1wonogiri.sch.id/id/sitemap.xml
