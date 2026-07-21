@@ -30,10 +30,11 @@ import HubungiKami from "./pages/HubungiKami";
 import ModulIntegrasi from "./pages/ModulIntegrasi";
 import SuaraSkansagiri from "./pages/SuaraSkansagiri";
 import AdminSuaraSkansagiri from "./pages/AdminSuaraSkansagiri";
+import AduanPublik from "./pages/AduanPublik";
 import { DataStore } from "./dataStore";
 import { navigate, getAppPath } from "./utils/navigation";
 
-type AppPath = "/" | "/adm-panel" | "/tentang/kepala-sekolah" | "/tentang/manajemen-sekolah" | "/tentang/visi-misi" | "/tracer-studi" | "/admin/tracer-studi" | "/berita" | "/hubungi-kami" | "/modul-integrasi" | "/suara-skansagiri" | "/admin/suara-skansagiri";
+type AppPath = "/" | "/adm-panel" | "/tentang/kepala-sekolah" | "/tentang/manajemen-sekolah" | "/tentang/visi-misi" | "/tracer-studi" | "/admin/tracer-studi" | "/berita" | "/hubungi-kami" | "/modul-integrasi" | "/suara-skansagiri" | "/admin/suara-skansagiri" | "/aduan-publik";
 
 function getPath(): AppPath {
   const p = getAppPath();
@@ -48,6 +49,7 @@ function getPath(): AppPath {
   if (p === "/modul-integrasi") return "/modul-integrasi";
   if (p === "/suara-skansagiri") return "/suara-skansagiri";
   if (p === "/admin/suara-skansagiri") return "/admin/suara-skansagiri";
+  if (p === "/aduan-publik") return "/aduan-publik";
   const h = window.location.hash;
   if (h === "#/adm-panel" || h === "#adm-panel") return "/adm-panel";
   return "/";
@@ -252,6 +254,17 @@ export default function App() {
         theme={theme}
         onBack={() => navigate("/")}
       />
+    );
+  }
+
+  if (currentPath === "/aduan-publik") {
+    return (
+      <div className={containerClass} id="application-container">
+        <GlobalPageBg theme={theme} />
+        <Navbar theme={theme} toggleTheme={toggleTheme} />
+        <AduanPublik theme={theme} />
+        <Footer theme={theme} />
+      </div>
     );
   }
 
