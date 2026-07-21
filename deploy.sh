@@ -102,6 +102,8 @@ trap cleanup EXIT
 
 # ── Restart Node.js ───────────────────────────────────────────────────────────
 restart_nodejs() {
+  local restarted=0
+
   # Metode 1: tmp/restart.txt (Passenger / cPanel LiteSpeed Selector)
   mkdir -p "$APP_DIR/tmp"
   touch "$APP_DIR/tmp/restart.txt"
@@ -110,13 +112,54 @@ restart_nodejs() {
   # Metode 2: cPanel API restart (jika tersedia dan modul NodeJS terpasang)
   if command -v uapi >/dev/null 2>&1; then
     UAPI_OUT="$(uapi NodeJS restart_app 2>&1 || true)"
-    # uapi selalu exit 0; cek 'status: 1' di output YAML untuk sukses
     if echo "$UAPI_OUT" | grep -q 'status: 1'; then
       log_ok "uapi NodeJS restart_app: berhasil."
+      restarted=1
     else
-      log_warn "uapi NodeJS restart_app tidak tersedia di server ini — restart manual diperlukan."
-      log_warn "  → cPanel → Setup Node.js App → cari app '/id' → klik RESTART"
+      log_warn "uapi NodeJS restart_app tidak tersedia — mencoba metode lain..."
     fi
+  fi
+
+  # Metode 3: Kirim SIGTERM ke proses Node.js yang sedang berjalan
+  # LiteSpeed / cPanel Node.js Selector akan spawn ulang otomatis setelah proses mati.
+  if [ "$restarted" -eq 0 ]; then
+    WHOAMI="$(whoami)"
+    # Cari PID proses node yang menjalankan app.js atau server.cjs
+    NODEPID="$(pgrep -u "$WHOAMI" -f "node.*(app\.js|server\.cjs)" 2>/dev/null | head -1 || true)"
+    if [ -n "$NODEPID" ]; then
+      if kill -SIGTERM "$NODEPID" 2>/dev/null; then
+        log_ok "Proses Node.js (PID: $NODEPID) dikirim SIGTERM — LiteSpeed akan restart."
+        sleep 3
+        restarted=1
+      else
+        log_warn "Gagal SIGTERM PID $NODEPID — mungkin perlu hak akses lebih."
+      fi
+    else
+      # Coba fallback: semua proses node milik user ini
+      NODEPID="$(pgrep -u "$WHOAMI" node 2>/dev/null | head -1 || true)"
+      if [ -n "$NODEPID" ]; then
+        if kill -SIGTERM "$NODEPID" 2>/dev/null; then
+          log_ok "Proses Node.js (PID: $NODEPID) dikirim SIGTERM."
+          sleep 3
+          restarted=1
+        fi
+      fi
+    fi
+    [ "$restarted" -eq 0 ] && log_warn "Proses Node.js tidak ditemukan via pgrep — restart manual diperlukan."
+  fi
+
+  # Metode 4: cPanel killall (beberapa server mendukung ini)
+  if [ "$restarted" -eq 0 ] && command -v killall >/dev/null 2>&1; then
+    if killall -u "$(whoami)" -SIGTERM node 2>/dev/null; then
+      log_ok "killall -SIGTERM node: berhasil."
+      sleep 3
+      restarted=1
+    fi
+  fi
+
+  if [ "$restarted" -eq 0 ]; then
+    log_warn "Semua metode restart otomatis gagal."
+    log_warn "  → Buka cPanel → Setup Node.js App → klik RESTART pada app '/id'"
   fi
 }
 
@@ -193,6 +236,14 @@ log_info "[4/5] Memulihkan file yang dilindungi..."
 restore_protected
 
 log_ok "data/, .env, app.js aman — tidak tersentuh git."
+
+# Bersihkan file aset lama yang tidak terlacak git (sisa upload manual sebelumnya)
+# git reset --hard tidak menghapus file untracked; ini wajib untuk mencegah
+# file JS/CSS lama dengan hash berbeda mengacaukan cache browser.
+log_info "Membersihkan file aset usang dari dist/assets/..."
+git -C "$APP_DIR" clean -fd dist/assets/ 2>/dev/null | while IFS= read -r l; do log_info "  $l"; done || true
+git -C "$APP_DIR" clean -fd dist/ 2>/dev/null | while IFS= read -r l; do log_info "  $l"; done || true
+log_ok "Aset usang dibersihkan."
 
 # Verifikasi dist/ dari repo sudah ada dan benar
 log_info "Memverifikasi dist/ dari repo..."
