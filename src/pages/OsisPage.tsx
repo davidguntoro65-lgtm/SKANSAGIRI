@@ -131,19 +131,18 @@ function FloatingParticles() {
 /* ─── Orbital hero emblem ────────────────────────────────────────────── */
 function OrbitalEmblem() {
   return (
-    <div className="relative w-40 h-40 mx-auto mb-6 select-none">
+    <div className="relative w-28 h-28 sm:w-36 sm:h-36 mx-auto mb-6 select-none">
       {/* Center core */}
       <div className="absolute inset-0 flex items-center justify-center">
-        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-700 flex items-center justify-center shadow-2xl shadow-blue-600/50 z-10">
-          <Shield className="w-10 h-10 text-white" />
+        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-700 flex items-center justify-center shadow-2xl shadow-blue-600/50 z-10">
+          <Shield className="w-7 h-7 sm:w-8 sm:h-8 text-white" />
         </div>
-        {/* Core glow */}
-        <div className="absolute w-20 h-20 rounded-2xl bg-blue-500/30 blur-xl" />
+        <div className="absolute w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-blue-500/30 blur-xl" />
       </div>
 
       {/* Ring 1 — slow clockwise */}
       <motion.div
-        className="absolute inset-4 rounded-full border border-blue-400/30"
+        className="absolute inset-3 sm:inset-4 rounded-full border border-blue-400/30"
         style={{ borderStyle: "dashed" }}
         animate={{ rotate: 360 }}
         transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
@@ -153,7 +152,7 @@ function OrbitalEmblem() {
 
       {/* Ring 2 — faster counter-clockwise */}
       <motion.div
-        className="absolute -inset-2 rounded-full border border-cyan-400/20"
+        className="absolute -inset-1 sm:-inset-2 rounded-full border border-cyan-400/20"
         animate={{ rotate: -360 }}
         transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
       >
@@ -163,7 +162,7 @@ function OrbitalEmblem() {
 
       {/* Ring 3 — slowest clockwise */}
       <motion.div
-        className="absolute -inset-8 rounded-full border border-blue-600/15"
+        className="absolute -inset-5 sm:-inset-8 rounded-full border border-blue-600/15"
         animate={{ rotate: 360 }}
         transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
       >
@@ -366,12 +365,12 @@ export default function OsisPage({ theme, toggleTheme }: OsisPageProps) {
           </div>
           <AnimatePresence>
             {navOpen && (
-              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="md:hidden overflow-hidden pb-2">
-                <div className="grid grid-cols-4 gap-1">
+              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="md:hidden overflow-hidden pb-3">
+                <div className="flex gap-1 overflow-x-auto no-scrollbar pb-1">
                   {ANCHORS.map(a => (
                     <button key={a.id} onClick={() => scrollTo(a.id)}
-                      className={`px-2 py-1.5 rounded-lg text-xs font-semibold transition-all text-center ${
-                        activeSection === a.id ? "bg-blue-600 text-white" : `${textMuted} hover:text-blue-400`
+                      className={`shrink-0 px-3 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
+                        activeSection === a.id ? "bg-blue-600 text-white" : `${textMuted} border ${isDark ? "border-blue-900/60" : "border-blue-200"}`
                       }`}
                     >{a.label}</button>
                   ))}
@@ -424,7 +423,7 @@ export default function OsisPage({ theme, toggleTheme }: OsisPageProps) {
 
             {/* Title */}
             <motion.h1 initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-              className="text-4xl sm:text-5xl md:text-7xl font-black text-white mb-2 leading-none tracking-tight">
+              className="text-3xl sm:text-5xl md:text-7xl font-black text-white mb-2 leading-tight tracking-tight break-words px-2">
               {info?.namaKabinet || "OSIS SKANSAGIRI"}
             </motion.h1>
             <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
@@ -569,7 +568,7 @@ export default function OsisPage({ theme, toggleTheme }: OsisPageProps) {
               className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
               onClick={() => setSelectedPengurus(null)}>
               <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
-                className={`w-full max-w-sm p-6 rounded-3xl border shadow-2xl ${cardBg}`}
+                className={`w-full max-w-sm p-5 rounded-3xl border shadow-2xl max-h-[85vh] overflow-y-auto ${cardBg}`}
                 onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex items-center gap-3">
@@ -616,14 +615,14 @@ export default function OsisPage({ theme, toggleTheme }: OsisPageProps) {
       <section id="proker" className={`py-14 px-4 sm:px-6 lg:px-8 relative z-10 ${altBg}`}>
         <div className="max-w-6xl mx-auto">
           <SectionHeader title="Program Kerja" subtitle="Realisasi visi melalui aksi nyata" isDark={isDark} />
-          <div className="flex gap-2 flex-wrap mb-6 justify-center">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar mb-6 pb-1 -mx-1 px-1">
             {["SEMUA", ...BIDANG_PROKER].map(b => (
               <button key={b} onClick={() => setProkerBidang(b)}
-                className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                className={`shrink-0 px-3 py-2 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
                   prokerBidang === b
                     ? "bg-blue-600 text-white"
-                    : `border ${isDark ? "border-blue-900 text-blue-300/60 hover:border-blue-500" : "border-blue-300 text-slate-500 hover:border-blue-400"}`
-                }`}>{b === "SEMUA" ? "Semua Bidang" : b}</button>
+                    : `border ${isDark ? "border-blue-900 text-blue-300/60" : "border-blue-300 text-slate-500"}`
+                }`}>{b === "SEMUA" ? "Semua" : b}</button>
             ))}
           </div>
           {proker.length === 0 ? (
@@ -719,13 +718,13 @@ export default function OsisPage({ theme, toggleTheme }: OsisPageProps) {
       <section id="ekskul" className={`py-14 px-4 sm:px-6 lg:px-8 relative z-10 ${altBg}`}>
         <div className="max-w-6xl mx-auto">
           <SectionHeader title="Ekstrakurikuler" subtitle="Temukan minat dan bakatmu" isDark={isDark} />
-          <div className="flex gap-2 flex-wrap mb-6 justify-center">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar mb-6 pb-1 -mx-1 px-1">
             {["SEMUA","AKADEMIK","SENI","OLAHRAGA","KEAGAMAAN","TEKNOLOGI"].map(k => {
               const Icon = EKSKUL_KATEGORI_ICON[k];
               return (
                 <button key={k} onClick={() => setEkskulFilter(k)}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all ${
-                    ekskulFilter === k ? "bg-blue-600 text-white" : `border ${isDark ? "border-blue-900 text-blue-300/60 hover:border-blue-500" : "border-blue-300 text-slate-500 hover:border-blue-400"}`
+                  className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
+                    ekskulFilter === k ? "bg-blue-600 text-white" : `border ${isDark ? "border-blue-900 text-blue-300/60" : "border-blue-300 text-slate-500"}`
                   }`}>
                   {Icon && <Icon className="w-3 h-3" />}{k === "SEMUA" ? "Semua" : k.charAt(0) + k.slice(1).toLowerCase()}
                 </button>
@@ -775,11 +774,11 @@ export default function OsisPage({ theme, toggleTheme }: OsisPageProps) {
       <section id="galeri" className="py-14 px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="max-w-6xl mx-auto">
           <SectionHeader title="Galeri Kegiatan" subtitle="Dokumentasi momen bersejarah OSIS" isDark={isDark} />
-          <div className="flex gap-2 flex-wrap mb-5 justify-center">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar mb-5 pb-1 -mx-1 px-1">
             {galeriCategories.map(k => (
               <button key={k} onClick={() => setGaleriFilter(k)}
-                className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
-                  galeriFilter === k ? "bg-blue-600 text-white" : `border ${isDark ? "border-blue-900 text-blue-300/60 hover:border-blue-500" : "border-blue-300 text-slate-500 hover:border-blue-400"}`
+                className={`shrink-0 px-3 py-2 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
+                  galeriFilter === k ? "bg-blue-600 text-white" : `border ${isDark ? "border-blue-900 text-blue-300/60" : "border-blue-300 text-slate-500"}`
                 }`}>{k === "SEMUA" ? "Semua" : k}</button>
             ))}
           </div>
@@ -832,30 +831,28 @@ export default function OsisPage({ theme, toggleTheme }: OsisPageProps) {
             <EmptyState icon={Trophy} text="Belum ada data prestasi." textMuted={textMuted} />
           ) : (
             <div className="relative">
-              <div className="absolute left-4 md:left-1/2 top-0 bottom-0 w-px bg-blue-600/20" />
-              <div className="space-y-5">
+              {/* Timeline line */}
+              <div className="absolute left-4 top-0 bottom-0 w-px bg-blue-600/20" />
+              <div className="space-y-4">
                 {prestasi.sort((a,b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime()).map((p, i) => {
                   const cfg = TINGKAT_CFG[p.tingkat] || TINGKAT_CFG.SEKOLAH;
-                  const isLeft = i % 2 === 0;
                   return (
-                    <motion.div key={p.id} initial={{ opacity: 0, x: isLeft ? -16 : 16 }}
+                    <motion.div key={p.id} initial={{ opacity: 0, x: -16 }}
                       whileInView={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }} viewport={{ once: true }}
-                      className={`relative flex items-center gap-4 md:gap-8 ${isLeft ? "md:flex-row" : "md:flex-row-reverse"}`}>
-                      <div className="absolute left-4 md:left-1/2 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-blue-300 -translate-x-1/2 shadow-lg shadow-blue-500/40 z-10" />
-                      <div className={`pl-10 md:pl-0 md:w-1/2 ${isLeft ? "md:pr-8 md:text-right" : "md:pl-8"}`}>
-                        <div className={`inline-flex p-4 rounded-2xl border ${cardBg} ${isLeft ? "md:ml-auto" : ""} max-w-sm`}>
-                          {p.foto && <img src={p.foto} alt={p.judul} className="w-14 h-14 object-cover rounded-lg mr-3 flex-shrink-0" />}
-                          <div>
-                            <div className="flex items-center gap-2 mb-1 flex-wrap">
-                              <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${cfg.cls}`}>{p.tingkat}</span>
-                            </div>
-                            <h4 className={`text-sm font-bold ${textPrimary} leading-tight`}>{p.judul}</h4>
-                            {p.deskripsi && <p className={`text-xs ${textMuted} mt-1`}>{p.deskripsi}</p>}
-                            <p className={`text-[10px] ${textMuted} mt-1`}>{new Date(p.tanggal).toLocaleDateString("id-ID", { day:"numeric", month:"long", year:"numeric"})}</p>
+                      className="relative pl-10">
+                      {/* Dot */}
+                      <div className="absolute left-4 top-4 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-blue-300 -translate-x-1/2 shadow-lg shadow-blue-500/40 z-10" />
+                      <div className={`flex gap-3 p-4 rounded-2xl border ${cardBg}`}>
+                        {p.foto && <img src={p.foto} alt={p.judul} className="w-12 h-12 sm:w-14 sm:h-14 object-cover rounded-lg flex-shrink-0" />}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${cfg.cls}`}>{p.tingkat}</span>
                           </div>
+                          <h4 className={`text-sm font-bold ${textPrimary} leading-tight`}>{p.judul}</h4>
+                          {p.deskripsi && <p className={`text-xs ${textMuted} mt-1`}>{p.deskripsi}</p>}
+                          <p className={`text-[10px] ${textMuted} mt-1`}>{new Date(p.tanggal).toLocaleDateString("id-ID", { day:"numeric", month:"long", year:"numeric"})}</p>
                         </div>
                       </div>
-                      <div className="md:w-1/2" />
                     </motion.div>
                   );
                 })}
@@ -955,7 +952,7 @@ export default function OsisPage({ theme, toggleTheme }: OsisPageProps) {
       <section id="kontak" className={`py-14 px-4 sm:px-6 lg:px-8 relative z-10 ${altBg}`}>
         <div className="max-w-4xl mx-auto text-center">
           <SectionHeader title="Kontak & Follow OSIS" subtitle="Tetap terhubung bersama kami" isDark={isDark} />
-          <div className="grid sm:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-3 gap-3 mb-6">
             {[
               { icon: Instagram, label: "Instagram", href: "https://instagram.com/osis.skansagiri", handle: "@osis.skansagiri", color: "from-pink-600 to-rose-600" },
               { icon: Youtube, label: "YouTube", href: "https://youtube.com/@osiskansagiri", handle: "OSIS Skansagiri", color: "from-red-600 to-red-700" },
