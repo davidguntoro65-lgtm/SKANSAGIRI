@@ -1,0 +1,186 @@
+Investigating server errors
+The deploy.sh ran perfectly — all files are in place. The problem is confirmed: LiteSpeed returns 404 for /id/api/health because the Node.js process is not running. No code fix can start a process that was never launched from the cPanel UI.
+
+This is a one-time manual step you must do in cPanel:
+
+Langkah persis di cPanel:
+
+Login ke cPanel → scroll ke bagian "Software"
+Klik "Setup Node.js App" (gambarnya seperti logo Node.js hijau)
+Akan muncul daftar aplikasi. Cari baris dengan:
+Application root: public_html/id
+Startup file: app.js
+Klik tombol ▶ Run atau ⟳ Restart pada baris itu
+Jika tidak ada app di daftar (belum terdaftar):
+
+Klik "Create Application"
+Node.js version: pilih 22.x (atau terbaru)
+Application root: public_html/id
+Application URL: smkn1wonogiri.sch.id/id
+Application startup file: app.js
+Klik Create → lalu klik Run
+Setelah app berjalan (status jadi hijau/Running), test:
+
+curl -s https://smkn1wonogiri.sch.id/id/api/health
+
+Harus keluar JSON. Kirim screenshot hasil Setup Node.js App kalau perlu saya bantu lebih lanjut.
+
+
+Checkpoint made
+22 minutes ago
+
+Worked for 49 seconds
+sudah dilakukan semua. eror log kosong. tetapi backend blm ready. lakukan analisis mendalam
+
+19 minutes ago
+Deep analyzing potential issues
+
+Deep analyzing potential issues
+Let me do a deep analysis before suggesting anything. Let me examine the exact cPanel LiteSpeed proxy mechanism, the htaccess, and the app.js startup chain simultaneously.
+
+
+Show less
+
+Searched for "listen|PORT|UNIX|socket…"
+
+Read .htaccess
+
+Ran a Node.js script
+API route rewriting
+
+API route rewriting
+The local server confirms dist/server.cjs is healthy — the problem is entirely in how LiteSpeed routes requests to Node.js on cPanel. Let me trace the exact failure chain.
+
+Root cause identified: deploy.sh runs git reset --hard origin/main which overwrites .htaccess every deploy. But cPanel's Node.js Selector writes its own proxy block into .htaccess when you click Start/Restart in the UI — something like RewriteRule ^(.*)$ http://127.0.0.1:PORT/$1 [P,L]. Our git reset deletes it. After that, RewriteRule .* - [L] just tells LiteSpeed "stop rewriting" with no proxy target → 404.
+
+Run these diagnostics in cPanel Terminal right now:
+
+
+Show less
+
+Opened deploy.sh
+Preventing .htaccess overwrites
+
+Preventing .htaccess overwrites
+The fix is clear. Let me implement it and provide diagnostics simultaneously.
+
+
+6 actions
+Pushed. Here is the precise sequence to run on cPanel Terminal — do it in this exact order:
+
+Step 1 — Restart app dari cPanel UI dulu (ini menulis proxy block ke .htaccess): cPanel → Setup Node.js App → klik Restart pada app /id
+
+Step 2 — Segera konfirmasi proxy block ada di .htaccess:
+
+cat ~/public_html/id/.htaccess | tail -20
+
+Harusnya ada baris dari cPanel seperti RewriteRule ^(.*)$ http://127.0.0.1:XXXX/$1 [P,L] atau serupa.
+
+Step 3 — Pull deploy.sh terbaru lalu deploy:
+
+cd ~/public_html/id
+git pull origin main
+bash deploy.sh
+
+Deploy sekarang melindungi .htaccess — blok proxy cPanel tidak akan terhapus oleh git reset.
+
+Step 4 — Test:
+
+curl -s https://smkn1wonogiri.sch.id/id/api/health
+
+Kirim output Step 2 (isi .htaccess bagian bawah) kalau ada masalah — itu akan mengkonfirmasi persis format blok proxy yang cPanel tulis di server ini.
+
+
+Worked for 3 minutes
+
+Attached Image
+
+Pasted--public-html-id-22-smknwon2-tirtonirmolo-id-cat-public-_1784610848340.txt
+12 minutes ago
+
+Show less
+Reading file content
+
+Reading file content
+
+Opened Pasted--public-html-id-22-smknwon2-tirtonirmolo-id-cat-public-_1784610848340.txt
+Validating server configuration
+
+Validating server configuration
+Key finding: The .htaccess has NO cPanel proxy block — cPanel on this server uses vhost-level LiteSpeed config, not .htaccess injection. The .htaccess fix was a false lead.
+
+Looking at the network panel: every single API call (health, competencies, milestones, gallery, etc.) is 404 — this is the signature of the Node.js process not running at all. LiteSpeed has no process to proxy to.
+
+Run these exact diagnostics in cPanel Terminal:
+
+
+2 actions
+Jalankan 5 baris ini di cPanel Terminal dan kirim outputnya:
+
+# 1. Apakah proses Node.js sedang berjalan?
+ps aux | grep node | grep -v grep
+# 2. Port mana yang dipakai?
+ss -tlnp 2>/dev/null | grep -E "node|5000|3000|8080" || echo "no node ports"
+# 3. Bisa dijangkau dari localhost?
+curl -s --max-time 3 http://127.0.0.1:5000/api/health || echo "port 5000: unreachable"
+curl -s --max-time 3 http://127.0.0.1:3000/api/health || echo "port 3000: unreachable"
+# 4. node_modules — symlink atau folder?
+ls -la ~/public_html/id/ | grep node_modules
+# 5. Coba start manual dan lihat outputnya
+cd ~/public_html/id && node app.js 2>&1 | head -20
+
+Sementara menunggu, saya persiapkan fix untuk kemungkinan yang paling probable — node_modules adalah symlink yang membuat npm install gagal dan cPanel Node.js Selector tidak mau start karena itu. Saya buat script yang start langsung tanpa npm install:
+
+
+3 actions
+Menunggu output dari 5 perintah diagnostik di atas. Kirim hasilnya dan saya akan langsung tahu persis penyebabnya dan fix apa yang dibutuhkan.
+
+
+Checkpoint made
+10 minutes ago
+
+Worked for 1 minute
+
+Pasted--public-html-id-22-smknwon2-tirtonirmolo-id-1-Apakah-pr_1784611089556.txt
+8 minutes ago
+
+Show less
+Reading diagnostic output
+
+Reading diagnostic output
+
+Opened Pasted--public-html-id-22-smknwon2-tirtonirmolo-id-1-Apakah-pr_1784611089556.txt
+Analyzing socket communication
+
+Analyzing socket communication
+Analisis diagnostik:
+
+Temuan	Artinya
+lsnode:/home/smknwon2/public_html/id/ running (PID 1900374)	LiteSpeed sudah start Node.js wrapper ✓
+ss -tlnp → no node ports	App di dalam lsnode tidak listen TCP — inner process mati atau pakai port berbeda
+node app.js manual → port 5000 OK	app.js dan dist/server.cjs tidak bermasalah ✓
+node_modules = folder (205 dirs)	npm install sudah pernah berhasil ✓
+Root cause: lsnode wrapper hidup, tapi inner Node.js process-nya mati/crash. LiteSpeed tidak punya backend → 404.
+
+Jalankan sekarang untuk konfirmasi:
+
+cat ~/public_html/id/logs/app.log | tail -30
+
+Dan:
+
+# PORT berapa yang cPanel assign ke app ini?
+cat ~/public_html/id/.env
+
+Sambil menunggu, saya antisipasi penyebab paling umum — PORT conflict. Ketika lsnode set PORT berbeda (misal 49xxx) dan app listen di situ, tapi lsnode crash → restart → port lama masih terikat → EADDRINUSE → crash loop. Fix:
+
+
+2 actions
+Sambil menunggu app.log, saya cek kode untuk antisipasi crash di dalam lsnode:
+
+
+Show less
+
+Opened server.ts
+
+Searched for "EADDRINUSE|listen.*erro…"
+You've reached your daily free quota limit. It will reset at 12:00 AM UTC.
