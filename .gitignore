@@ -1,0 +1,24 @@
+# ── User data — dikelola admin panel, JANGAN pernah di-overwrite saat deploy ──
+# Semua file di folder ini (logo, berita, galeri, kepala sekolah, dll.) disimpan
+# di sini oleh server dan harus tetap utuh saat ada update source code.
+data/
+
+# ── Server logs ───────────────────────────────────────────────────────────────
+logs/
+
+# ── Dependencies & build artifacts ───────────────────────────────────────────
+node_modules/
+
+# ── Environment secrets ───────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── Deploy temp dirs ──────────────────────────────────────────────────────────
+.deploy_protect_*
+
+# ── OS / editor ───────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo

@@ -9,9 +9,11 @@
 # ke GitHub. Script ini TIDAK perlu build ulang di server.
 #
 # Yang TIDAK PERNAH diubah oleh script ini:
-#   - data/       (database JSON flat-file)
+#   - data/       (database JSON flat-file — logo, berita, galeri, kepala sekolah, dll.)
+#   - logs/       (server log files)
 #   - .env        (variabel lingkungan / secrets)
 #   - app.js      (Passenger startup file — spesifik cPanel, JANGAN di-overwrite)
+#   - .htaccess   (konfigurasi Apache spesifik server)
 #
 # Penggunaan:
 #   bash deploy.sh            → deploy branch 'main'
@@ -22,6 +24,12 @@
 #   Bash tetap membaca dari inode LAMA sepanjang sesi. Solusinya: setelah
 #   git reset, script re-exec dirinya sendiri via exec bash "$0" --post-reset
 #   agar fase 2 (restore + clean + restart) berjalan dari inode BARU.
+#
+# KEAMANAN DATA:
+#   data/ kini ada di .gitignore — git reset --hard TIDAK menyentuhnya.
+#   Backup/restore berfungsi sebagai lapisan perlindungan kedua.
+#   EXIT trap di Fase 1 dibersihkan sebelum exec agar backup tidak terhapus
+#   sebelum Fase 2 sempat melakukan restore.
 # =============================================================================
 
 set -euo pipefail
@@ -30,8 +38,9 @@ APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_FILE="$APP_DIR/deploy.log"
 MAX_LOG_LINES=2000
 
-# Folder/file yang wajib dilindungi dari git reset --hard
-PROTECTED_FILES=("data" ".env" "app.js" ".htaccess")
+# Folder/file yang wajib dilindungi dari git reset --hard (lapisan kedua)
+# Catatan: data/ juga ada di .gitignore (lapisan pertama — git tidak menyentuhnya)
+PROTECTED_FILES=("data" "logs" ".env" "app.js" ".htaccess")
 
 # ── Warna terminal ────────────────────────────────────────────────────────────
 if [ -t 1 ]; then
@@ -62,26 +71,86 @@ rotate_log() {
 # ── Backup / Restore helpers ──────────────────────────────────────────────────
 backup_protected() {
   local protect_dir="$1"
-  mkdir -p "$protect_dir"
+  mkdir -p "$protect_dir" || { log_err "Tidak bisa membuat direktori backup: $protect_dir"; return 1; }
+  local backup_ok=1
   for item in "${PROTECTED_FILES[@]}"; do
     local src="$APP_DIR/$item"
     if [ -e "$src" ]; then
-      cp -rp "$src" "$protect_dir/$item" 2>/dev/null || true
-      log_info "  Backup: $item"
+      # Verifikasi: cp harus benar-benar berhasil (tidak disembunyikan dengan || true)
+      if cp -rp "$src" "$protect_dir/$item" 2>/dev/null; then
+        local sz
+        sz="$(du -sh "$protect_dir/$item" 2>/dev/null | cut -f1 || echo '?')"
+        log_ok "  Backup OK: $item ($sz)"
+      else
+        log_err "  GAGAL backup: $item — DEPLOY DIBATALKAN untuk keamanan data"
+        backup_ok=0
+      fi
+    else
+      log_info "  Lewati (tidak ada): $item"
     fi
   done
+  [ "$backup_ok" -eq 0 ] && return 1
+  return 0
 }
 
 restore_protected() {
   local protect_dir="$1"
+  local restore_ok=1
   for item in "${PROTECTED_FILES[@]}"; do
     local bak="$protect_dir/$item"
     if [ -e "$bak" ]; then
       rm -rf "$APP_DIR/$item" 2>/dev/null || true
-      cp -rp "$bak" "$APP_DIR/$item" 2>/dev/null || true
-      log_info "  Dipulihkan: $item"
+      if cp -rp "$bak" "$APP_DIR/$item" 2>/dev/null; then
+        local sz
+        sz="$(du -sh "$APP_DIR/$item" 2>/dev/null | cut -f1 || echo '?')"
+        log_ok "  Dipulihkan: $item ($sz)"
+      else
+        log_err "  GAGAL restore: $item — BACKUP MASIH ADA DI: $protect_dir"
+        restore_ok=0
+      fi
+    else
+      log_info "  Tidak ada backup untuk: $item (dilewati)"
     fi
   done
+  [ "$restore_ok" -eq 0 ] && return 1
+  return 0
+}
+
+# Verifikasi backup: pastikan data/ ada di backup dan tidak kosong
+verify_backup() {
+  local protect_dir="$1"
+  local data_bak="$protect_dir/data"
+  if [ ! -d "$data_bak" ]; then
+    log_err "KRITIS: Direktori backup data/ tidak ditemukan di $data_bak"
+    log_err "Deploy dibatalkan untuk melindungi data admin (logo, berita, galeri, dll.)"
+    return 1
+  fi
+  local file_count
+  file_count="$(find "$data_bak" -name "*.json" 2>/dev/null | wc -l | tr -d ' ')"
+  if [ "$file_count" -eq 0 ]; then
+    log_err "KRITIS: Backup data/ kosong (0 file JSON ditemukan)"
+    log_err "Deploy dibatalkan untuk melindungi data admin"
+    return 1
+  fi
+  log_ok "  Verifikasi backup: $file_count file JSON aman di backup"
+  return 0
+}
+
+# Verifikasi restore: pastikan data/ ada dan berisi file JSON
+verify_restore() {
+  local data_dir="$APP_DIR/data"
+  if [ ! -d "$data_dir" ]; then
+    log_err "KRITIS: data/ tidak ada setelah restore!"
+    return 1
+  fi
+  local file_count
+  file_count="$(find "$data_dir" -name "*.json" 2>/dev/null | wc -l | tr -d ' ')"
+  if [ "$file_count" -eq 0 ]; then
+    log_err "KRITIS: data/ kosong setelah restore!"
+    return 1
+  fi
+  log_ok "  Verifikasi restore: $file_count file JSON berhasil dipulihkan"
+  return 0
 }
 
 # =============================================================================
@@ -93,20 +162,48 @@ if [ "${1:-}" = "--post-reset" ]; then
   BRANCH="${3}"
   COMMIT_BEFORE="${4}"
 
-  cleanup_phase2() { rm -rf "$PROTECT_DIR" 2>/dev/null || true; }
+  # PENTING: Backup dipertahankan sampai restore dikonfirmasi berhasil.
+  # Jika restore GAGAL, PROTECT_DIR TIDAK dihapus agar data bisa dipulihkan manual.
+  RESTORE_DONE=0
+  cleanup_phase2() {
+    if [ "$RESTORE_DONE" -eq 1 ]; then
+      rm -rf "$PROTECT_DIR" 2>/dev/null || true
+      log_info "Backup sementara dibersihkan."
+    else
+      log_warn "══════════════════════════════════════════════════"
+      log_warn "PERHATIAN: Restore belum dikonfirmasi selesai."
+      log_warn "Backup data MASIH ADA di: $PROTECT_DIR"
+      log_warn "Pulihkan manual dengan: cp -rp '$PROTECT_DIR/data' '$APP_DIR/data'"
+      log_warn "══════════════════════════════════════════════════"
+    fi
+  }
   trap cleanup_phase2 EXIT
 
   # ── Pulihkan file yang dilindungi ─────────────────────────────────────────
-  log_info "[4/5] Memulihkan file yang dilindungi (fase 2 — inode baru)..."
-  restore_protected "$PROTECT_DIR"
-  log_ok "data/, .env, app.js, .htaccess aman — tidak tersentuh git."
+  log_info "[4/6] Memulihkan file yang dilindungi..."
+  if ! restore_protected "$PROTECT_DIR"; then
+    log_err "Restore gagal. Backup ada di: $PROTECT_DIR"
+    log_err "Pulihkan manual: cp -rp '$PROTECT_DIR/data' '$APP_DIR/data'"
+    exit 1
+  fi
+
+  # ── Verifikasi hasil restore ───────────────────────────────────────────────
+  log_info "[5/6] Memverifikasi data setelah restore..."
+  if ! verify_restore; then
+    log_err "Verifikasi restore GAGAL. Backup ada di: $PROTECT_DIR"
+    exit 1
+  fi
+  log_ok "data/, logs/, .env, app.js, .htaccess aman — tidak tersentuh git."
+
+  # Tandai restore berhasil — backup boleh dihapus saat cleanup
+  RESTORE_DONE=1
 
   # ── Bersihkan file aset usang yang tidak terlacak git ────────────────────
   # git reset --hard tidak menghapus file untracked; ini wajib untuk mencegah
   # file JS/CSS lama dengan hash berbeda mengacaukan cache browser.
-  log_info "Membersihkan file aset usang dari dist/..."
-  git -C "$APP_DIR" clean -fd dist/assets/ 2>/dev/null | while IFS= read -r l; do log_info "  bersih: $l"; done || true
-  git -C "$APP_DIR" clean -fd dist/ 2>/dev/null | while IFS= read -r l; do log_info "  bersih: $l"; done || true
+  log_info "Membersihkan aset usang dari dist/..."
+  git -C "$APP_DIR" clean -fd dist/assets/ 2>/dev/null | while IFS= read -r l; do log_info "  $l"; done || true
+  git -C "$APP_DIR" clean -fd dist/ 2>/dev/null | while IFS= read -r l; do log_info "  $l"; done || true
   log_ok "Aset usang dibersihkan."
 
   # ── Verifikasi dist/ ──────────────────────────────────────────────────────
@@ -136,10 +233,10 @@ if [ "${1:-}" = "--post-reset" ]; then
     log_ok "  ✓ dist/server.cjs ukuran OK (${SERVER_SIZE}KB)"
   fi
 
-  [ "$VERIFY_ERR" -gt 0 ] && { log_err "$VERIFY_ERR masalah — deploy dibatalkan."; exit 1; }
+  [ "$VERIFY_ERR" -gt 0 ] && { log_err "$VERIFY_ERR masalah verifikasi dist/ — deploy dibatalkan."; exit 1; }
 
   # ── Restart Node.js — semua metode dicoba ────────────────────────────────
-  log_info "[5/5] Merestart aplikasi Node.js..."
+  log_info "[6/6] Merestart aplikasi Node.js..."
   RESTARTED=0
 
   # Metode 1: tmp/restart.txt (Passenger / beberapa LiteSpeed)
@@ -164,14 +261,13 @@ if [ "${1:-}" = "--post-reset" ]; then
     NODEPID="$(pgrep -u "$WHOAMI" -f "node.*(app\.js|server\.cjs)" 2>/dev/null | head -1 || true)"
     if [ -n "$NODEPID" ]; then
       if kill -SIGTERM "$NODEPID" 2>/dev/null; then
-        log_ok "Proses Node.js (PID: $NODEPID) dikirim SIGTERM — LiteSpeed akan restart."
+        log_ok "Proses Node.js (PID: $NODEPID) dikirim SIGTERM — Passenger akan restart."
         sleep 3
         RESTARTED=1
       else
         log_warn "Gagal SIGTERM PID $NODEPID."
       fi
     else
-      # Fallback: cari semua proses node milik user ini
       NODEPID="$(pgrep -u "$WHOAMI" node 2>/dev/null | head -1 || true)"
       if [ -n "$NODEPID" ]; then
         if kill -SIGTERM "$NODEPID" 2>/dev/null; then
@@ -193,15 +289,17 @@ if [ "${1:-}" = "--post-reset" ]; then
     fi
   fi
 
-  # Ringkasan restart
+  # Ringkasan
   COMMIT_AFTER="$(git -C "$APP_DIR" rev-parse HEAD 2>/dev/null || echo '?')"
   log_info "══════════════════════════════════════════════════"
   log_ok   "DEPLOY BERHASIL ✓"
   log_info "Commit  : $COMMIT_AFTER"
   log_info "Branch  : $BRANCH"
-  log_info "Data DB   : TIDAK DIUBAH"
-  log_info "app.js    : TIDAK DIUBAH (dari cPanel)"
-  log_info ".htaccess : dipulihkan dari backup cPanel"
+  log_info "data/     : AMAN (logo, berita, galeri, kepala sekolah, dll. tidak tersentuh)"
+  log_info "logs/     : AMAN"
+  log_info ".env      : AMAN"
+  log_info "app.js    : AMAN"
+  log_info ".htaccess : AMAN"
   log_info "Log     : $LOG_FILE"
   log_info "══════════════════════════════════════════════════"
   if [ "$RESTARTED" -eq 0 ]; then
@@ -228,7 +326,6 @@ on_error() {
   exit 1
 }
 trap 'on_error $LINENO' ERR
-trap 'rm -rf "$PROTECT_DIR" 2>/dev/null || true' EXIT
 
 rotate_log
 log_info "══════════════════════════════════════════════════"
@@ -238,7 +335,7 @@ log_info "App dir : $APP_DIR"
 log_info "══════════════════════════════════════════════════"
 
 # ── Langkah 1: Prasyarat ──────────────────────────────────────────────────────
-log_info "[1/5] Memeriksa prasyarat..."
+log_info "[1/6] Memeriksa prasyarat..."
 for cmd in git node; do
   command -v "$cmd" >/dev/null 2>&1 || { log_err "'$cmd' tidak ada di PATH."; exit 1; }
 done
@@ -248,14 +345,24 @@ log_ok "node=$(node --version)  git=$(git --version | awk '{print $3}')"
 log_ok "Prasyarat OK."
 
 # ── Langkah 2: Backup ─────────────────────────────────────────────────────────
-log_info "[2/5] Backup file yang dilindungi..."
-backup_protected "$PROTECT_DIR"
+log_info "[2/6] Backup file yang dilindungi..."
+if ! backup_protected "$PROTECT_DIR"; then
+  log_err "Backup gagal — deploy dibatalkan untuk melindungi data."
+  rm -rf "$PROTECT_DIR" 2>/dev/null || true
+  exit 1
+fi
+
+# Verifikasi backup sebelum melanjutkan ke git reset
+if ! verify_backup "$PROTECT_DIR"; then
+  rm -rf "$PROTECT_DIR" 2>/dev/null || true
+  exit 1
+fi
 
 COMMIT_BEFORE="$(git -C "$APP_DIR" rev-parse --short HEAD 2>/dev/null || echo 'awal')"
 log_info "Commit saat ini: $COMMIT_BEFORE"
 
 # ── Langkah 3: Tarik dari GitHub ──────────────────────────────────────────────
-log_info "[3/5] Menarik perubahan dari GitHub (branch: $BRANCH)..."
+log_info "[3/6] Menarik perubahan dari GitHub (branch: $BRANCH)..."
 git -C "$APP_DIR" fetch origin "$BRANCH" 2>&1 | sed 's/^/  [git] /' | tee -a "$LOG_FILE"
 git -C "$APP_DIR" reset --hard "origin/$BRANCH" 2>&1 | sed 's/^/  [git] /' | tee -a "$LOG_FILE"
 
@@ -273,5 +380,10 @@ fi
 # ── Handoff ke Fase 2 (inode baru) ────────────────────────────────────────────
 # KRITIS: Bash saat ini membaca dari inode LAMA deploy.sh.
 # exec bash "$0" membuka inode BARU — seluruh logika pasca-git berjalan dari sana.
+#
+# KRITIS: Bersihkan EXIT trap Fase 1 SEBELUM exec.
+# Jika tidak, ketika exec mengganti proses ini, EXIT trap akan terpicu dan
+# menghapus $PROTECT_DIR (backup data) sebelum Fase 2 sempat melakukan restore.
 log_info "Handoff ke fase 2 (inode baru)..."
+trap - EXIT ERR
 exec bash "$APP_DIR/deploy.sh" --post-reset "$PROTECT_DIR" "$BRANCH" "$COMMIT_BEFORE"
