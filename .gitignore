@@ -18,6 +18,9 @@ node_modules/
 # ── Deploy temp dirs ──────────────────────────────────────────────────────────
 .deploy_protect_*
 
+# ── Uploaded / pasted assets (may contain sensitive content) ─────────────────
+attached_assets/
+
 # ── OS / editor ───────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
