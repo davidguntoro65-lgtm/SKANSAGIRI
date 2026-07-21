@@ -159,11 +159,14 @@ export default function AduanPublik({ theme }: AduanPublikProps) {
   };
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files) return;
-    const picked = Array.from(e.target.files).filter(
-      (f: File) => f.size <= 5 * 1024 * 1024
-    );
-    setFiles((prev) => [...prev, ...picked].slice(0, 5));
+    if (!e.target.files || !e.target.files[0]) return;
+    const f = e.target.files[0];
+    if (f.size > 1 * 1024 * 1024) {
+      alert("Ukuran file melebihi batas 1 MB. Pilih file yang lebih kecil.");
+      e.target.value = "";
+      return;
+    }
+    setFiles([f]);
     e.target.value = "";
   };
 
@@ -638,7 +641,7 @@ export default function AduanPublik({ theme }: AduanPublikProps) {
                     <label className={labelBase}>
                       <span className="flex items-center gap-1.5">
                         <Paperclip className="w-3 h-3" />
-                        Lampiran <span className={`font-normal normal-case ${isDark ? "text-slate-600" : "text-slate-400"}`}>(opsional, maks 5 file · 5 MB/file)</span>
+                        Lampiran <span className={`font-normal normal-case ${isDark ? "text-slate-600" : "text-slate-400"}`}>(opsional, maks 1 file · 1 MB)</span>
                       </span>
                     </label>
                     <button
@@ -656,7 +659,6 @@ export default function AduanPublik({ theme }: AduanPublikProps) {
                     <input
                       ref={fileRef}
                       type="file"
-                      multiple
                       accept="image/*,.pdf,.doc,.docx"
                       className="hidden"
                       onChange={handleFileChange}
