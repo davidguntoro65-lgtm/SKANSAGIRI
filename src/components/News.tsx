@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 import { Newspaper, Calendar, Clock, Star } from "lucide-react";
 import { DataStore } from "../dataStore";
 import { SectionPattern, GradientMesh } from "./BackgroundSystem";
+import { navigate } from "../utils/navigation";
 
 export default function News({ theme = "dark" }: { theme?: "light" | "dark" }) {
   const [news, setNews] = useState(() => DataStore.getNews());
@@ -17,7 +18,7 @@ export default function News({ theme = "dark" }: { theme?: "light" | "dark" }) {
   if (news.length === 0) return null;
 
   const featuredNews = news[0];
-  const highlightNews = news.slice(1);
+  const highlightNews = news.slice(1, 4);
 
   return (
     <section
@@ -66,6 +67,7 @@ export default function News({ theme = "dark" }: { theme?: "light" | "dark" }) {
             transition={{ duration: 0.7 }}
             className="lg:col-span-7 flex flex-col justify-between group cursor-pointer"
             id={`news-featured-${featuredNews.id}`}
+            onClick={() => navigate("/berita")}
           >
             <div className={`relative overflow-hidden rounded-2xl aspect-video md:aspect-[16/10] border shadow-2xl mb-6 ${
               isDark
@@ -159,6 +161,7 @@ export default function News({ theme = "dark" }: { theme?: "light" | "dark" }) {
                   isDark ? "border-white/5" : "border-slate-200"
                 }`}
                 id={`news-highlight-${item.id}`}
+                onClick={() => navigate("/berita")}
               >
                 <div className={`w-24 h-24 md:w-28 md:h-28 rounded-xl overflow-hidden border shrink-0 relative ${
                   isDark ? "bg-slate-900 border-white/5" : "bg-slate-200 border-slate-200"
