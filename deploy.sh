@@ -200,39 +200,42 @@ if [ "${1:-}" = "--post-reset" ]; then
 
   # ── Install dependencies (termasuk @prisma/client yang di-externalize) ───
   # CloudLinux NodeJS Selector menyimpan node_modules sebagai symlink ke virtual
-  # environment di ~/nodevenv/. npm install harus dijalankan lewat venv itu,
-  # bukan npm sistem, agar tidak konflik dengan symlink tersebut.
+  # environment di ~/nodevenv/. npm install HARUS dijalankan lewat npm biner
+  # yang ada di dalam venv itu — bukan npm sistem — agar symlink tidak konflik.
   log_info "[3.5a/6] Menginstall dependencies Node.js..."
 
-  # Cari activate script venv cPanel: ~/nodevenv/<rel_path>/<node_major>/bin/activate
-  VENV_ACTIVATE=""
+  # Cari npm biner dari venv cPanel: ~/nodevenv/<app_rel_path>/<node_major>/bin/npm
+  VENV_NPM=""
   APP_REL="$(realpath --relative-to="$HOME" "$APP_DIR" 2>/dev/null || echo "")"
   if [ -n "$APP_REL" ]; then
     NODE_MAJOR="$(node --version | sed 's/v\([0-9]*\).*/\1/')"
-    CANDIDATE="$HOME/nodevenv/$APP_REL/$NODE_MAJOR/bin/activate"
-    [ -f "$CANDIDATE" ] && VENV_ACTIVATE="$CANDIDATE"
+    CANDIDATE="$HOME/nodevenv/$APP_REL/$NODE_MAJOR/bin/npm"
+    [ -x "$CANDIDATE" ] && VENV_NPM="$CANDIDATE"
   fi
 
-  if [ -n "$VENV_ACTIVATE" ]; then
-    log_info "  Menggunakan CloudLinux venv: $VENV_ACTIVATE"
-    # shellcheck disable=SC1090
-    if (source "$VENV_ACTIVATE" && cd "$APP_DIR" && npm install --omit=dev 2>&1 | sed 's/^/  [npm] /' | tee -a "$LOG_FILE"); then
+  if [ -n "$VENV_NPM" ]; then
+    log_info "  Menggunakan CloudLinux venv npm: $VENV_NPM"
+    if (cd "$APP_DIR" && "$VENV_NPM" install --omit=dev 2>&1 | sed 's/^/  [npm] /' | tee -a "$LOG_FILE"); then
       log_ok "npm install (venv) berhasil."
     else
       log_err "npm install GAGAL — deploy dibatalkan."
+      log_err "Coba manual: cPanel → Setup Node.js App → app '/id' → klik 'Run NPM Install'"
       exit 1
     fi
   else
-    log_warn "  Virtual environment cPanel tidak ditemukan — mencoba npm langsung..."
-    log_warn "  (Jika gagal, buka cPanel → Setup Node.js App → klik 'Run NPM Install')"
-    if (cd "$APP_DIR" && npm install --omit=dev 2>&1 | sed 's/^/  [npm] /' | tee -a "$LOG_FILE"); then
-      log_ok "npm install berhasil."
-    else
-      log_err "npm install GAGAL."
-      log_err "Solusi manual: cPanel → Setup Node.js App → app '/id' → klik 'Run NPM Install'"
-      log_err "Setelah itu jalankan ulang: bash deploy.sh"
+    # venv tidak ditemukan — bisa terjadi saat pertama kali setup atau path berbeda
+    log_warn "  Virtual environment cPanel tidak ditemukan di: ~/nodevenv/$APP_REL/$NODE_MAJOR/bin/npm"
+    log_warn "  Langkah WAJIB sebelum deploy pertama:"
+    log_warn "    1. cPanel → Setup Node.js App"
+    log_warn "    2. Pilih app '/id' → klik 'Run NPM Install'"
+    log_warn "    3. Setelah selesai, jalankan ulang: bash deploy.sh"
+    log_warn "  Melewati npm install — menggunakan node_modules yang sudah ada..."
+    # Cek apakah node_modules ada (symlink atau dir) — jika tidak ada sama sekali, hentikan
+    if [ ! -e "$APP_DIR/node_modules" ]; then
+      log_err "node_modules tidak ada! Wajib klik 'Run NPM Install' di cPanel dulu."
       exit 1
     fi
+    log_warn "  node_modules ada — melanjutkan deploy tanpa install ulang."
   fi
 
   # ── Jalankan Prisma migrate deploy ───────────────────────────────────────
