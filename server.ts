@@ -275,7 +275,7 @@ app.use((req, res, next) => {
   if (!writeMethods.includes(req.method)) return next();
 
   // Exact-match public routes
-  const publicExact = ["/api/auth/login", "/api/tracer", "/api/contact", "/api/suara"];
+  const publicExact = ["/api/auth/login", "/api/tracer", "/api/contact", "/api/suara", "/api/aduan"];
   if (publicExact.includes(req.path)) return next();
 
   // Pattern-match public routes (dynamic segments)
@@ -812,6 +812,87 @@ app.delete("/api/contact/:id", requireAuth, (req, res) => {
   } catch {
     res.status(500).json({ error: "Gagal menghapus pesan." });
   }
+});
+
+// ── Aduan Publik ──────────────────────────────────────────────────────────────
+const ADUAN_FILE = path.join(DATA_DIR, "aduan-publik.json");
+
+function readAduan(): any[] {
+  try {
+    if (!fs.existsSync(ADUAN_FILE)) return [];
+    return JSON.parse(fs.readFileSync(ADUAN_FILE, "utf-8"));
+  } catch { return []; }
+}
+
+app.post("/api/aduan", (req, res) => {
+  try {
+    const { namaLengkap, noHp, alamat, judul, isi, tanggal, lokasi, lokasiLainnya, kategori, anonim, rahasia } = req.body;
+    if (!judul || !isi || !tanggal || !lokasi || !kategori) {
+      return res.status(400).json({ error: "Field wajib tidak lengkap." });
+    }
+    if (isi.trim().length < 30) {
+      return res.status(400).json({ error: "Isi laporan minimal 30 karakter." });
+    }
+    const list = readAduan();
+    const entry = {
+      id: crypto.randomUUID(),
+      namaLengkap: anonim ? "Anonim" : String(namaLengkap || "").trim(),
+      noHp: anonim ? "" : String(noHp || "").trim(),
+      alamat: anonim ? "" : String(alamat || "").trim(),
+      judul: String(judul).trim(),
+      isi: String(isi).trim(),
+      tanggal: String(tanggal).trim(),
+      lokasi: lokasi === "Lokasi Lainnya" ? String(lokasiLainnya || lokasi).trim() : String(lokasi).trim(),
+      kategori: String(kategori).trim(),
+      anonim: !!anonim,
+      rahasia: !!rahasia,
+      status: "BARU",
+      catatan: "",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    list.unshift(entry);
+    atomicWriteFile(ADUAN_FILE, JSON.stringify(list, null, 2));
+    res.json({ success: true, id: entry.id });
+  } catch (err: any) {
+    res.status(500).json({ error: "Gagal menyimpan aduan." });
+  }
+});
+
+app.get("/api/aduan", requireAuth, (req, res) => {
+  res.json(readAduan());
+});
+
+app.patch("/api/aduan/:id/status", requireAuth, (req, res) => {
+  try {
+    const list = readAduan();
+    const idx = list.findIndex((m: any) => m.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: "Aduan tidak ditemukan." });
+    const { status, catatan } = req.body;
+    if (status) list[idx].status = String(status).trim();
+    if (catatan !== undefined) list[idx].catatan = String(catatan).trim();
+    list[idx].updatedAt = new Date().toISOString();
+    atomicWriteFile(ADUAN_FILE, JSON.stringify(list, null, 2));
+    res.json({ success: true });
+  } catch { res.status(500).json({ error: "Gagal memperbarui status." }); }
+});
+
+app.delete("/api/aduan/:id", requireAuth, (req, res) => {
+  try {
+    const filtered = readAduan().filter((m: any) => m.id !== req.params.id);
+    atomicWriteFile(ADUAN_FILE, JSON.stringify(filtered, null, 2));
+    res.json({ success: true });
+  } catch { res.status(500).json({ error: "Gagal menghapus aduan." }); }
+});
+
+app.post("/api/aduan/bulk-delete", requireAuth, (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids)) return res.status(400).json({ error: "ids harus array." });
+    const filtered = readAduan().filter((m: any) => !ids.includes(m.id));
+    atomicWriteFile(ADUAN_FILE, JSON.stringify(filtered, null, 2));
+    res.json({ success: true });
+  } catch { res.status(500).json({ error: "Gagal menghapus aduan." }); }
 });
 
 // ── Suara Skansagiri ──────────────────────────────────────────────────────────

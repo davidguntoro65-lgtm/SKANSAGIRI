@@ -5,7 +5,7 @@ import {
   ArrowLeft, ChevronRight, MapPin, Phone, Mail, MessageSquare,
   ExternalLink, Building2, Shield, Megaphone, Send, CheckCircle2,
   Paperclip, X, AlertTriangle, CalendarDays, FileText, AlignLeft,
-  Tag, Eye, EyeOff, Loader2, Info
+  Tag, Eye, EyeOff, Loader2, Info, User, Home
 } from "lucide-react";
 
 interface AduanPublikProps {
@@ -93,6 +93,9 @@ const LOKASI_OPTIONS = [
 ];
 
 interface FormState {
+  namaLengkap: string;
+  noHp: string;
+  alamat: string;
   judul: string;
   isi: string;
   tanggal: string;
@@ -104,6 +107,9 @@ interface FormState {
 }
 
 const INITIAL_FORM: FormState = {
+  namaLengkap: "",
+  noHp: "",
+  alamat: "",
   judul: "",
   isi: "",
   tanggal: "",
@@ -137,6 +143,10 @@ export default function AduanPublik({ theme }: AduanPublikProps) {
 
   const validate = (): boolean => {
     const e: Partial<Record<keyof FormState, string>> = {};
+    if (!form.anonim) {
+      if (!form.namaLengkap.trim()) e.namaLengkap = "Nama lengkap wajib diisi.";
+      if (!form.noHp.trim()) e.noHp = "Nomor HP/WA wajib diisi.";
+    }
     if (!form.judul.trim()) e.judul = "Judul laporan wajib diisi.";
     if (!form.isi.trim() || form.isi.trim().length < 30) e.isi = "Isi laporan minimal 30 karakter.";
     if (!form.tanggal) e.tanggal = "Tanggal kejadian wajib diisi.";
@@ -163,9 +173,25 @@ export default function AduanPublik({ theme }: AduanPublikProps) {
     e.preventDefault();
     if (!validate()) return;
     setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 1600));
-    setSubmitting(false);
-    setSubmitted(true);
+    try {
+      const payload = {
+        ...form,
+        lokasi: form.lokasi,
+        lokasiLainnya: form.lokasiLainnya,
+      };
+      const r = await fetch("/api/aduan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || "Gagal mengirim.");
+      setSubmitted(true);
+    } catch (err: any) {
+      setErrors({ judul: err.message || "Gagal mengirim aduan. Coba lagi." });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleReset = () => {
@@ -402,6 +428,75 @@ export default function AduanPublik({ theme }: AduanPublikProps) {
                 </div>
 
                 <div className="grid gap-5">
+                  {/* ── Identitas Pelapor ── */}
+                  <div className={`rounded-xl p-4 space-y-4 ${isDark ? "bg-slate-800/40 border border-white/6" : "bg-slate-50 border border-slate-200"}`}>
+                    <p className={`text-[10px] font-mono font-bold uppercase tracking-widest ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                      Identitas Pelapor {form.anonim && <span className={`ml-1 ${isDark ? "text-slate-600" : "text-slate-400"}`}>(disembunyikan karena mode Anonim)</span>}
+                    </p>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      {/* Nama Lengkap */}
+                      <div>
+                        <label className={labelBase}>
+                          <span className="flex items-center gap-1.5">
+                            <User className="w-3 h-3" />
+                            Nama Lengkap {!form.anonim && <span className="text-red-500">*</span>}
+                          </span>
+                        </label>
+                        <input
+                          type="text"
+                          value={form.namaLengkap}
+                          onChange={set("namaLengkap")}
+                          disabled={form.anonim}
+                          placeholder={form.anonim ? "— Anonim —" : "Nama lengkap Anda"}
+                          className={`${inputBase} disabled:opacity-40 disabled:cursor-not-allowed ${errors.namaLengkap ? "border-red-500/60 focus:border-red-500" : ""}`}
+                          maxLength={80}
+                        />
+                        {errors.namaLengkap && (
+                          <p className={errClass}><AlertTriangle className="w-3 h-3" />{errors.namaLengkap}</p>
+                        )}
+                      </div>
+                      {/* Nomor HP/WA */}
+                      <div>
+                        <label className={labelBase}>
+                          <span className="flex items-center gap-1.5">
+                            <Phone className="w-3 h-3" />
+                            Nomor HP / WA {!form.anonim && <span className="text-red-500">*</span>}
+                          </span>
+                        </label>
+                        <input
+                          type="tel"
+                          value={form.noHp}
+                          onChange={set("noHp")}
+                          disabled={form.anonim}
+                          placeholder={form.anonim ? "— Anonim —" : "08xxxxxxxxxx"}
+                          className={`${inputBase} disabled:opacity-40 disabled:cursor-not-allowed ${errors.noHp ? "border-red-500/60 focus:border-red-500" : ""}`}
+                          maxLength={20}
+                        />
+                        {errors.noHp && (
+                          <p className={errClass}><AlertTriangle className="w-3 h-3" />{errors.noHp}</p>
+                        )}
+                      </div>
+                    </div>
+                    {/* Alamat Lengkap */}
+                    <div>
+                      <label className={labelBase}>
+                        <span className="flex items-center gap-1.5">
+                          <Home className="w-3 h-3" />
+                          Alamat Lengkap <span className={`font-normal normal-case ${isDark ? "text-slate-600" : "text-slate-400"}`}>(opsional)</span>
+                        </span>
+                      </label>
+                      <input
+                        type="text"
+                        value={form.alamat}
+                        onChange={set("alamat")}
+                        disabled={form.anonim}
+                        placeholder={form.anonim ? "— Anonim —" : "Jalan, RT/RW, Kelurahan, Kecamatan"}
+                        className={`${inputBase} disabled:opacity-40 disabled:cursor-not-allowed`}
+                        maxLength={200}
+                      />
+                    </div>
+                  </div>
+
                   {/* Judul */}
                   <div>
                     <label className={labelBase}>
