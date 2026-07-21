@@ -378,6 +378,29 @@
   color: #ffffff !important;
 }
 
+/* ── OSIS Page Animations ─────────────────────────────────────────────── */
+
+/* Floating energy spark particles */
+@keyframes osis-float-up {
+  0%   { transform: translateY(0) scale(1);   opacity: var(--spark-op, 0.5); }
+  80%  { opacity: var(--spark-op, 0.5); }
+  100% { transform: translateY(-100vh) scale(0.3); opacity: 0; }
+}
+
+.osis-spark {
+  animation: osis-float-up linear infinite;
+  will-change: transform, opacity;
+}
+
+/* Slow pulsing glow for hero orbs */
+@keyframes pulse-slow {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50%       { opacity: 1;   transform: scale(1.08); }
+}
+.animate-pulse-slow {
+  animation: pulse-slow 4s ease-in-out infinite;
+}
+
 /* OSDAI Button AI Animations */
 @keyframes osdai-scan {
   0% { transform: translateX(-100%) skewX(-15deg); }

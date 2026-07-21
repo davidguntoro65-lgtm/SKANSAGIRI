@@ -279,7 +279,7 @@ export default function App() {
   }
 
   if (currentPath === "/osis") {
-    return <OsisPage theme={theme} />;
+    return <OsisPage theme={theme} toggleTheme={toggleTheme} />;
   }
 
   if (currentPath === "/osis/adm-panel") {
