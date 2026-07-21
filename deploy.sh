@@ -116,40 +116,48 @@ restore_protected() {
   return 0
 }
 
-# Verifikasi backup: pastikan data/ ada di backup dan tidak kosong
+# Verifikasi backup: pastikan file-file yang di-backup ada di PROTECT_DIR
+# Catatan: data/ TIDAK dicek di sini — data kini di PostgreSQL (bukan JSON),
+# dan data/ dilindungi oleh .gitignore (git reset --hard tidak menyentuhnya).
 verify_backup() {
   local protect_dir="$1"
-  local data_bak="$protect_dir/data"
-  if [ ! -d "$data_bak" ]; then
-    log_err "KRITIS: Direktori backup data/ tidak ditemukan di $data_bak"
-    log_err "Deploy dibatalkan untuk melindungi data admin (logo, berita, galeri, dll.)"
-    return 1
+  local ok=1
+  for item in "${PROTECTED_FILES[@]}"; do
+    if [ -e "$protect_dir/$item" ]; then
+      log_ok "  Verifikasi backup OK: $item"
+    else
+      log_warn "  Verifikasi backup: $item tidak ada di backup (mungkin memang tidak ada di server)"
+    fi
+  done
+  # Cek apakah ada setidaknya .env (wajib ada)
+  if [ ! -f "$protect_dir/.env" ]; then
+    log_err "KRITIS: .env tidak berhasil di-backup — deploy dibatalkan"
+    ok=0
   fi
-  local file_count
-  file_count="$(find "$data_bak" -name "*.json" 2>/dev/null | wc -l | tr -d ' ')"
-  if [ "$file_count" -eq 0 ]; then
-    log_err "KRITIS: Backup data/ kosong (0 file JSON ditemukan)"
-    log_err "Deploy dibatalkan untuk melindungi data admin"
-    return 1
-  fi
-  log_ok "  Verifikasi backup: $file_count file JSON aman di backup"
+  [ "$ok" -eq 0 ] && return 1
+  log_ok "  Verifikasi backup selesai."
   return 0
 }
 
-# Verifikasi restore: pastikan data/ ada dan berisi file JSON
+# Verifikasi restore: pastikan .env dan app.js ada setelah restore
 verify_restore() {
-  local data_dir="$APP_DIR/data"
-  if [ ! -d "$data_dir" ]; then
-    log_err "KRITIS: data/ tidak ada setelah restore!"
-    return 1
+  local ok=1
+  for item in ".env" "app.js"; do
+    if [ ! -e "$APP_DIR/$item" ]; then
+      log_err "KRITIS: $item tidak ada setelah restore!"
+      ok=0
+    fi
+  done
+  [ "$ok" -eq 0 ] && return 1
+  # Info: data/ dilindungi .gitignore, bukan backup — tampilkan statusnya
+  if [ -d "$APP_DIR/data" ]; then
+    local fc
+    fc="$(find "$APP_DIR/data" -name "*.json" 2>/dev/null | wc -l | tr -d ' ')"
+    log_ok "  data/ tetap utuh ($fc file JSON) — dilindungi .gitignore"
+  else
+    log_info "  data/ tidak ada (data tersimpan di PostgreSQL — normal)"
   fi
-  local file_count
-  file_count="$(find "$data_dir" -name "*.json" 2>/dev/null | wc -l | tr -d ' ')"
-  if [ "$file_count" -eq 0 ]; then
-    log_err "KRITIS: data/ kosong setelah restore!"
-    return 1
-  fi
-  log_ok "  Verifikasi restore: $file_count file JSON berhasil dipulihkan"
+  log_ok "  Verifikasi restore selesai."
   return 0
 }
 
