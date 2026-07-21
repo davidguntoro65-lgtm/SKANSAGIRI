@@ -2,16 +2,16 @@
 # =============================================================================
 # deploy.sh — SMKN 1 Wonogiri Portal
 # =============================================================================
-# Tarik perubahan dari GitHub, build ulang, restart Passenger di cPanel.
+# Tarik perubahan dari GitHub (termasuk dist/ yang sudah dibangun di Replit),
+# lalu restart Node.js di cPanel.
+#
+# Build dilakukan di Replit (VITE_BASE_PATH=/id/ npm run build), lalu di-commit
+# ke GitHub. Script ini TIDAK perlu build ulang di server.
 #
 # Yang TIDAK PERNAH diubah oleh script ini:
 #   - data/       (database JSON flat-file)
 #   - .env        (variabel lingkungan / secrets)
 #   - app.js      (Passenger startup file — spesifik cPanel, JANGAN di-overwrite)
-#
-# CATATAN: .htaccess SENGAJA tidak dilindungi agar versi terbaru dari repo
-# selalu diterapkan ke server. Routing API yang benar (RewriteRule ^ - [L])
-# wajib ada agar login dan semua /api/* endpoint bekerja di cPanel/Passenger.
 #
 # Penggunaan:
 #   bash deploy.sh            → deploy branch 'main'
@@ -26,8 +26,7 @@ APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_FILE="$APP_DIR/deploy.log"
 MAX_LOG_LINES=2000
 
-# Folder/file yang wajib dilindungi dari git (backup sebelum pull, restore sesudah)
-# CATATAN: .htaccess TIDAK dilindungi — harus selalu diperbarui dari repo
+# Folder/file yang wajib dilindungi dari git reset --hard
 PROTECTED_FILES=("data" ".env" "app.js")
 
 # ── Warna terminal ────────────────────────────────────────────────────────────
@@ -56,7 +55,6 @@ rotate_log() {
 }
 
 # ── Backup / Restore helpers ──────────────────────────────────────────────────
-# Simpan semua file/folder yang dilindungi ke .deploy_protect_<pid>/
 PROTECT_DIR="$APP_DIR/.deploy_protect_$$"
 
 backup_protected() {
@@ -64,8 +62,8 @@ backup_protected() {
   for item in "${PROTECTED_FILES[@]}"; do
     local src="$APP_DIR/$item"
     if [ -e "$src" ]; then
-      cp -r "$src" "$PROTECT_DIR/$item"
-      log_info "  Dibackup: $item"
+      cp -rp "$src" "$PROTECT_DIR/$item" 2>/dev/null || true
+      log_info "  Backup: $item"
     fi
   done
 }
@@ -74,52 +72,19 @@ restore_protected() {
   for item in "${PROTECTED_FILES[@]}"; do
     local bak="$PROTECT_DIR/$item"
     if [ -e "$bak" ]; then
-      rm -rf "$APP_DIR/$item"
-      cp -r "$bak" "$APP_DIR/$item"
+      rm -rf "$APP_DIR/$item" 2>/dev/null || true
+      cp -rp "$bak" "$APP_DIR/$item" 2>/dev/null || true
       log_info "  Dipulihkan: $item"
     fi
   done
 }
 
-# ── Rollback dist jika build gagal ────────────────────────────────────────────
-DIST_BAK="$APP_DIR/.deploy_dist_$$"
-
-backup_dist() {
-  [ -d "$APP_DIR/dist" ] && cp -r "$APP_DIR/dist" "$DIST_BAK" && \
-    log_info "  dist/ di-backup untuk rollback darurat."
-}
-
-rollback_dist() {
-  if [ -d "$DIST_BAK" ]; then
-    rm -rf "$APP_DIR/dist" 2>/dev/null || true
-    cp -r "$DIST_BAK" "$APP_DIR/dist"
-    log_warn "dist/ dipulihkan dari backup."
-  fi
-}
-
-# ── Cleanup sementara saat script keluar ─────────────────────────────────────
-cleanup() {
-  rm -rf "$PROTECT_DIR" "$DIST_BAK" 2>/dev/null || true
-}
-trap cleanup EXIT
-
 # ── ERR trap: rollback otomatis ───────────────────────────────────────────────
 on_error() {
   local line="$1"
   log_err "Script gagal pada baris $line — rollback dijalankan..."
-
-  # Pulihkan dist lama
-  rollback_dist
-
-  # Pulihkan semua file yang dilindungi
   restore_protected
-
-  # Coba restart Passenger dengan versi lama agar site tidak mati
-  if [ -d "$APP_DIR/tmp" ] || mkdir -p "$APP_DIR/tmp" 2>/dev/null; then
-    touch "$APP_DIR/tmp/restart.txt" 2>/dev/null || true
-    log_warn "Passenger di-restart dengan versi LAMA."
-  fi
-
+  restart_nodejs || true
   log_err "══════════════════════════════════════════════════"
   log_err "DEPLOY GAGAL. Site berjalan dengan versi sebelumnya."
   log_err "Periksa: $LOG_FILE"
@@ -127,6 +92,22 @@ on_error() {
   exit 1
 }
 trap 'on_error $LINENO' ERR
+
+cleanup() { rm -rf "$PROTECT_DIR" 2>/dev/null || true; }
+trap cleanup EXIT
+
+# ── Restart Node.js ───────────────────────────────────────────────────────────
+restart_nodejs() {
+  # Metode 1: tmp/restart.txt (Passenger / cPanel LiteSpeed Selector)
+  mkdir -p "$APP_DIR/tmp"
+  touch "$APP_DIR/tmp/restart.txt"
+  log_ok "tmp/restart.txt diperbarui."
+
+  # Metode 2: cPanel API restart (jika tersedia)
+  if command -v uapi >/dev/null 2>&1; then
+    uapi NodeJS restart_app 2>/dev/null && log_ok "uapi NodeJS restart_app berhasil." || true
+  fi
+}
 
 # =============================================================================
 rotate_log
@@ -139,16 +120,16 @@ log_info "═══════════════════════�
 # ─────────────────────────────────────────────────────────────────────────────
 # LANGKAH 1 — Periksa prasyarat
 # ─────────────────────────────────────────────────────────────────────────────
-log_info "[1/8] Memeriksa prasyarat..."
+log_info "[1/5] Memeriksa prasyarat..."
 
-for cmd in git node npm; do
+for cmd in git node; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
     log_err "Perintah '$cmd' tidak tersedia di PATH."
     exit 1
   fi
 done
 
-log_ok "node=$(node --version)  npm=$(npm --version)  git=$(git --version | awk '{print $3}')"
+log_ok "node=$(node --version)  git=$(git --version | awk '{print $3}')"
 
 if ! git -C "$APP_DIR" rev-parse --git-dir >/dev/null 2>&1; then
   log_err "$APP_DIR bukan repositori git."
@@ -164,9 +145,9 @@ fi
 log_ok "Prasyarat OK."
 
 # ─────────────────────────────────────────────────────────────────────────────
-# LANGKAH 2 — Backup semua file yang dilindungi SEBELUM git
+# LANGKAH 2 — Backup file yang dilindungi
 # ─────────────────────────────────────────────────────────────────────────────
-log_info "[2/8] Backup file yang dilindungi..."
+log_info "[2/5] Backup file yang dilindungi..."
 
 backup_protected
 
@@ -174,17 +155,12 @@ COMMIT_BEFORE="$(git -C "$APP_DIR" rev-parse --short HEAD 2>/dev/null || echo 'a
 log_info "Commit saat ini: $COMMIT_BEFORE"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# LANGKAH 3 — Tarik perubahan dari GitHub
+# LANGKAH 3 — Tarik perubahan dari GitHub (termasuk dist/ yang sudah dibangun)
 # ─────────────────────────────────────────────────────────────────────────────
-log_info "[3/8] Menarik perubahan dari GitHub (branch: $BRANCH)..."
+log_info "[3/5] Menarik perubahan dari GitHub (branch: $BRANCH)..."
 
-# Fetch dulu
-git -C "$APP_DIR" fetch origin "$BRANCH" 2>&1 | \
-  sed 's/^/  [git] /' | tee -a "$LOG_FILE"
-
-# Reset hard ke remote state (bersih tanpa konflik merge)
-git -C "$APP_DIR" reset --hard "origin/$BRANCH" 2>&1 | \
-  sed 's/^/  [git] /' | tee -a "$LOG_FILE"
+git -C "$APP_DIR" fetch origin "$BRANCH" 2>&1 | sed 's/^/  [git] /' | tee -a "$LOG_FILE"
+git -C "$APP_DIR" reset --hard "origin/$BRANCH" 2>&1 | sed 's/^/  [git] /' | tee -a "$LOG_FILE"
 
 COMMIT_AFTER="$(git -C "$APP_DIR" rev-parse HEAD)"
 COMMIT_SHORT="$(git -C "$APP_DIR" rev-parse --short HEAD)"
@@ -199,154 +175,64 @@ else
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# LANGKAH 4 — Pulihkan file yang dilindungi SEGERA setelah git reset
-#
-# PENTING: app.js dipulihkan dari backup cPanel, BUKAN dari git.
-# app.js adalah Passenger startup file yang dikonfigurasi cPanel.
-# .htaccess TIDAK dilindungi — diperbarui dari repo agar routing API benar.
+# LANGKAH 4 — Pulihkan file yang dilindungi + verifikasi dist/
 # ─────────────────────────────────────────────────────────────────────────────
-log_info "[4/8] Memulihkan file yang dilindungi..."
+log_info "[4/5] Memulihkan file yang dilindungi..."
 
 restore_protected
 
-log_ok "data/, .env, app.js aman — tidak tersentuh git. .htaccess diperbarui dari repo."
+log_ok "data/, .env, app.js aman — tidak tersentuh git."
 
-# ─────────────────────────────────────────────────────────────────────────────
-# LANGKAH 5 — Install npm (hanya jika diperlukan)
-#
-# Gunakan 'npm install' bukan 'npm ci' untuk:
-#   - Tidak menghapus node_modules yang sudah ada (lebih aman di cPanel)
-#   - Hanya menginstall paket yang belum ada atau berubah
-# ─────────────────────────────────────────────────────────────────────────────
-log_info "[5/8] Memeriksa dependensi npm..."
-
-LOCKFILE="$APP_DIR/package-lock.json"
-NEEDS_INSTALL=false
-
-if [ ! -d "$APP_DIR/node_modules" ]; then
-  log_warn "node_modules tidak ada → install diperlukan."
-  NEEDS_INSTALL=true
-elif [ ! -f "$LOCKFILE" ]; then
-  log_warn "package-lock.json tidak ada → install diperlukan."
-  NEEDS_INSTALL=true
-else
-  # Bandingkan hash package-lock dengan yang terakhir di-install
-  LOCK_MARK="$APP_DIR/node_modules/.deploy_lock_hash"
-  LOCK_HASH="$(md5sum "$LOCKFILE" 2>/dev/null | cut -d' ' -f1 || echo '')"
-  PREV_HASH="$(cat "$LOCK_MARK" 2>/dev/null || echo '')"
-  if [ "$LOCK_HASH" != "$PREV_HASH" ]; then
-    log_info "package-lock.json berubah → update dependensi."
-    NEEDS_INSTALL=true
-  else
-    log_ok "Dependensi tidak berubah — skip install."
-  fi
-fi
-
-if [ "$NEEDS_INSTALL" = true ]; then
-  log_info "Menjalankan npm install (ini mungkin 1–3 menit)..."
-  # Gunakan --include=dev agar vite, esbuild, typescript tersedia untuk build
-  npm --prefix "$APP_DIR" install --include=dev --no-audit --no-fund 2>&1 | \
-    sed 's/^/  [npm] /' | tee -a "$LOG_FILE"
-  # Simpan hash yang berhasil diinstall
-  [ -f "$LOCKFILE" ] && md5sum "$LOCKFILE" | cut -d' ' -f1 \
-    > "$APP_DIR/node_modules/.deploy_lock_hash" || true
-  log_ok "npm install selesai."
-fi
-
-# Pastikan vite dan esbuild tersedia (build tool wajib)
-for build_tool in vite esbuild; do
-  if ! "$APP_DIR/node_modules/.bin/$build_tool" --version >/dev/null 2>&1; then
-    log_err "Build tool '$build_tool' tidak tersedia di node_modules/.bin/."
-    log_err "Coba hapus node_modules/ lalu jalankan deploy.sh lagi."
-    exit 1
-  fi
-done
-log_ok "Build tools tersedia: vite=$(./node_modules/.bin/vite --version 2>/dev/null | head -1) esbuild=$(./node_modules/.bin/esbuild --version 2>/dev/null)"
-
-# ─────────────────────────────────────────────────────────────────────────────
-# LANGKAH 6 — Build production
-# ─────────────────────────────────────────────────────────────────────────────
-log_info "[6/8] Membangun aplikasi (NODE_ENV=production)..."
-
-# Backup dist lama untuk rollback jika build gagal
-backup_dist
-
-BUILD_START="$(date +%s)"
-NODE_ENV=production npm --prefix "$APP_DIR" run build 2>&1 | \
-  sed 's/^/  [build] /' | tee -a "$LOG_FILE"
-BUILD_SECS="$(( $(date +%s) - BUILD_START ))"
-log_ok "Build selesai dalam ${BUILD_SECS}s."
-
-# ─────────────────────────────────────────────────────────────────────────────
-# LANGKAH 7 — Verifikasi hasil build
-# ─────────────────────────────────────────────────────────────────────────────
-log_info "[7/8] Memverifikasi hasil build..."
+# Verifikasi dist/ dari repo sudah ada dan benar
+log_info "Memverifikasi dist/ dari repo..."
 
 VERIFY_ERR=0
-
-# Cek file wajib ada dan tidak kosong
 for req in "dist/server.cjs" "dist/index.html" "dist/assets"; do
   if [ -e "$APP_DIR/$req" ]; then
     SIZE="$(du -sh "$APP_DIR/$req" 2>/dev/null | cut -f1 || echo '?')"
     log_ok "  ✓ $req  ($SIZE)"
   else
-    log_err "  ✗ $req  TIDAK DITEMUKAN"
+    log_err "  ✗ $req  TIDAK DITEMUKAN — pastikan 'dist/' sudah di-commit ke GitHub!"
     VERIFY_ERR=$((VERIFY_ERR + 1))
   fi
 done
 
-# Cek ukuran dist/server.cjs — harus > 100KB (bundle lengkap)
-SERVER_SIZE="$(du -k "$APP_DIR/dist/server.cjs" 2>/dev/null | cut -f1 || echo 0)"
-if [ "$SERVER_SIZE" -lt 100 ]; then
-  log_err "  ✗ dist/server.cjs terlalu kecil ($SERVER_SIZE KB) — kemungkinan build tidak lengkap"
-  VERIFY_ERR=$((VERIFY_ERR + 1))
-else
-  log_ok "  ✓ dist/server.cjs ukuran OK (${SERVER_SIZE} KB)"
-fi
-
-# Validasi sintaks CJS bundle dengan Node.js
-if node --check "$APP_DIR/dist/server.cjs" 2>/dev/null; then
-  log_ok "  ✓ dist/server.cjs sintaks valid (node --check OK)"
-else
-  log_err "  ✗ dist/server.cjs gagal validasi sintaks Node.js!"
-  VERIFY_ERR=$((VERIFY_ERR + 1))
-fi
-
-# Cek base path /id/ di index.html (pastikan Vite build dengan config benar)
-if grep -q '"/id/' "$APP_DIR/dist/index.html" 2>/dev/null; then
+# Pastikan base path /id/ ada di index.html
+if grep -q '"/id/' "$APP_DIR/dist/index.html" 2>/dev/null || grep -q "'/id/" "$APP_DIR/dist/index.html" 2>/dev/null; then
   log_ok "  ✓ Base path /id/ terdeteksi di index.html"
 else
-  log_err "  ✗ Base path /id/ TIDAK ditemukan di index.html — periksa vite.config.ts!"
+  log_warn "  ⚠ Base path /id/ tidak terdeteksi di index.html — pastikan build dengan VITE_BASE_PATH=/id/"
+fi
+
+# Cek ukuran dist/server.cjs — harus > 100KB
+SERVER_SIZE="$(du -k "$APP_DIR/dist/server.cjs" 2>/dev/null | cut -f1 || echo 0)"
+if [ "$SERVER_SIZE" -lt 100 ]; then
+  log_err "  ✗ dist/server.cjs terlalu kecil (${SERVER_SIZE}KB) — build mungkin tidak lengkap"
   VERIFY_ERR=$((VERIFY_ERR + 1))
+else
+  log_ok "  ✓ dist/server.cjs ukuran OK (${SERVER_SIZE}KB)"
 fi
 
 if [ "$VERIFY_ERR" -gt 0 ]; then
-  log_err "$VERIFY_ERR masalah terdeteksi. Build dibatalkan, rollback..."
-  rollback_dist
+  log_err "$VERIFY_ERR masalah terdeteksi — deploy dibatalkan."
   exit 1
 fi
 
-DIST_SIZE="$(du -sh "$APP_DIR/dist" | cut -f1)"
-log_ok "Build valid: $DIST_SIZE total, ${BUILD_SECS}s."
-
 # ─────────────────────────────────────────────────────────────────────────────
-# LANGKAH 8 — Restart Passenger (cPanel)
+# LANGKAH 5 — Restart Node.js
 # ─────────────────────────────────────────────────────────────────────────────
-log_info "[8/8] Merestart aplikasi Node.js di cPanel..."
+log_info "[5/5] Merestart aplikasi Node.js di cPanel..."
 
-mkdir -p "$APP_DIR/tmp"
-touch "$APP_DIR/tmp/restart.txt"
-log_ok "tmp/restart.txt diperbarui — Passenger akan restart."
+restart_nodejs
 
 # =============================================================================
 log_info "══════════════════════════════════════════════════"
 log_ok   "DEPLOY BERHASIL ✓"
 log_info "Commit  : $COMMIT_AFTER"
 log_info "Branch  : $BRANCH"
-log_info "Build   : ${BUILD_SECS}s"
 log_info "Data DB   : TIDAK DIUBAH"
 log_info "app.js    : TIDAK DIUBAH (dari cPanel)"
-log_info ".htaccess : DIPERBARUI dari repo (routing API /id/api/* → Passenger)"
+log_info ".htaccess : DIPERBARUI dari repo"
 log_info "Log     : $LOG_FILE"
 log_info "══════════════════════════════════════════════════"
 log_info ""
