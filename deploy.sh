@@ -103,9 +103,16 @@ restart_nodejs() {
   touch "$APP_DIR/tmp/restart.txt"
   log_ok "tmp/restart.txt diperbarui."
 
-  # Metode 2: cPanel API restart (jika tersedia)
+  # Metode 2: cPanel API restart (jika tersedia dan modul NodeJS terpasang)
   if command -v uapi >/dev/null 2>&1; then
-    uapi NodeJS restart_app 2>/dev/null && log_ok "uapi NodeJS restart_app berhasil." || true
+    UAPI_OUT="$(uapi NodeJS restart_app 2>&1 || true)"
+    # uapi selalu exit 0; cek 'status: 1' di output YAML untuk sukses
+    if echo "$UAPI_OUT" | grep -q 'status: 1'; then
+      log_ok "uapi NodeJS restart_app: berhasil."
+    else
+      log_warn "uapi NodeJS restart_app tidak tersedia di server ini — restart manual diperlukan."
+      log_warn "  → cPanel → Setup Node.js App → cari app '/id' → klik RESTART"
+    fi
   fi
 }
 

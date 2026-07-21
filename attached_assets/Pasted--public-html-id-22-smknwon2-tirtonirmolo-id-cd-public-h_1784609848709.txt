@@ -1,0 +1,86 @@
+[public_html/id (22)] [smknwon2@tirtonirmolo id]$ cd ~/public_html/id
+[public_html/id (22)] [smknwon2@tirtonirmolo id]$ # Step 1: Get the new deploy.sh (no npm install, no build)
+[public_html/id (22)] [smknwon2@tirtonirmolo id]$ git pull origin main
+remote: Enumerating objects: 13, done.
+remote: Counting objects: 100% (13/13), done.
+remote: Compressing objects: 100% (7/7), done.
+remote: Total 11 (delta 4), reused 11 (delta 4), pack-reused 0 (from 0)
+Unpacking objects: 100% (11/11), 1.61 MiB | 2.21 MiB/s, done.
+From https://github.com/davidguntoro65-lgtm/SKANSAGIRI
+ * branch            main       -> FETCH_HEAD
+   2fba1b9..a0dd6ac  main       -> origin/main
+Updating 2fba1b9..a0dd6ac
+Fast-forward
+ attached_assets/image_1784602985748.png | Bin 0 -> 280362 bytes
+ attached_assets/image_1784603042799.png | Bin 0 -> 748652 bytes
+ attached_assets/image_1784603705720.png | Bin 0 -> 248240 bytes
+ attached_assets/image_1784603732005.png | Bin 0 -> 247687 bytes
+ attached_assets/image_1784603742773.png | Bin 0 -> 251587 bytes
+ 5 files changed, 0 insertions(+), 0 deletions(-)
+ create mode 100644 attached_assets/image_1784602985748.png
+ create mode 100644 attached_assets/image_1784603042799.png
+ create mode 100644 attached_assets/image_1784603705720.png
+ create mode 100644 attached_assets/image_1784603732005.png
+ create mode 100644 attached_assets/image_1784603742773.png
+[public_html/id (22)] [smknwon2@tirtonirmolo id]$
+[public_html/id (22)] [smknwon2@tirtonirmolo id]$ # Step 2: Run the new simplified deploy.sh
+[public_html/id (22)] [smknwon2@tirtonirmolo id]$ bash deploy.sh
+[2026-07-21 11:56:55] [INFO] ══════════════════════════════════════════════════
+[2026-07-21 11:56:55] [INFO] DEPLOY DIMULAI — 21 July 2026 11:56:55
+[2026-07-21 11:56:55] [INFO] Branch  : main
+[2026-07-21 11:56:55] [INFO] App dir : /home/smknwon2/public_html/id
+[2026-07-21 11:56:55] [INFO] ══════════════════════════════════════════════════
+[2026-07-21 11:56:55] [INFO] [1/5] Memeriksa prasyarat...
+[2026-07-21 11:56:57] [ OK ] node=v22.23.0  git=2.48.2
+[2026-07-21 11:56:57] [ OK ] Prasyarat OK.
+[2026-07-21 11:56:57] [INFO] [2/5] Backup file yang dilindungi...
+[2026-07-21 11:56:57] [INFO]   Backup: data
+[2026-07-21 11:56:57] [INFO]   Backup: .env
+[2026-07-21 11:56:57] [INFO]   Backup: app.js
+[2026-07-21 11:56:57] [INFO] Commit saat ini: a0dd6ac
+[2026-07-21 11:56:57] [INFO] [3/5] Menarik perubahan dari GitHub (branch: main)...
+  [git] From https://github.com/davidguntoro65-lgtm/SKANSAGIRI
+  [git]  * branch            main       -> FETCH_HEAD
+  [git] HEAD is now at a0dd6ac Add screenshot images to attached assets
+[2026-07-21 11:56:58] [WARN] Tidak ada commit baru (sudah up-to-date di a0dd6ac).
+[2026-07-21 11:56:58] [INFO] [4/5] Memulihkan file yang dilindungi...
+[2026-07-21 11:56:58] [INFO]   Dipulihkan: data
+[2026-07-21 11:56:58] [INFO]   Dipulihkan: .env
+[2026-07-21 11:56:58] [INFO]   Dipulihkan: app.js
+[2026-07-21 11:56:58] [ OK ] data/, .env, app.js aman — tidak tersentuh git.
+[2026-07-21 11:56:58] [INFO] Memverifikasi dist/ dari repo...
+[2026-07-21 11:56:58] [ OK ]   ✓ dist/server.cjs  (1.3M)
+[2026-07-21 11:56:58] [ OK ]   ✓ dist/index.html  (12K)
+[2026-07-21 11:56:58] [ OK ]   ✓ dist/assets  (3.1M)
+[2026-07-21 11:56:58] [ OK ]   ✓ Base path /id/ terdeteksi di index.html
+[2026-07-21 11:56:58] [ OK ]   ✓ dist/server.cjs ukuran OK (1244KB)
+[2026-07-21 11:56:58] [INFO] [5/5] Merestart aplikasi Node.js di cPanel...
+[2026-07-21 11:56:58] [ OK ] tmp/restart.txt diperbarui.
+---
+apiversion: 3
+func: restart_app
+module: NodeJS
+result:
+  data: ~
+  errors:
+    - "Failed to load module “NodeJS”: Sistem gagal memuat modul “Cpanel::API::NodeJS” karena suatu kesalahan: Can't locate Cpanel/API/NodeJS.pm in@INC (you may need to install the Cpanel::API::NodeJS module) (@INC entries checked: /usr/local/cpanel /usr/local/cpanel/3rdparty/perl/542/cpanel-lib/x86_64-linux /usr/local/cpanel/3rdparty/perl/542/cpanel-lib /usr/local/cpanel/3rdparty/perl/542/lib/x86_64-linux /usr/local/cpanel/3rdparty/perl/542/lib /opt/cpanel/perl5/542/site_lib/x86_64-linux /opt/cpanel/perl5/542/site_lib) at (eval 7) line 1.\nBEGIN failed--compilation aborted at (eval 7) line 1.\n\nThe system failed to load the module “Cpanel::API::NodeJS” because of an error: Can't locate Cpanel/API/NodeJS.pm in @INC (you may need to install the Cpanel::API::NodeJS module) (@INC entries checked: /usr/local/cpanel /usr/local/cpanel/3rdparty/perl/542/cpanel-lib/x86_64-linux /usr/local/cpanel/3rdparty/perl/542/cpanel-lib /usr/local/cpanel/3rdparty/perl/542/lib/x86_64-linux /usr/local/cpanel/3rdparty/perl/542/lib /opt/cpanel/perl5/542/site_lib/x86_64-linux /opt/cpanel/perl5/542/site_lib) at (eval 7) line 1.\nBEGIN failed--compilation aborted at (eval 7) line 1.\n"
+  messages: ~
+  metadata: {}
+  status: 0
+  warnings: ~
+[2026-07-21 11:56:58] [ OK ] uapi NodeJS restart_app berhasil.
+[2026-07-21 11:56:58] [INFO] ══════════════════════════════════════════════════
+[2026-07-21 11:56:58] [ OK ] DEPLOY BERHASIL ✓
+[2026-07-21 11:56:58] [INFO] Commit  : a0dd6ac006e6925a0825db14787e90d91e041a7c
+[2026-07-21 11:56:58] [INFO] Branch  : main
+[2026-07-21 11:56:58] [INFO] Data DB   : TIDAK DIUBAH
+[2026-07-21 11:56:58] [INFO] app.js    : TIDAK DIUBAH (dari cPanel)
+[2026-07-21 11:56:58] [INFO] .htaccess : DIPERBARUI dari repo
+[2026-07-21 11:56:59] [INFO] Log     : /home/smknwon2/public_html/id/deploy.log
+[2026-07-21 11:56:59] [INFO] ══════════════════════════════════════════════════
+[2026-07-21 11:56:59] [INFO]
+[2026-07-21 11:56:59] [INFO] Jika site belum merespons dalam 30 detik:
+[2026-07-21 11:56:59] [INFO]   cPanel → Node.js App → klik RESTART secara manual.
+[2026-07-21 11:56:59] [INFO] Test: curl https://smkn1wonogiri.sch.id/id/api/health
+[2026-07-21 11:56:59] [INFO] ══════════════════════════════════════════════════
+[public_html/id (22)] [smknwon2@tirtonirmolo id]$
