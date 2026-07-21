@@ -3,23 +3,23 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { 
-  COMPETENCY_DATA, 
-  TIMELINE_ACHIEVEMENTS, 
-  CAMPUS_LIFE_GALLERY, 
-  ALUMNI_TESTIMONIALS, 
+import { db } from "./src/db";
+import {
+  COMPETENCY_DATA,
+  TIMELINE_ACHIEVEMENTS,
+  CAMPUS_LIFE_GALLERY,
+  ALUMNI_TESTIMONIALS,
   NEWS_COMPILATION,
   INDUSTRI_PARTNERS
 } from "./src/data";
 
 const app = express();
 const PORT = parseInt(process.env.PORT || "5000", 10);
-const DATA_DIR = path.join(process.cwd(), "data");
 
 // ─── Server-side file logger ─────────────────────────────────────────────────
 const LOG_DIR      = path.join(process.cwd(), "logs");
 const SERVER_LOG   = path.join(LOG_DIR, "server.log");
-const MAX_LOG_SIZE = 512 * 1024; // rotate at 512 KB
+const MAX_LOG_SIZE = 512 * 1024;
 
 function serverLog(level: "INFO" | "WARN" | "ERROR", message: string) {
   const line = `${new Date().toISOString()} [${level}] ${message}\n`;
@@ -32,57 +32,39 @@ function serverLog(level: "INFO" | "WARN" | "ERROR", message: string) {
       fs.renameSync(SERVER_LOG, old);
     }
     fs.appendFileSync(SERVER_LOG, line, "utf-8");
-  } catch { /* best-effort — never crash the server because of logging */ }
+  } catch { /* best-effort */ }
 }
 
 serverLog("INFO", `server.ts loaded — PORT=${PORT}  NODE_ENV=${process.env.NODE_ENV}  BASE_PATH=${process.env.BASE_PATH}`);
 
-// ─── Persistent session store ────────────────────────────────────────────────
-// Sessions are written to data/sessions.json so they survive Passenger restarts.
-// Each entry maps token → expiry timestamp (48h TTL).
+// ─── Session TTL ─────────────────────────────────────────────────────────────
 const SESSION_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
-const SESSIONS_FILE = path.join(DATA_DIR, "sessions.json");
 
-function loadSessions(): Map<string, number> {
-  try {
-    if (fs.existsSync(SESSIONS_FILE)) {
-      const raw = JSON.parse(fs.readFileSync(SESSIONS_FILE, "utf-8"));
-      const now = Date.now();
-      // Hydrate and drop expired entries
-      return new Map(Object.entries(raw as Record<string, number>).filter(([, exp]) => exp > now));
-    }
-  } catch { /* fall through */ }
-  return new Map();
+// ─── DB-backed session helpers ────────────────────────────────────────────────
+async function addSession(token: string) {
+  const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+  // Purge expired sessions while we're here
+  await db.session.deleteMany({ where: { expiresAt: { lt: new Date() } } }).catch(() => {});
+  await db.session.create({ data: { token, expiresAt } });
 }
 
-function saveSessions(sessions: Map<string, number>) {
-  try {
-    const obj: Record<string, number> = {};
-    sessions.forEach((exp, tok) => { obj[tok] = exp; });
-    fs.writeFileSync(SESSIONS_FILE, JSON.stringify(obj), "utf-8");
-  } catch { /* best-effort */ }
-}
-
-const activeSessions = loadSessions();
-
-function addSession(token: string) {
-  const now = Date.now();
-  // Purge expired sessions while we're at it
-  activeSessions.forEach((exp, tok) => { if (exp <= now) activeSessions.delete(tok); });
-  activeSessions.set(token, now + SESSION_TTL_MS);
-  saveSessions(activeSessions);
-}
-
-function hasSession(token: string): boolean {
-  const exp = activeSessions.get(token);
-  if (!exp) return false;
-  if (Date.now() > exp) { activeSessions.delete(token); saveSessions(activeSessions); return false; }
+async function hasSession(token: string): Promise<boolean> {
+  if (!token) return false;
+  const sess = await db.session.findUnique({ where: { token } });
+  if (!sess) return false;
+  if (sess.expiresAt < new Date()) {
+    await db.session.delete({ where: { token } }).catch(() => {});
+    return false;
+  }
   return true;
 }
 
-function removeSession(token: string) {
-  activeSessions.delete(token);
-  saveSessions(activeSessions);
+async function removeSession(token: string) {
+  await db.session.delete({ where: { token } }).catch(() => {});
+}
+
+async function removeAllSessions() {
+  await db.session.deleteMany({});
 }
 
 // Login rate limiter: max 5 attempts per IP, then 60s lockout
@@ -106,74 +88,51 @@ function recordFailedAttempt(ip: string) {
   }
   loginAttempts.set(ip, entry);
 }
-function clearAttempts(ip: string) {
-  loginAttempts.delete(ip);
-}
-// Purge stale rate-limit entries every 10 minutes to prevent memory leak
+function clearAttempts(ip: string) { loginAttempts.delete(ip); }
 setInterval(() => {
   const cutoff = Date.now() - 10 * 60 * 1000;
   for (const [ip, entry] of loginAttempts.entries()) {
-    if (entry.lastSeen < cutoff && entry.lockUntil < Date.now()) {
-      loginAttempts.delete(ip);
-    }
+    if (entry.lastSeen < cutoff && entry.lockUntil < Date.now()) loginAttempts.delete(ip);
   }
 }, 10 * 60 * 1000).unref();
 
-// Auth middleware — protects all write endpoints
-function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
-  const authHeader = req.headers.authorization || "";
-  const token = authHeader.replace("Bearer ", "").trim();
-  if (!token || !hasSession(token)) {
+// ─── Auth middleware ──────────────────────────────────────────────────────────
+async function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
+  if (!token || !(await hasSession(token))) {
     return res.status(401).json({ error: "Tidak diotorisasi. Silakan login kembali." });
   }
   next();
 }
 
-// Ensure data directory exists
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+// ─── Admin credentials helpers ────────────────────────────────────────────────
+async function getAdminCredentials(): Promise<{ username: string; password: string }> {
+  const cred = await db.adminCredential.findFirst();
+  if (cred) return { username: cred.username, password: cred.password };
+  return {
+    username: process.env.ADMIN_USERNAME || "jobenenterprise",
+    password: process.env.ADMIN_PASSWORD || "KuraKuraNinja!0!",
+  };
 }
 
-const filePaths = {
-  competencies: path.join(DATA_DIR, "competencies.json"),
-  milestones: path.join(DATA_DIR, "milestones.json"),
-  gallery: path.join(DATA_DIR, "gallery.json"),
-  alumni: path.join(DATA_DIR, "alumni.json"),
-  news: path.join(DATA_DIR, "news.json"),
-  partners: path.join(DATA_DIR, "partners.json"),
-  branding: path.join(DATA_DIR, "branding.json"),
-  kepalaSekolah: path.join(DATA_DIR, "kepala-sekolah.json"),
-  manajemenSekolah: path.join(DATA_DIR, "manajemen-sekolah.json"),
-  visiMisi: path.join(DATA_DIR, "visi-misi.json"),
-  socialMedia: path.join(DATA_DIR, "social-media.json"),
-  adminCredentials: path.join(DATA_DIR, "admin-credentials.json")
-};
-
-// Helper to initialize files with initial data if they don't exist
-function initJsonFile(filePath: string, initialData: any) {
-  if (!fs.existsSync(filePath)) {
-    fs.writeFileSync(filePath, JSON.stringify(initialData, null, 2), "utf-8");
-  } else {
-    try {
-      const content = fs.readFileSync(filePath, "utf-8");
-      JSON.parse(content);
-    } catch (e) {
-      console.error(`Invalid JSON in ${filePath}, resetting to default.`);
-      fs.writeFileSync(filePath, JSON.stringify(initialData, null, 2), "utf-8");
-    }
-  }
+// ─── Setting helpers (replaces all JSON file r/w for config + collections) ────
+async function getSetting<T>(key: string, fallback: T): Promise<T> {
+  const row = await db.setting.findUnique({ where: { key } });
+  if (row) return row.value as T;
+  // Seed default on first access
+  await db.setting.create({ data: { key, value: fallback as any } }).catch(() => {});
+  return fallback;
 }
 
-// ── Atomic write: write to .tmp then rename to prevent JSON corruption on crash ──
-function atomicWriteFile(filePath: string, data: string) {
-  const tmp = filePath + ".tmp";
-  fs.writeFileSync(tmp, data, "utf-8");
-  fs.renameSync(tmp, filePath);
+async function setSetting(key: string, value: any) {
+  await db.setting.upsert({
+    where: { key },
+    update: { value },
+    create: { key, value },
+  });
 }
 
-// ── Image size guard: reject base64 fields exceeding maxKB per field ──────────
-// maxKB is measured against the base64 string length (≈ 1.37× binary size).
-// This prevents giant payloads from crashing Passenger on shared hosting.
+// ─── Image size guard ─────────────────────────────────────────────────────────
 function validateImageFields(obj: any, fields: string[], maxKB: number): string | null {
   for (const field of fields) {
     const val = obj?.[field];
@@ -187,46 +146,25 @@ function validateImageFields(obj: any, fields: string[], maxKB: number): string 
   return null;
 }
 
-// Initialize dynamic datasets with full protection
-initJsonFile(filePaths.competencies, COMPETENCY_DATA);
-initJsonFile(filePaths.milestones, TIMELINE_ACHIEVEMENTS);
-initJsonFile(filePaths.gallery, CAMPUS_LIFE_GALLERY);
-initJsonFile(filePaths.alumni, ALUMNI_TESTIMONIALS);
-initJsonFile(filePaths.news, NEWS_COMPILATION);
-initJsonFile(filePaths.partners, INDUSTRI_PARTNERS);
-initJsonFile(filePaths.branding, {
-  schoolLogo: null,
-  schoolLogoDark: null,
-  schoolLogoLight: null,
-  schoolFavicon: null,
-  schoolAppIcon: null
-});
-initJsonFile(filePaths.kepalaSekolah, {
+// ─── Default setting values ───────────────────────────────────────────────────
+const DEFAULT_BRANDING = {
+  schoolLogo: null, schoolLogoDark: null, schoolLogoLight: null,
+  schoolFavicon: null, schoolAppIcon: null
+};
+const DEFAULT_KEPALA_SEKOLAH = {
   nama: "Drs. Gunawan, M.Pd.",
   nip: "19680324 199403 1 008",
   foto: null,
   sambutan: "Atas nama segenap keluarga besar SMKN 1 Wonogiri, saya menyambut kehadiran Anda di gerbang digital institusi terakreditasi unggul kami. Kami percaya bahwa pendidikan kejuruan mandiri tidak hanya mengajarkan metode teknis semata, namun mencetak kesiapan karakter, kepemimpinan, dan etika moral kelas dunia.\n\nSebagai Center of Excellence Nasional, kami mendesain setiap detail proses belajar mengajar dengan standar internasional paling prima. Kami mendedikasikan seluruh daya upaya guna meluncurkan lulusan yang siap mengambil peranan krusial sebagai inovator bisnis, ahli kriya, serta motor penggerak ekonomi global."
-});
-initJsonFile(filePaths.manajemenSekolah, [
+};
+const DEFAULT_MANAJEMEN = [
   { id: "waka-kesiswaan", jabatan: "Waka Kesiswaan", nama: "-", foto: null },
   { id: "waka-kurikulum", jabatan: "Waka Kurikulum", nama: "-", foto: null },
   { id: "waka-sarpras", jabatan: "Waka Sarpras & Ketenagakerjaan", nama: "-", foto: null },
   { id: "waka-humas", jabatan: "Waka Humas", nama: "-", foto: null },
-  { id: "kepala-tu", jabatan: "Kepala Tata Usaha", nama: "-", foto: null }
-]);
-const aboutPath = path.join(DATA_DIR, "about.json");
-initJsonFile(aboutPath, { foto: null, fotoX: 50, fotoY: 50, fotoScale: 100 });
-
-initJsonFile(filePaths.socialMedia, {
-  instagram: "https://instagram.com/smkn1wonogiri",
-  youtube: "https://youtube.com/@smkn1wonogiri",
-  website: "https://smkn1wonogiri.sch.id",
-  facebook: "",
-  tiktok: "",
-  twitter: ""
-});
-
-initJsonFile(filePaths.visiMisi, {
+  { id: "kepala-tu", jabatan: "Kepala Tata Usaha", nama: "-", foto: null },
+];
+const DEFAULT_VISI_MISI = {
   visi: "Terwujudnya SMKN 1 Wonogiri sebagai lembaga pendidikan kejuruan yang unggul, berkarakter, dan berdaya saing global dalam rangka mewujudkan masyarakat yang sejahtera.",
   misi: [
     "Menyelenggarakan pendidikan dan pelatihan kejuruan berkualitas tinggi berbasis kompetensi dan standar industri nasional maupun internasional.",
@@ -235,13 +173,44 @@ initJsonFile(filePaths.visiMisi, {
     "Menciptakan lingkungan belajar yang inovatif, inspiratif, dan adaptif terhadap perkembangan ilmu pengetahuan dan teknologi.",
     "Menghasilkan lulusan yang kompeten, produktif, mandiri, dan siap memasuki dunia kerja serta berwirausaha di era global."
   ]
-});
+};
+const DEFAULT_SOCIAL_MEDIA = {
+  instagram: "https://instagram.com/smkn1wonogiri",
+  youtube: "https://youtube.com/@smkn1wonogiri",
+  website: "https://smkn1wonogiri.sch.id",
+  facebook: "", tiktok: "", twitter: ""
+};
+const DEFAULT_ABOUT = { foto: null, fotoX: 50, fotoY: 50, fotoScale: 100 };
 
-// Parsing Middlewares
+// ─── Seed defaults into DB on startup ─────────────────────────────────────────
+async function seedDefaults() {
+  const seeds: [string, any][] = [
+    ["competencies", COMPETENCY_DATA],
+    ["milestones", TIMELINE_ACHIEVEMENTS],
+    ["gallery", CAMPUS_LIFE_GALLERY],
+    ["alumni", ALUMNI_TESTIMONIALS],
+    ["news", NEWS_COMPILATION],
+    ["partners", INDUSTRI_PARTNERS],
+    ["branding", DEFAULT_BRANDING],
+    ["kepala-sekolah", DEFAULT_KEPALA_SEKOLAH],
+    ["manajemen-sekolah", DEFAULT_MANAJEMEN],
+    ["visi-misi", DEFAULT_VISI_MISI],
+    ["social-media", DEFAULT_SOCIAL_MEDIA],
+    ["about", DEFAULT_ABOUT],
+  ];
+  for (const [key, value] of seeds) {
+    const exists = await db.setting.findUnique({ where: { key } });
+    if (!exists) {
+      await db.setting.create({ data: { key, value } }).catch(() => {});
+    }
+  }
+}
+
+// ─── Parsing Middlewares ──────────────────────────────────────────────────────
 app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ extended: true, limit: "25mb" }));
 
-// Security headers — applied to every response
+// Security headers
 app.use((_req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "SAMEORIGIN");
@@ -251,155 +220,106 @@ app.use((_req, res, next) => {
   next();
 });
 
-// Path normalisation — strip the BASE_PATH prefix (/id) when Passenger/LiteSpeed passes the
-// full URI to Express (e.g. /id/api/auth/login → /api/auth/login).
-// Also handles /id (exact, no trailing slash) → 302 redirect to /id/ so the SPA loads.
-// Harmless when the frontend calls /api/… directly (no /id prefix present).
+// BASE_PATH prefix stripping (cPanel/Passenger)
 app.use((req, res, next) => {
-  const BASE = (process.env.BASE_PATH || "").replace(/\/$/, ""); // e.g. "/id"
+  const BASE = (process.env.BASE_PATH || "").replace(/\/$/, "");
   if (BASE) {
-    if (req.url === BASE) {
-      // /id → /id/  (missing trailing slash would cause Express to return "Cannot GET /id")
-      return res.redirect(302, BASE + "/");
-    }
-    if (req.url.startsWith(BASE + "/")) {
-      req.url = req.url.slice(BASE.length); // strip prefix; req.path updates automatically
-    }
+    if (req.url === BASE) return res.redirect(302, BASE + "/");
+    if (req.url.startsWith(BASE + "/")) req.url = req.url.slice(BASE.length);
   }
   next();
 });
 
-// Global write-protection: every POST/DELETE/PUT except public ones requires a valid session token
+// Global write-protection
 app.use((req, res, next) => {
   const writeMethods = ["POST", "DELETE", "PUT", "PATCH"];
   if (!writeMethods.includes(req.method)) return next();
-
-  // Exact-match public routes
   const publicExact = ["/api/auth/login", "/api/tracer", "/api/contact", "/api/suara", "/api/aduan"];
   if (publicExact.includes(req.path)) return next();
-
-  // Pattern-match public routes (dynamic segments)
   const publicPatterns = [
-    /^\/api\/suara\/[^/]+\/komentar$/,   // POST /api/suara/:id/komentar
-    /^\/api\/suara\/[^/]+\/like$/,       // PATCH /api/suara/:id/like
-    /^\/api\/suara\/[^/]+\/view$/,       // PATCH /api/suara/:id/view
+    /^\/api\/suara\/[^/]+\/komentar$/,
+    /^\/api\/suara\/[^/]+\/like$/,
+    /^\/api\/suara\/[^/]+\/view$/,
   ];
   if (publicPatterns.some(re => re.test(req.path))) return next();
-
   return requireAuth(req, res, next);
 });
 
-// --- Auth Endpoints ---
-
-function getAdminCredentials(): { username: string; password: string } {
-  try {
-    if (fs.existsSync(filePaths.adminCredentials)) {
-      const saved = JSON.parse(fs.readFileSync(filePaths.adminCredentials, "utf-8"));
-      if (saved.username && saved.password) return saved;
-    }
-  } catch { /* fall through */ }
-  return {
-    username: process.env.ADMIN_USERNAME || "jobenenterprise",
-    password: process.env.ADMIN_PASSWORD || "KuraKuraNinja!0!",
-  };
-}
-
-app.post("/api/auth/login", (req, res) => {
+// ─── Auth Endpoints ───────────────────────────────────────────────────────────
+app.post("/api/auth/login", async (req, res) => {
   const ip = (req.headers["x-forwarded-for"] as string || req.socket.remoteAddress || "unknown").split(",")[0].trim();
   const { allowed, secondsLeft } = checkRateLimit(ip);
-  if (!allowed) {
-    return res.status(429).json({ error: `Terlalu banyak percobaan login. Coba lagi dalam ${secondsLeft} detik.` });
-  }
+  if (!allowed) return res.status(429).json({ error: `Terlalu banyak percobaan login. Coba lagi dalam ${secondsLeft} detik.` });
   const { username, password } = req.body;
-  const creds = getAdminCredentials();
+  const creds = await getAdminCredentials();
   if (username === creds.username && password === creds.password) {
     clearAttempts(ip);
     const token = crypto.randomBytes(48).toString("hex");
-    addSession(token);
+    await addSession(token);
     return res.json({ token });
   }
   recordFailedAttempt(ip);
   return res.status(401).json({ error: "Kombinasi User Name atau Sandi salah. Periksa kembali!" });
 });
 
-app.post("/api/auth/change-password", (req, res) => {
+app.post("/api/auth/change-password", async (req, res) => {
   const { currentPassword, newUsername, newPassword } = req.body;
-  if (!currentPassword || !newPassword) {
-    return res.status(400).json({ error: "Password lama dan password baru wajib diisi." });
-  }
-  if (newPassword.length < 8) {
-    return res.status(400).json({ error: "Password baru minimal 8 karakter." });
-  }
-  const creds = getAdminCredentials();
-  if (currentPassword !== creds.password) {
-    return res.status(401).json({ error: "Password saat ini salah." });
-  }
-  const updated = {
-    username: (newUsername || "").trim() || creds.username,
-    password: newPassword,
-  };
+  if (!currentPassword || !newPassword) return res.status(400).json({ error: "Password lama dan password baru wajib diisi." });
+  if (newPassword.length < 8) return res.status(400).json({ error: "Password baru minimal 8 karakter." });
+  const creds = await getAdminCredentials();
+  if (currentPassword !== creds.password) return res.status(401).json({ error: "Password saat ini salah." });
+  const updated = { username: (newUsername || "").trim() || creds.username, password: newPassword };
   try {
-    fs.writeFileSync(filePaths.adminCredentials, JSON.stringify(updated, null, 2), "utf-8");
-    // Invalidate all active sessions so user must re-login with new credentials
-    activeSessions.clear();
-    saveSessions(activeSessions);
+    await db.adminCredential.upsert({
+      where: { id: 1 },
+      update: updated,
+      create: { id: 1, ...updated },
+    });
+    await removeAllSessions();
     return res.json({ success: true, username: updated.username });
   } catch (err: any) {
     return res.status(500).json({ error: "Gagal menyimpan perubahan: " + err.message });
   }
 });
 
-app.post("/api/auth/logout", (req, res) => {
+app.post("/api/auth/logout", async (req, res) => {
   const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
-  if (token) removeSession(token);
+  if (token) await removeSession(token);
   return res.json({ success: true });
 });
 
-app.get("/api/auth/verify", (req, res) => {
+app.get("/api/auth/verify", async (req, res) => {
   const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
-  if (token && hasSession(token)) return res.json({ valid: true });
+  if (token && (await hasSession(token))) return res.json({ valid: true });
   return res.status(401).json({ valid: false });
 });
 
-// --- Health Check Endpoint ---
-
-app.get("/api/health", (_req, res) => {
+// ─── Health Check ─────────────────────────────────────────────────────────────
+app.get("/api/health", async (_req, res) => {
   const startedAt = new Date(Date.now() - process.uptime() * 1000).toISOString();
-  const uptimeSeconds = Math.floor(process.uptime());
-
-  // adminCredentials is intentionally optional — falls back to env vars when absent
-  const optionalFiles = new Set(["adminCredentials"]);
-
-  const dataFiles = Object.entries(filePaths) as [string, string][];
-  const fileStatus = dataFiles.map(([name, filePath]) => {
-    try {
-      if (!fs.existsSync(filePath)) return { name, status: optionalFiles.has(name) ? "optional" : "missing" };
-      const raw = fs.readFileSync(filePath, "utf-8");
-      JSON.parse(raw);
-      return { name, status: "ok" };
-    } catch {
-      return { name, status: "corrupt" };
-    }
-  });
-
-  const allOk = fileStatus.every(f => f.status === "ok" || f.status === "optional");
-
-  res.status(allOk ? 200 : 207).json({
-    status: allOk ? "ok" : "degraded",
+  let dbStatus = "ok";
+  let sessionCount = 0;
+  try {
+    const result = await db.$queryRaw<[{ count: bigint }]>`SELECT COUNT(*) as count FROM "Session" WHERE "expiresAt" > NOW()`;
+    sessionCount = Number(result[0].count);
+  } catch (e: any) {
+    dbStatus = "error: " + e.message;
+  }
+  res.status(dbStatus === "ok" ? 200 : 207).json({
+    status: dbStatus === "ok" ? "ok" : "degraded",
     server: "running",
-    uptime_seconds: uptimeSeconds,
+    uptime_seconds: Math.floor(process.uptime()),
     started_at: startedAt,
     timestamp: new Date().toISOString(),
     node_version: process.version,
     env: process.env.NODE_ENV || "development",
-    active_sessions: activeSessions.size,
-    data_files: fileStatus,
+    active_sessions: sessionCount,
+    database: dbStatus,
   });
 });
 
-// --- Logs Endpoint (auth-protected) ---
-
-app.get("/api/logs", requireAuth, (_req, res) => {
+// ─── Logs Endpoint ────────────────────────────────────────────────────────────
+app.get("/api/logs", requireAuth as any, (_req, res) => {
   const files = [
     { name: "app.log",    path: path.join(process.cwd(), "logs", "app.log") },
     { name: "server.log", path: SERVER_LOG },
@@ -411,8 +331,7 @@ app.get("/api/logs", requireAuth, (_req, res) => {
     try {
       if (!fs.existsSync(f.path)) { result[f.name] = ["(file not found)"]; continue; }
       const raw = fs.readFileSync(f.path, "utf-8");
-      const lines = raw.split("\n").filter(Boolean);
-      result[f.name] = lines.slice(-TAIL_LINES);
+      result[f.name] = raw.split("\n").filter(Boolean).slice(-TAIL_LINES);
     } catch (e: any) {
       result[f.name] = [`(read error: ${e.message})`];
     }
@@ -420,569 +339,281 @@ app.get("/api/logs", requireAuth, (_req, res) => {
   res.json({ generated_at: new Date().toISOString(), files: result });
 });
 
-// --- Express REST API Routes for High Integrity CRUD ---
-
-// 1. Competencies API
-app.get("/api/competencies", (req, res) => {
-  try {
-    const data = fs.readFileSync(filePaths.competencies, "utf-8");
-    res.json(JSON.parse(data));
-  } catch (error: any) {
-    res.status(500).json({ error: "Failed to read competencies: " + error.message });
-  }
-});
-
-app.post("/api/competencies", (req, res) => {
-  try {
-    const { data } = req.body;
-    if (!Array.isArray(data)) {
-      return res.status(400).json({ error: "Data must be an array of competencies" });
+// ─── Generic setting GET/POST factory ─────────────────────────────────────────
+function settingRoutes(
+  key: string,
+  defaultValue: any,
+  opts: {
+    validateArray?: boolean;
+    imageFields?: string[];
+    maxImgKB?: number;
+    arrayItemImageFields?: string[];
+    arrayItemMaxKB?: number;
+  } = {}
+) {
+  app.get(`/api/${key}`, async (_req, res) => {
+    try {
+      res.json(await getSetting(key, defaultValue));
+    } catch (e: any) {
+      res.status(500).json({ error: `Failed to read ${key}: ` + e.message });
     }
-    atomicWriteFile(filePaths.competencies, JSON.stringify(data, null, 2));
-    res.json({ success: true, count: data.length });
-  } catch (error: any) {
-    res.status(500).json({ error: "Failed to save competencies: " + error.message });
-  }
-});
+  });
 
-// 2. Milestones API
-app.get("/api/milestones", (req, res) => {
-  try {
-    const data = fs.readFileSync(filePaths.milestones, "utf-8");
-    res.json(JSON.parse(data));
-  } catch (error: any) {
-    res.status(500).json({ error: "Failed to read milestones: " + error.message });
-  }
-});
-
-app.post("/api/milestones", (req, res) => {
-  try {
-    const { data } = req.body;
-    if (!Array.isArray(data)) {
-      return res.status(400).json({ error: "Data must be an array of milestones" });
-    }
-    atomicWriteFile(filePaths.milestones, JSON.stringify(data, null, 2));
-    res.json({ success: true, count: data.length });
-  } catch (error: any) {
-    res.status(500).json({ error: "Failed to save milestones: " + error.message });
-  }
-});
-
-// 3. Gallery API
-app.get("/api/gallery", (req, res) => {
-  try {
-    const data = fs.readFileSync(filePaths.gallery, "utf-8");
-    res.json(JSON.parse(data));
-  } catch (error: any) {
-    res.status(500).json({ error: "Failed to read gallery: " + error.message });
-  }
-});
-
-app.post("/api/gallery", (req, res) => {
-  try {
-    const { data } = req.body;
-    if (!Array.isArray(data)) {
-      return res.status(400).json({ error: "Data must be an array of gallery items" });
-    }
-    for (const item of data) {
-      const imgErr = validateImageFields(item, ["image"], 800);
-      if (imgErr) return res.status(413).json({ error: imgErr });
-    }
-    atomicWriteFile(filePaths.gallery, JSON.stringify(data, null, 2));
-    res.json({ success: true, count: data.length });
-  } catch (error: any) {
-    res.status(500).json({ error: "Failed to save gallery: " + error.message });
-  }
-});
-
-// 4. Alumni API
-app.get("/api/alumni", (req, res) => {
-  try {
-    const data = fs.readFileSync(filePaths.alumni, "utf-8");
-    res.json(JSON.parse(data));
-  } catch (error: any) {
-    res.status(500).json({ error: "Failed to read alumni: " + error.message });
-  }
-});
-
-app.post("/api/alumni", (req, res) => {
-  try {
-    const { data } = req.body;
-    if (!Array.isArray(data)) {
-      return res.status(400).json({ error: "Data must be an array of alumni" });
-    }
-    for (const item of data) {
-      const imgErr = validateImageFields(item, ["avatar"], 500);
-      if (imgErr) return res.status(413).json({ error: imgErr });
-    }
-    atomicWriteFile(filePaths.alumni, JSON.stringify(data, null, 2));
-    res.json({ success: true, count: data.length });
-  } catch (error: any) {
-    res.status(500).json({ error: "Failed to save alumni: " + error.message });
-  }
-});
-
-// 5. News API
-app.get("/api/news", (req, res) => {
-  try {
-    const data = fs.readFileSync(filePaths.news, "utf-8");
-    res.json(JSON.parse(data));
-  } catch (error: any) {
-    res.status(500).json({ error: "Failed to read news: " + error.message });
-  }
-});
-
-app.post("/api/news", (req, res) => {
-  try {
-    const { data } = req.body;
-    if (!Array.isArray(data)) {
-      return res.status(400).json({ error: "Data must be an array of news items" });
-    }
-    for (const item of data) {
-      const imgErr = validateImageFields(item, ["image"], 800);
-      if (imgErr) return res.status(413).json({ error: imgErr });
-    }
-    atomicWriteFile(filePaths.news, JSON.stringify(data, null, 2));
-    res.json({ success: true, count: data.length });
-  } catch (error: any) {
-    res.status(500).json({ error: "Failed to save news: " + error.message });
-  }
-});
-
-// 6. Partners API
-app.get("/api/partners", (req, res) => {
-  try {
-    const data = fs.readFileSync(filePaths.partners, "utf-8");
-    res.json(JSON.parse(data));
-  } catch (error: any) {
-    res.status(500).json({ error: "Failed to read partners: " + error.message });
-  }
-});
-
-app.post("/api/partners", (req, res) => {
-  try {
-    const { data } = req.body;
-    if (!Array.isArray(data)) {
-      return res.status(400).json({ error: "Data must be an array of partners" });
-    }
-    atomicWriteFile(filePaths.partners, JSON.stringify(data, null, 2));
-    res.json({ success: true, count: data.length });
-  } catch (error: any) {
-    res.status(500).json({ error: "Failed to save partners: " + error.message });
-  }
-});
-
-// 7. Kepala Sekolah API
-app.get("/api/kepala-sekolah", (req, res) => {
-  try {
-    res.json(JSON.parse(fs.readFileSync(filePaths.kepalaSekolah, "utf-8")));
-  } catch (e: any) {
-    res.status(500).json({ error: "Failed to read kepala sekolah: " + e.message });
-  }
-});
-app.post("/api/kepala-sekolah", (req, res) => {
-  try {
-    const imgErr = validateImageFields(req.body, ["foto"], 800);
-    if (imgErr) return res.status(413).json({ error: imgErr });
-    atomicWriteFile(filePaths.kepalaSekolah, JSON.stringify(req.body, null, 2));
-    res.json({ success: true });
-  } catch (e: any) {
-    res.status(500).json({ error: "Failed to save kepala sekolah: " + e.message });
-  }
-});
-
-// 8. Manajemen Sekolah API
-app.get("/api/manajemen-sekolah", (req, res) => {
-  try {
-    res.json(JSON.parse(fs.readFileSync(filePaths.manajemenSekolah, "utf-8")));
-  } catch (e: any) {
-    res.status(500).json({ error: "Failed to read manajemen sekolah: " + e.message });
-  }
-});
-app.post("/api/manajemen-sekolah", (req, res) => {
-  try {
-    const items = req.body;
-    if (Array.isArray(items)) {
-      for (const item of items) {
-        const imgErr = validateImageFields(item, ["foto"], 800);
-        if (imgErr) return res.status(413).json({ error: imgErr });
+  app.post(`/api/${key}`, async (req, res) => {
+    try {
+      const data = opts.validateArray ? req.body.data : req.body;
+      if (opts.validateArray && !Array.isArray(data)) {
+        return res.status(400).json({ error: `Data must be an array` });
       }
+      // Per-object image validation
+      if (opts.imageFields) {
+        const err = validateImageFields(data, opts.imageFields, opts.maxImgKB ?? 800);
+        if (err) return res.status(413).json({ error: err });
+      }
+      // Per-item image validation for arrays
+      if (opts.arrayItemImageFields && Array.isArray(data)) {
+        for (const item of data) {
+          const err = validateImageFields(item, opts.arrayItemImageFields, opts.arrayItemMaxKB ?? 800);
+          if (err) return res.status(413).json({ error: err });
+        }
+      }
+      await setSetting(key, data);
+      res.json({ success: true, count: Array.isArray(data) ? data.length : undefined });
+    } catch (e: any) {
+      res.status(500).json({ error: `Failed to save ${key}: ` + e.message });
     }
-    atomicWriteFile(filePaths.manajemenSekolah, JSON.stringify(req.body, null, 2));
-    res.json({ success: true });
-  } catch (e: any) {
-    res.status(500).json({ error: "Failed to save manajemen sekolah: " + e.message });
-  }
-});
+  });
+}
 
-// 9. Visi Misi API
-app.get("/api/visi-misi", (req, res) => {
-  try {
-    res.json(JSON.parse(fs.readFileSync(filePaths.visiMisi, "utf-8")));
-  } catch (e: any) {
-    res.status(500).json({ error: "Failed to read visi misi: " + e.message });
-  }
+// Register all setting-backed routes
+settingRoutes("competencies", COMPETENCY_DATA, { validateArray: true });
+settingRoutes("milestones", TIMELINE_ACHIEVEMENTS, { validateArray: true });
+settingRoutes("gallery", CAMPUS_LIFE_GALLERY, { validateArray: true, arrayItemImageFields: ["image"], arrayItemMaxKB: 800 });
+settingRoutes("alumni", ALUMNI_TESTIMONIALS, { validateArray: true, arrayItemImageFields: ["avatar"], arrayItemMaxKB: 500 });
+settingRoutes("news", NEWS_COMPILATION, { validateArray: true, arrayItemImageFields: ["image"], arrayItemMaxKB: 800 });
+settingRoutes("partners", INDUSTRI_PARTNERS, { validateArray: true });
+settingRoutes("kepala-sekolah", DEFAULT_KEPALA_SEKOLAH, { imageFields: ["foto"], maxImgKB: 800 });
+settingRoutes("manajemen-sekolah", DEFAULT_MANAJEMEN, {
+  validateArray: false,
+  arrayItemImageFields: ["foto"],
+  arrayItemMaxKB: 800,
 });
-app.post("/api/visi-misi", (req, res) => {
-  try {
-    atomicWriteFile(filePaths.visiMisi, JSON.stringify(req.body, null, 2));
-    res.json({ success: true });
-  } catch (e: any) {
-    res.status(500).json({ error: "Failed to save visi misi: " + e.message });
-  }
-});
+settingRoutes("visi-misi", DEFAULT_VISI_MISI);
+settingRoutes("social-media", DEFAULT_SOCIAL_MEDIA);
+settingRoutes("about", DEFAULT_ABOUT, { imageFields: ["foto"], maxImgKB: 800 });
 
-// --- SOCIAL MEDIA API ---
-app.get("/api/social-media", (req, res) => {
-  try {
-    res.json(JSON.parse(fs.readFileSync(filePaths.socialMedia, "utf-8")));
-  } catch (e: any) {
-    res.status(500).json({ error: "Failed to read social media: " + e.message });
-  }
+// ─── Branding (special: POST wraps body as-is, with logo field validation) ────
+app.get("/api/branding", async (_req, res) => {
+  try { res.json(await getSetting("branding", DEFAULT_BRANDING)); }
+  catch (e: any) { res.status(500).json({ error: "Failed to read branding: " + e.message }); }
 });
-app.post("/api/social-media", (req, res) => {
-  try {
-    atomicWriteFile(filePaths.socialMedia, JSON.stringify(req.body, null, 2));
-    res.json({ success: true });
-  } catch (e: any) {
-    res.status(500).json({ error: "Failed to save social media: " + e.message });
-  }
-});
-
-// --- ABOUT SECTION API ---
-app.get("/api/about", (req, res) => {
-  try {
-    res.json(JSON.parse(fs.readFileSync(aboutPath, "utf-8")));
-  } catch (e: any) {
-    res.status(500).json({ error: "Failed to read about: " + e.message });
-  }
-});
-app.post("/api/about", (req, res) => {
-  try {
-    const imgErr = validateImageFields(req.body, ["foto"], 800);
-    if (imgErr) return res.status(413).json({ error: imgErr });
-    atomicWriteFile(aboutPath, JSON.stringify(req.body, null, 2));
-    res.json({ success: true });
-  } catch (e: any) {
-    res.status(500).json({ error: "Failed to save about: " + e.message });
-  }
-});
-
-// --- BRANDING LOGO MANAGEMENT API ---
-app.get("/api/branding", (req, res) => {
-  try {
-    res.json(JSON.parse(fs.readFileSync(filePaths.branding, "utf-8")));
-  } catch (e: any) {
-    res.status(500).json({ error: "Failed to read branding: " + e.message });
-  }
-});
-
-app.post("/api/branding", (req, res) => {
+app.post("/api/branding", async (req, res) => {
   try {
     const data = req.body;
     const logoFields = ["schoolLogo", "schoolLogoDark", "schoolLogoLight", "schoolFavicon", "schoolAppIcon"];
     const imgErr = validateImageFields(data, logoFields, 800);
     if (imgErr) return res.status(413).json({ error: imgErr });
-    atomicWriteFile(filePaths.branding, JSON.stringify(data, null, 2));
+    await setSetting("branding", data);
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: "Failed to save branding: " + e.message }); }
+});
+
+// ─── Reset to defaults ────────────────────────────────────────────────────────
+app.post("/api/reset", async (_req, res) => {
+  try {
+    await Promise.all([
+      setSetting("competencies", COMPETENCY_DATA),
+      setSetting("milestones", TIMELINE_ACHIEVEMENTS),
+      setSetting("gallery", CAMPUS_LIFE_GALLERY),
+      setSetting("alumni", ALUMNI_TESTIMONIALS),
+      setSetting("news", NEWS_COMPILATION),
+      setSetting("partners", INDUSTRI_PARTNERS),
+    ]);
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: "Failed to reset data: " + e.message }); }
+});
+
+// ─── Tracer Study ─────────────────────────────────────────────────────────────
+app.get("/api/tracer", async (_req, res) => {
+  try {
+    const entries = await db.tracerEntry.findMany({ orderBy: { createdAt: "asc" } });
+    res.json(entries.map(e => ({ id: e.id, createdAt: e.createdAt, ...(e.data as object) })));
+  } catch (e: any) { res.status(500).json({ error: "Failed to read tracer data: " + e.message }); }
+});
+
+app.post("/api/tracer", async (req, res) => {
+  try {
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    const entry = await db.tracerEntry.create({
+      data: { id, data: req.body },
+    });
+    res.json({ id: entry.id, createdAt: entry.createdAt, ...(entry.data as object) });
+  } catch (e: any) { res.status(500).json({ error: "Failed to save tracer entry: " + e.message }); }
+});
+
+app.delete("/api/tracer/:id", async (req, res) => {
+  try {
+    await db.tracerEntry.delete({ where: { id: req.params.id } });
     res.json({ success: true });
   } catch (e: any) {
-    res.status(500).json({ error: "Failed to save branding: " + e.message });
-  }
-});
-
-// 10. Tracer Study API
-const tracerPath = path.join(DATA_DIR, "tracer.json");
-initJsonFile(tracerPath, []);
-
-app.get("/api/tracer", (req, res) => {
-  try {
-    res.json(JSON.parse(fs.readFileSync(tracerPath, "utf-8")));
-  } catch (e: any) {
-    res.status(500).json({ error: "Failed to read tracer data: " + e.message });
-  }
-});
-
-app.post("/api/tracer", (req, res) => {
-  try {
-    const existing: any[] = JSON.parse(fs.readFileSync(tracerPath, "utf-8"));
-    const entry = {
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
-      ...req.body,
-      createdAt: new Date().toISOString(),
-    };
-    existing.push(entry);
-    atomicWriteFile(tracerPath, JSON.stringify(existing, null, 2));
-    res.json(entry);
-  } catch (e: any) {
-    res.status(500).json({ error: "Failed to save tracer entry: " + e.message });
-  }
-});
-
-app.delete("/api/tracer/:id", (req, res) => {
-  try {
-    const existing: any[] = JSON.parse(fs.readFileSync(tracerPath, "utf-8"));
-    const updated = existing.filter((e: any) => e.id !== req.params.id);
-    if (updated.length === existing.length) {
-      return res.status(404).json({ error: "Entry not found" });
-    }
-    atomicWriteFile(tracerPath, JSON.stringify(updated, null, 2));
-    res.json({ success: true });
-  } catch (e: any) {
+    if ((e as any).code === "P2025") return res.status(404).json({ error: "Entry not found" });
     res.status(500).json({ error: "Failed to delete tracer entry: " + e.message });
   }
 });
 
-app.post("/api/reset", (req, res) => {
-  try {
-    atomicWriteFile(filePaths.competencies, JSON.stringify(COMPETENCY_DATA, null, 2));
-    atomicWriteFile(filePaths.milestones, JSON.stringify(TIMELINE_ACHIEVEMENTS, null, 2));
-    atomicWriteFile(filePaths.gallery, JSON.stringify(CAMPUS_LIFE_GALLERY, null, 2));
-    atomicWriteFile(filePaths.alumni, JSON.stringify(ALUMNI_TESTIMONIALS, null, 2));
-    atomicWriteFile(filePaths.news, JSON.stringify(NEWS_COMPILATION, null, 2));
-    atomicWriteFile(filePaths.partners, JSON.stringify(INDUSTRI_PARTNERS, null, 2));
-    res.json({ success: true });
-  } catch (error: any) {
-    res.status(500).json({ error: "Failed to reset data: " + error.message });
-  }
-});
-
-// ── Contact Messages ─────────────────────────────────────────────────────────
-const CONTACT_FILE = path.join(DATA_DIR, "contact-messages.json");
-
-function readContactMessages(): any[] {
-  try {
-    if (!fs.existsSync(CONTACT_FILE)) return [];
-    return JSON.parse(fs.readFileSync(CONTACT_FILE, "utf-8"));
-  } catch {
-    return [];
-  }
-}
-
-app.post("/api/contact", (req, res) => {
+// ─── Contact Messages ─────────────────────────────────────────────────────────
+app.post("/api/contact", async (req, res) => {
   try {
     const { nama, email, noHp, keperluan, pesan, waktu } = req.body;
-    if (!nama || !email || !keperluan || !pesan) {
-      return res.status(400).json({ error: "Field wajib tidak lengkap." });
-    }
-    if (pesan.trim().length < 20) {
-      return res.status(400).json({ error: "Pesan minimal 20 karakter." });
-    }
-    const messages = readContactMessages();
-    const newMsg = {
-      id: crypto.randomUUID(),
-      nama: String(nama).trim(),
-      email: String(email).trim().toLowerCase(),
-      noHp: String(noHp || "").trim(),
-      keperluan: String(keperluan).trim(),
-      pesan: String(pesan).trim(),
-      waktu: waktu || new Date().toISOString(),
-      dibaca: false,
-    };
-    messages.unshift(newMsg);
-    atomicWriteFile(CONTACT_FILE, JSON.stringify(messages, null, 2));
-    res.json({ success: true, id: newMsg.id });
-  } catch (error: any) {
-    res.status(500).json({ error: "Gagal menyimpan pesan." });
-  }
+    if (!nama || !email || !keperluan || !pesan) return res.status(400).json({ error: "Field wajib tidak lengkap." });
+    if (pesan.trim().length < 20) return res.status(400).json({ error: "Pesan minimal 20 karakter." });
+    const msg = await db.contactMessage.create({
+      data: {
+        nama: String(nama).trim(),
+        email: String(email).trim().toLowerCase(),
+        noHp: String(noHp || "").trim(),
+        keperluan: String(keperluan).trim(),
+        pesan: String(pesan).trim(),
+        waktu: waktu ? new Date(waktu) : new Date(),
+      },
+    });
+    res.json({ success: true, id: msg.id });
+  } catch (e: any) { res.status(500).json({ error: "Gagal menyimpan pesan." }); }
 });
 
-app.get("/api/contact", requireAuth, (req, res) => {
-  res.json(readContactMessages());
-});
-
-app.patch("/api/contact/:id/baca", requireAuth, (req, res) => {
+app.get("/api/contact", requireAuth as any, async (_req, res) => {
   try {
-    const messages = readContactMessages();
-    const idx = messages.findIndex((m: any) => m.id === req.params.id);
-    if (idx === -1) return res.status(404).json({ error: "Pesan tidak ditemukan." });
-    messages[idx].dibaca = true;
-    atomicWriteFile(CONTACT_FILE, JSON.stringify(messages, null, 2));
+    const msgs = await db.contactMessage.findMany({ orderBy: { createdAt: "desc" } });
+    res.json(msgs.map(m => ({ ...m, waktu: m.waktu.toISOString(), createdAt: m.createdAt.toISOString() })));
+  } catch (e: any) { res.status(500).json({ error: "Gagal membaca pesan." }); }
+});
+
+app.patch("/api/contact/:id/baca", requireAuth as any, async (req, res) => {
+  try {
+    await db.contactMessage.update({ where: { id: req.params.id }, data: { dibaca: true } });
     res.json({ success: true });
-  } catch {
+  } catch (e: any) {
+    if ((e as any).code === "P2025") return res.status(404).json({ error: "Pesan tidak ditemukan." });
     res.status(500).json({ error: "Gagal memperbarui status pesan." });
   }
 });
 
-app.delete("/api/contact/:id", requireAuth, (req, res) => {
+app.delete("/api/contact/:id", requireAuth as any, async (req, res) => {
   try {
-    const messages = readContactMessages();
-    const filtered = messages.filter((m: any) => m.id !== req.params.id);
-    atomicWriteFile(CONTACT_FILE, JSON.stringify(filtered, null, 2));
+    await db.contactMessage.delete({ where: { id: req.params.id } });
     res.json({ success: true });
-  } catch {
-    res.status(500).json({ error: "Gagal menghapus pesan." });
-  }
+  } catch { res.status(500).json({ error: "Gagal menghapus pesan." }); }
 });
 
-// ── Aduan Publik ──────────────────────────────────────────────────────────────
-const ADUAN_FILE = path.join(DATA_DIR, "aduan-publik.json");
-
-function readAduan(): any[] {
-  try {
-    if (!fs.existsSync(ADUAN_FILE)) return [];
-    return JSON.parse(fs.readFileSync(ADUAN_FILE, "utf-8"));
-  } catch { return []; }
-}
-
-app.post("/api/aduan", (req, res) => {
+// ─── Aduan Publik ─────────────────────────────────────────────────────────────
+app.post("/api/aduan", async (req, res) => {
   try {
     const { namaLengkap, noHp, alamat, judul, isi, tanggal, lokasi, lokasiLainnya, kategori, anonim, rahasia } = req.body;
-    if (!judul || !isi || !tanggal || !lokasi || !kategori) {
-      return res.status(400).json({ error: "Field wajib tidak lengkap." });
-    }
-    if (isi.trim().length < 30) {
-      return res.status(400).json({ error: "Isi laporan minimal 30 karakter." });
-    }
-    const list = readAduan();
-    const entry = {
-      id: crypto.randomUUID(),
-      namaLengkap: anonim ? "Anonim" : String(namaLengkap || "").trim(),
-      noHp: anonim ? "" : String(noHp || "").trim(),
-      alamat: anonim ? "" : String(alamat || "").trim(),
-      judul: String(judul).trim(),
-      isi: String(isi).trim(),
-      tanggal: String(tanggal).trim(),
-      lokasi: lokasi === "Lokasi Lainnya" ? String(lokasiLainnya || lokasi).trim() : String(lokasi).trim(),
-      kategori: String(kategori).trim(),
-      anonim: !!anonim,
-      rahasia: !!rahasia,
-      status: "BARU",
-      catatan: "",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    list.unshift(entry);
-    atomicWriteFile(ADUAN_FILE, JSON.stringify(list, null, 2));
+    if (!judul || !isi || !tanggal || !lokasi || !kategori) return res.status(400).json({ error: "Field wajib tidak lengkap." });
+    if (isi.trim().length < 30) return res.status(400).json({ error: "Isi laporan minimal 30 karakter." });
+    const entry = await db.aduanPublik.create({
+      data: {
+        namaLengkap: anonim ? "Anonim" : String(namaLengkap || "").trim(),
+        noHp: anonim ? "" : String(noHp || "").trim(),
+        alamat: anonim ? "" : String(alamat || "").trim(),
+        judul: String(judul).trim(),
+        isi: String(isi).trim(),
+        tanggal: String(tanggal).trim(),
+        lokasi: lokasi === "Lokasi Lainnya" ? String(lokasiLainnya || lokasi).trim() : String(lokasi).trim(),
+        kategori: String(kategori).trim(),
+        anonim: !!anonim,
+        rahasia: !!rahasia,
+      },
+    });
     res.json({ success: true, id: entry.id });
-  } catch (err: any) {
-    res.status(500).json({ error: "Gagal menyimpan aduan." });
+  } catch (e: any) { res.status(500).json({ error: "Gagal menyimpan aduan." }); }
+});
+
+app.get("/api/aduan", requireAuth as any, async (_req, res) => {
+  try {
+    const list = await db.aduanPublik.findMany({ orderBy: { createdAt: "desc" } });
+    res.json(list.map(a => ({ ...a, createdAt: a.createdAt.toISOString(), updatedAt: a.updatedAt.toISOString() })));
+  } catch (e: any) { res.status(500).json({ error: "Gagal membaca aduan." }); }
+});
+
+app.patch("/api/aduan/:id/status", requireAuth as any, async (req, res) => {
+  try {
+    const { status, catatan } = req.body;
+    const data: any = {};
+    if (status) data.status = String(status).trim();
+    if (catatan !== undefined) data.catatan = String(catatan).trim();
+    await db.aduanPublik.update({ where: { id: req.params.id }, data });
+    res.json({ success: true });
+  } catch (e: any) {
+    if ((e as any).code === "P2025") return res.status(404).json({ error: "Aduan tidak ditemukan." });
+    res.status(500).json({ error: "Gagal memperbarui status." });
   }
 });
 
-app.get("/api/aduan", requireAuth, (req, res) => {
-  res.json(readAduan());
-});
-
-app.patch("/api/aduan/:id/status", requireAuth, (req, res) => {
+app.delete("/api/aduan/:id", requireAuth as any, async (req, res) => {
   try {
-    const list = readAduan();
-    const idx = list.findIndex((m: any) => m.id === req.params.id);
-    if (idx === -1) return res.status(404).json({ error: "Aduan tidak ditemukan." });
-    const { status, catatan } = req.body;
-    if (status) list[idx].status = String(status).trim();
-    if (catatan !== undefined) list[idx].catatan = String(catatan).trim();
-    list[idx].updatedAt = new Date().toISOString();
-    atomicWriteFile(ADUAN_FILE, JSON.stringify(list, null, 2));
-    res.json({ success: true });
-  } catch { res.status(500).json({ error: "Gagal memperbarui status." }); }
-});
-
-app.delete("/api/aduan/:id", requireAuth, (req, res) => {
-  try {
-    const filtered = readAduan().filter((m: any) => m.id !== req.params.id);
-    atomicWriteFile(ADUAN_FILE, JSON.stringify(filtered, null, 2));
+    await db.aduanPublik.delete({ where: { id: req.params.id } });
     res.json({ success: true });
   } catch { res.status(500).json({ error: "Gagal menghapus aduan." }); }
 });
 
-app.post("/api/aduan/bulk-delete", requireAuth, (req, res) => {
+app.post("/api/aduan/bulk-delete", requireAuth as any, async (req, res) => {
   try {
     const { ids } = req.body;
     if (!Array.isArray(ids)) return res.status(400).json({ error: "ids harus array." });
-    const filtered = readAduan().filter((m: any) => !ids.includes(m.id));
-    atomicWriteFile(ADUAN_FILE, JSON.stringify(filtered, null, 2));
+    await db.aduanPublik.deleteMany({ where: { id: { in: ids } } });
     res.json({ success: true });
   } catch { res.status(500).json({ error: "Gagal menghapus aduan." }); }
 });
 
-// ── Suara Skansagiri ──────────────────────────────────────────────────────────
-interface KaryaSiswa {
-  id: string;
-  title: string;
-  slug: string;
-  content: string;
-  excerpt: string;
-  category: "JURNAL_VOKASI" | "ESAI_INOVASI" | "SASTRA" | "OPINI";
-  status: "REVIEW" | "PUBLISHED" | "REVISION" | "ARCHIVED";
-  feedback: string | null;
-  views: number;
-  likes: number;
-  authorName: string;
-  authorClass: string;
-  authorJurusan: string;
-  tags: string[];
-  createdAt: string;
-  updatedAt: string;
-  publishedAt: string | null;
-}
-
-const SUARA_FILE = path.join(DATA_DIR, "suara-skansagiri.json");
-initJsonFile(SUARA_FILE, []);
-
-function readSuara(): KaryaSiswa[] {
-  try { return JSON.parse(fs.readFileSync(SUARA_FILE, "utf-8")); } catch { return []; }
-}
-function writeSuara(data: KaryaSiswa[]) {
-  atomicWriteFile(SUARA_FILE, JSON.stringify(data, null, 2));
-}
+// ─── Suara Skansagiri ─────────────────────────────────────────────────────────
 function slugify(text: string): string {
   return text.toLowerCase()
     .replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "-").replace(/^-+|-+$/g, "").substring(0, 80);
 }
 
-interface KomentarSuara {
-  id: string;
-  artikelId: string;
-  artikelTitle: string;
-  authorName: string;
-  authorClass: string;
-  content: string;
-  status: "PENDING" | "APPROVED" | "REJECTED";
-  createdAt: string;
-}
-
-const KOMENTAR_FILE = path.join(DATA_DIR, "suara-komentar.json");
-initJsonFile(KOMENTAR_FILE, []);
-
-function readKomentar(): KomentarSuara[] {
-  try { return JSON.parse(fs.readFileSync(KOMENTAR_FILE, "utf-8")); } catch { return []; }
-}
-function writeKomentar(data: KomentarSuara[]) {
-  atomicWriteFile(KOMENTAR_FILE, JSON.stringify(data, null, 2));
-}
-
-app.get("/api/suara", (req, res) => {
+app.get("/api/suara", async (req, res) => {
   try {
-    const all = readSuara();
     const { category, search } = req.query as Record<string, string>;
-    let result = all.filter(k => k.status === "PUBLISHED");
-    if (category && category !== "ALL") result = result.filter(k => k.category === category);
+    const where: any = { status: "PUBLISHED" };
+    if (category && category !== "ALL") where.category = category;
     if (search) {
       const q = search.toLowerCase();
-      result = result.filter(k =>
-        k.title.toLowerCase().includes(q) ||
-        k.excerpt.toLowerCase().includes(q) ||
-        k.authorName.toLowerCase().includes(q) ||
-        k.tags.some(t => t.toLowerCase().includes(q))
-      );
+      where.OR = [
+        { title: { contains: q, mode: "insensitive" } },
+        { excerpt: { contains: q, mode: "insensitive" } },
+        { authorName: { contains: q, mode: "insensitive" } },
+        { tags: { has: q } },
+      ];
     }
-    result.sort((a, b) => new Date(b.publishedAt || b.createdAt).getTime() - new Date(a.publishedAt || a.createdAt).getTime());
-    res.json(result);
+    const result = await db.karyaSiswa.findMany({
+      where,
+      orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
+    });
+    res.json(result.map(k => ({
+      ...k,
+      createdAt: k.createdAt.toISOString(),
+      updatedAt: k.updatedAt.toISOString(),
+      publishedAt: k.publishedAt?.toISOString() ?? null,
+    })));
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-app.get("/api/suara/admin", requireAuth, (req, res) => {
+app.get("/api/suara/admin", requireAuth as any, async (_req, res) => {
   try {
-    const all = readSuara();
-    all.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    res.json(all);
+    const all = await db.karyaSiswa.findMany({ orderBy: { createdAt: "desc" } });
+    res.json(all.map(k => ({
+      ...k,
+      createdAt: k.createdAt.toISOString(),
+      updatedAt: k.updatedAt.toISOString(),
+      publishedAt: k.publishedAt?.toISOString() ?? null,
+    })));
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-app.get("/api/suara/leaderboard", (req, res) => {
+app.get("/api/suara/leaderboard", async (_req, res) => {
   try {
-    const all = readSuara();
-    const published = all.filter(k => k.status === "PUBLISHED");
+    const published = await db.karyaSiswa.findMany({ where: { status: "PUBLISHED" } });
     const map = new Map<string, {
       authorName: string; authorClass: string; authorJurusan: string;
       points: number; publishedCount: number; totalLikes: number; totalViews: number;
@@ -1000,13 +631,13 @@ app.get("/api/suara/leaderboard", (req, res) => {
       }
       const e = map.get(key)!;
       e.publishedCount += 1;
-      e.points += 10;
-      e.points += Math.floor(k.likes / 5);
+      e.points += 10 + Math.floor(k.likes / 5);
       e.totalLikes += k.likes;
       e.totalViews += k.views;
       e.categories.add(k.category);
-      if (!e.latestDate || k.publishedAt! > e.latestDate) {
-        e.latestDate = k.publishedAt || k.createdAt;
+      const pubDate = k.publishedAt?.toISOString() || k.createdAt.toISOString();
+      if (!e.latestDate || pubDate > e.latestDate) {
+        e.latestDate = pubDate;
         e.latestTitle = k.title;
       }
     }
@@ -1018,225 +649,213 @@ app.get("/api/suara/leaderboard", (req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-app.get("/api/suara/komentar/admin", requireAuth, (req, res) => {
+app.get("/api/suara/komentar/admin", requireAuth as any, async (_req, res) => {
   try {
-    const all = readKomentar();
-    all.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    res.json(all);
+    const all = await db.komentarSuara.findMany({ orderBy: { createdAt: "desc" } });
+    res.json(all.map(k => ({ ...k, createdAt: k.createdAt.toISOString() })));
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-app.get("/api/suara/:id", (req, res) => {
+app.get("/api/suara/:id", async (req, res) => {
   try {
-    const all = readSuara();
-    const karya = all.find(k => k.id === req.params.id || k.slug === req.params.id);
+    const karya = await db.karyaSiswa.findFirst({
+      where: { OR: [{ id: req.params.id }, { slug: req.params.id }] },
+    });
     if (!karya) return res.status(404).json({ error: "Karya tidak ditemukan" });
     if (karya.status !== "PUBLISHED") {
       const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
-      if (!token || !hasSession(token)) return res.status(403).json({ error: "Karya belum dipublikasikan" });
+      if (!token || !(await hasSession(token))) return res.status(403).json({ error: "Karya belum dipublikasikan" });
     }
-    res.json(karya);
+    res.json({
+      ...karya,
+      createdAt: karya.createdAt.toISOString(),
+      updatedAt: karya.updatedAt.toISOString(),
+      publishedAt: karya.publishedAt?.toISOString() ?? null,
+    });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-app.post("/api/suara", (req, res) => {
+app.post("/api/suara", async (req, res) => {
   try {
     const { title, content, category, authorName, authorClass, authorJurusan, tags } = req.body;
     if (!title || !content || !category || !authorName || !authorClass)
       return res.status(400).json({ error: "Field wajib tidak lengkap." });
-    if (content.trim().length < 200)
-      return res.status(400).json({ error: "Konten minimal 200 karakter." });
+    if (content.trim().length < 200) return res.status(400).json({ error: "Konten minimal 200 karakter." });
     const validCats = ["JURNAL_VOKASI", "ESAI_INOVASI", "SASTRA", "OPINI"];
     if (!validCats.includes(category)) return res.status(400).json({ error: "Kategori tidak valid." });
-    const all = readSuara();
+
     const baseSlug = slugify(title);
     let slug = baseSlug || `karya-${Date.now()}`;
     let counter = 1;
-    while (all.some(k => k.slug === slug)) slug = `${baseSlug}-${counter++}`;
-    const excerpt = content.trim().replace(/\n+/g, " ").substring(0, 220) + (content.length > 220 ? "..." : "");
-    const now = new Date().toISOString();
-    const newKarya: KaryaSiswa = {
-      id: crypto.randomUUID(), title: title.trim(), slug, content: content.trim(), excerpt,
-      category, status: "REVIEW", feedback: null, views: 0, likes: 0,
-      authorName: authorName.trim(), authorClass: authorClass.trim(),
-      authorJurusan: (authorJurusan || "").trim(),
-      tags: Array.isArray(tags) ? tags.map((t: string) => t.trim()).filter(Boolean)
-        : (tags || "").split(",").map((t: string) => t.trim()).filter(Boolean),
-      createdAt: now, updatedAt: now, publishedAt: null,
-    };
-    all.push(newKarya);
-    writeSuara(all);
+    while (await db.karyaSiswa.findUnique({ where: { slug } })) slug = `${baseSlug}-${counter++}`;
+
+    const trimmedContent = content.trim();
+    const excerpt = trimmedContent.replace(/\n+/g, " ").substring(0, 220) + (trimmedContent.length > 220 ? "..." : "");
+    const parsedTags: string[] = Array.isArray(tags)
+      ? tags.map((t: string) => t.trim()).filter(Boolean)
+      : (tags || "").split(",").map((t: string) => t.trim()).filter(Boolean);
+
+    const newKarya = await db.karyaSiswa.create({
+      data: {
+        title: title.trim(), slug, content: trimmedContent, excerpt,
+        category, status: "REVIEW", views: 0, likes: 0,
+        authorName: authorName.trim(), authorClass: authorClass.trim(),
+        authorJurusan: (authorJurusan || "").trim(), tags: parsedTags,
+      },
+    });
     res.json({ success: true, id: newKarya.id, slug: newKarya.slug });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-app.put("/api/suara/:id", requireAuth, (req, res) => {
+app.put("/api/suara/:id", requireAuth as any, async (req, res) => {
   try {
     const { title, content, category, tags, authorName, authorClass, authorJurusan } = req.body;
-    if (!title || !content || !category)
-      return res.status(400).json({ error: "Judul, konten, dan kategori wajib diisi." });
-    if (content.trim().length < 200)
-      return res.status(400).json({ error: "Konten minimal 200 karakter." });
+    if (!title || !content || !category) return res.status(400).json({ error: "Judul, konten, dan kategori wajib diisi." });
+    if (content.trim().length < 200) return res.status(400).json({ error: "Konten minimal 200 karakter." });
     const validCats = ["JURNAL_VOKASI", "ESAI_INOVASI", "SASTRA", "OPINI"];
     if (!validCats.includes(category)) return res.status(400).json({ error: "Kategori tidak valid." });
-    const all = readSuara();
-    const idx = all.findIndex(k => k.id === req.params.id);
-    if (idx === -1) return res.status(404).json({ error: "Karya tidak ditemukan." });
-    const existing = all[idx];
+
+    const existing = await db.karyaSiswa.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: "Karya tidak ditemukan." });
+
     let slug = existing.slug;
     if (title.trim() !== existing.title) {
       const baseSlug = slugify(title);
       slug = baseSlug || `karya-${Date.now()}`;
       let counter = 1;
-      while (all.some((k, i) => i !== idx && k.slug === slug)) slug = `${baseSlug}-${counter++}`;
+      while (await db.karyaSiswa.findFirst({ where: { slug, NOT: { id: req.params.id } } })) slug = `${baseSlug}-${counter++}`;
     }
+
     const trimmedContent = content.trim();
     const excerpt = trimmedContent.replace(/\n+/g, " ").substring(0, 220) + (trimmedContent.length > 220 ? "..." : "");
-    all[idx] = {
-      ...existing,
-      title: title.trim(),
-      slug,
-      content: trimmedContent,
-      excerpt,
-      category,
-      tags: Array.isArray(tags)
-        ? tags.map((t: string) => t.trim()).filter(Boolean)
-        : (tags || "").split(",").map((t: string) => t.trim()).filter(Boolean),
-      authorName: authorName ? authorName.trim() : existing.authorName,
-      authorClass: authorClass ? authorClass.trim() : existing.authorClass,
-      authorJurusan: authorJurusan !== undefined ? authorJurusan.trim() : existing.authorJurusan,
-      updatedAt: new Date().toISOString(),
-    };
-    writeSuara(all);
-    res.json({ success: true, data: all[idx] });
+    const parsedTags: string[] = Array.isArray(tags)
+      ? tags.map((t: string) => t.trim()).filter(Boolean)
+      : (tags || "").split(",").map((t: string) => t.trim()).filter(Boolean);
+
+    const updated = await db.karyaSiswa.update({
+      where: { id: req.params.id },
+      data: {
+        title: title.trim(), slug, content: trimmedContent, excerpt,
+        category, tags: parsedTags,
+        authorName: authorName ? authorName.trim() : existing.authorName,
+        authorClass: authorClass ? authorClass.trim() : existing.authorClass,
+        authorJurusan: authorJurusan !== undefined ? authorJurusan.trim() : existing.authorJurusan,
+      },
+    });
+    res.json({ success: true, data: { ...updated, createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString(), publishedAt: updated.publishedAt?.toISOString() ?? null } });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-app.patch("/api/suara/:id/like", (req, res) => {
+app.patch("/api/suara/:id/like", async (req, res) => {
   try {
-    const all = readSuara();
-    const idx = all.findIndex(k => k.id === req.params.id);
-    if (idx === -1) return res.status(404).json({ error: "Karya tidak ditemukan" });
-    all[idx].likes = (all[idx].likes || 0) + 1;
-    all[idx].updatedAt = new Date().toISOString();
-    writeSuara(all);
-    res.json({ likes: all[idx].likes });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+    const updated = await db.karyaSiswa.update({ where: { id: req.params.id }, data: { likes: { increment: 1 } } });
+    res.json({ likes: updated.likes });
+  } catch (e: any) {
+    if ((e as any).code === "P2025") return res.status(404).json({ error: "Karya tidak ditemukan" });
+    res.status(500).json({ error: e.message });
+  }
 });
 
-app.patch("/api/suara/:id/view", (req, res) => {
+app.patch("/api/suara/:id/view", async (req, res) => {
   try {
-    const all = readSuara();
-    const idx = all.findIndex(k => k.id === req.params.id);
-    if (idx === -1) return res.status(404).json({ error: "Karya tidak ditemukan" });
-    all[idx].views = (all[idx].views || 0) + 1;
-    writeSuara(all);
-    res.json({ views: all[idx].views });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+    const updated = await db.karyaSiswa.update({ where: { id: req.params.id }, data: { views: { increment: 1 } } });
+    res.json({ views: updated.views });
+  } catch (e: any) {
+    if ((e as any).code === "P2025") return res.status(404).json({ error: "Karya tidak ditemukan" });
+    res.status(500).json({ error: e.message });
+  }
 });
 
-app.patch("/api/suara/:id/approve", requireAuth, (req, res) => {
+app.patch("/api/suara/:id/approve", requireAuth as any, async (req, res) => {
   try {
-    const all = readSuara();
-    const idx = all.findIndex(k => k.id === req.params.id);
-    if (idx === -1) return res.status(404).json({ error: "Karya tidak ditemukan" });
-    const now = new Date().toISOString();
-    all[idx].status = "PUBLISHED"; all[idx].feedback = null;
-    all[idx].publishedAt = all[idx].publishedAt || now; all[idx].updatedAt = now;
-    writeSuara(all);
+    const existing = await db.karyaSiswa.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: "Karya tidak ditemukan" });
+    await db.karyaSiswa.update({
+      where: { id: req.params.id },
+      data: { status: "PUBLISHED", feedback: null, publishedAt: existing.publishedAt ?? new Date() },
+    });
     res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-app.patch("/api/suara/:id/reject", requireAuth, (req, res) => {
+app.patch("/api/suara/:id/reject", requireAuth as any, async (req, res) => {
   try {
-    const all = readSuara();
-    const idx = all.findIndex(k => k.id === req.params.id);
-    if (idx === -1) return res.status(404).json({ error: "Karya tidak ditemukan" });
     const { feedback, action } = req.body;
-    all[idx].status = action === "archive" ? "ARCHIVED" : "REVISION";
-    all[idx].feedback = feedback || null;
-    all[idx].updatedAt = new Date().toISOString();
-    writeSuara(all);
+    await db.karyaSiswa.update({
+      where: { id: req.params.id },
+      data: { status: action === "archive" ? "ARCHIVED" : "REVISION", feedback: feedback || null },
+    });
     res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete("/api/suara/:id", requireAuth, (req, res) => {
+app.delete("/api/suara/:id", requireAuth as any, async (req, res) => {
   try {
-    const all = readSuara();
-    const filtered = all.filter(k => k.id !== req.params.id);
-    if (filtered.length === all.length) return res.status(404).json({ error: "Karya tidak ditemukan" });
-    writeSuara(filtered);
+    await db.karyaSiswa.delete({ where: { id: req.params.id } });
     res.json({ success: true });
+  } catch (e: any) {
+    if ((e as any).code === "P2025") return res.status(404).json({ error: "Karya tidak ditemukan" });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/api/suara/:id/komentar", async (req, res) => {
+  try {
+    const list = await db.komentarSuara.findMany({
+      where: { artikelId: req.params.id, status: "APPROVED" },
+      orderBy: { createdAt: "desc" },
+    });
+    res.json(list.map(k => ({ ...k, createdAt: k.createdAt.toISOString() })));
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-app.get("/api/suara/:id/komentar", (req, res) => {
+app.post("/api/suara/:id/komentar", async (req, res) => {
   try {
-    const all = readKomentar();
-    const approved = all
-      .filter(k => k.artikelId === req.params.id && k.status === "APPROVED")
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    res.json(approved);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
-});
-
-app.post("/api/suara/:id/komentar", (req, res) => {
-  try {
-    const all = readSuara();
-    const karya = all.find(k => k.id === req.params.id);
-    if (!karya || karya.status !== "PUBLISHED")
-      return res.status(404).json({ error: "Artikel tidak ditemukan" });
+    const karya = await db.karyaSiswa.findFirst({
+      where: { OR: [{ id: req.params.id }, { slug: req.params.id }], status: "PUBLISHED" },
+    });
+    if (!karya) return res.status(404).json({ error: "Artikel tidak ditemukan" });
     const { authorName, authorClass, content } = req.body;
-    if (!authorName?.trim() || !content?.trim())
-      return res.status(400).json({ error: "Nama dan isi komentar wajib diisi." });
-    if (content.trim().length < 10)
-      return res.status(400).json({ error: "Komentar minimal 10 karakter." });
-    if (content.trim().length > 500)
-      return res.status(400).json({ error: "Komentar maksimal 500 karakter." });
-    const newKomentar: KomentarSuara = {
-      id: crypto.randomUUID(),
-      artikelId: karya.id,
-      artikelTitle: karya.title,
-      authorName: authorName.trim(),
-      authorClass: (authorClass || "").trim(),
-      content: content.trim(),
-      status: "PENDING",
-      createdAt: new Date().toISOString(),
-    };
-    const existing = readKomentar();
-    existing.push(newKomentar);
-    writeKomentar(existing);
+    if (!authorName?.trim() || !content?.trim()) return res.status(400).json({ error: "Nama dan isi komentar wajib diisi." });
+    if (content.trim().length < 10) return res.status(400).json({ error: "Komentar minimal 10 karakter." });
+    if (content.trim().length > 500) return res.status(400).json({ error: "Komentar maksimal 500 karakter." });
+    await db.komentarSuara.create({
+      data: {
+        artikelId: karya.id,
+        artikelTitle: karya.title,
+        authorName: authorName.trim(),
+        authorClass: (authorClass || "").trim(),
+        content: content.trim(),
+        status: "PENDING",
+      },
+    });
     res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-app.patch("/api/suara/komentar/:commentId/approve", requireAuth, (req, res) => {
+app.patch("/api/suara/komentar/:commentId/approve", requireAuth as any, async (req, res) => {
   try {
-    const all = readKomentar();
-    const idx = all.findIndex(k => k.id === req.params.commentId);
-    if (idx === -1) return res.status(404).json({ error: "Komentar tidak ditemukan" });
-    all[idx].status = "APPROVED";
-    writeKomentar(all);
+    await db.komentarSuara.update({ where: { id: req.params.commentId }, data: { status: "APPROVED" } });
     res.json({ success: true });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (e: any) {
+    if ((e as any).code === "P2025") return res.status(404).json({ error: "Komentar tidak ditemukan" });
+    res.status(500).json({ error: e.message });
+  }
 });
 
-app.delete("/api/suara/komentar/:commentId", requireAuth, (req, res) => {
+app.delete("/api/suara/komentar/:commentId", requireAuth as any, async (req, res) => {
   try {
-    const all = readKomentar();
-    const filtered = all.filter(k => k.id !== req.params.commentId);
-    if (filtered.length === all.length) return res.status(404).json({ error: "Komentar tidak ditemukan" });
-    writeKomentar(filtered);
+    await db.komentarSuara.delete({ where: { id: req.params.commentId } });
     res.json({ success: true });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (e: any) {
+    if ((e as any).code === "P2025") return res.status(404).json({ error: "Komentar tidak ditemukan" });
+    res.status(500).json({ error: e.message });
+  }
 });
 
-// Sitemap generator
-app.get("/sitemap.xml", (req, res) => {
+// ─── Sitemap ──────────────────────────────────────────────────────────────────
+app.get("/sitemap.xml", async (req, res) => {
   const BASE_URL = (process.env.SITE_URL || "https://smkn1wonogiri.sch.id/id").replace(/\/$/, "");
-
   const staticRoutes = [
     { path: "/", priority: "1.0", changefreq: "weekly" },
     { path: "/berita", priority: "0.9", changefreq: "daily" },
@@ -1248,86 +867,53 @@ app.get("/sitemap.xml", (req, res) => {
     { path: "/suara-skansagiri", priority: "0.7", changefreq: "weekly" },
     { path: "/hubungi-kami", priority: "0.6", changefreq: "monthly" },
   ];
-
   let newsUrls = "";
   try {
-    const newsData: any[] = JSON.parse(fs.readFileSync(filePaths.news, "utf-8"));
+    const newsData = await getSetting<any[]>("news", []);
     newsData.forEach((item: any) => {
       if (item.id) {
-        newsUrls += `
-  <url>
-    <loc>${BASE_URL}/berita#${item.id}</loc>
-    <priority>0.6</priority>
-    <changefreq>never</changefreq>
-  </url>`;
+        newsUrls += `\n  <url><loc>${BASE_URL}/berita#${item.id}</loc><priority>0.6</priority><changefreq>never</changefreq></url>`;
       }
     });
-  } catch (_) {}
-
+  } catch {}
   const today = new Date().toISOString().split("T")[0];
-  const staticXml = staticRoutes.map(r => `
-  <url>
-    <loc>${BASE_URL}${r.path}</loc>
-    <lastmod>${today}</lastmod>
-    <changefreq>${r.changefreq}</changefreq>
-    <priority>${r.priority}</priority>
-  </url>`).join("");
-
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${staticXml}${newsUrls}
-</urlset>`;
-
+  const staticXml = staticRoutes.map(r =>
+    `\n  <url><loc>${BASE_URL}${r.path}</loc><lastmod>${today}</lastmod><changefreq>${r.changefreq}</changefreq><priority>${r.priority}</priority></url>`
+  ).join("");
   res.set("Content-Type", "application/xml");
-  res.send(xml);
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${staticXml}${newsUrls}\n</urlset>`);
 });
 
-// Initialize Vite and setup listening
+// ─── Vite / Static serving ────────────────────────────────────────────────────
 async function main() {
+  // Connect to DB and seed defaults
+  await seedDefaults();
+  serverLog("INFO", "Database connected and defaults seeded.");
+
   if (process.env.NODE_ENV !== "production") {
     const { createServer: createViteServer } = await import("vite");
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa"
-    });
+    const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    // IMPORTANT: The BASE_PATH middleware above (line ~203) already strips the /id
-    // prefix from req.url for ALL incoming requests.  After stripping, every URL
-    // arrives here as /api/…, /assets/…, /adm-panel, etc. — WITHOUT the /id prefix.
-    // Therefore ALL static / SPA routes must be mounted at root ("/"), not at BASE.
-    // This is identical whether BASE_PATH="/id" (cPanel) or BASE_PATH="" (Replit).
-
-    // Explicit MIME types — prevents Passenger / Apache returning wrong content-type
     const mimeOverride: express.RequestHandler = (_req, res, next) => {
       const url = _req.url;
-      if (url.endsWith(".js") || url.endsWith(".mjs")) {
-        res.setHeader("Content-Type", "application/javascript; charset=utf-8");
-      } else if (url.endsWith(".css")) {
-        res.setHeader("Content-Type", "text/css; charset=utf-8");
-      } else if (url.endsWith(".json")) {
-        res.setHeader("Content-Type", "application/json; charset=utf-8");
-      }
+      if (url.endsWith(".js") || url.endsWith(".mjs")) res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+      else if (url.endsWith(".css")) res.setHeader("Content-Type", "text/css; charset=utf-8");
+      else if (url.endsWith(".json")) res.setHeader("Content-Type", "application/json; charset=utf-8");
       next();
     };
-
     app.use(mimeOverride);
     app.use(express.static(distPath, { index: false }));
     app.get("/", (_req, res) => res.sendFile(path.join(distPath, "index.html")));
-    // SPA catch-all — serve index.html for any non-API, non-file path
     app.get("/*splat", (req, res) => {
-      if (req.path.startsWith("/api/")) {
-        return res.status(404).json({ error: "API endpoint not found" });
-      }
+      if (req.path.startsWith("/api/")) return res.status(404).json({ error: "API endpoint not found" });
       const filePath = path.join(distPath, req.path);
-      if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-        return res.sendFile(filePath);
-      }
+      if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) return res.sendFile(filePath);
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
-  // Global Express error handler — logs every unhandled error to file
   app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
     serverLog("ERROR", `Unhandled Express error on ${req.method} ${req.originalUrl}: ${err.stack || err.message}`);
     res.status(500).json({ error: "Internal server error" });

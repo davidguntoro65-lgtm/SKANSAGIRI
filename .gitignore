@@ -1,6 +1,7 @@
-# ── User data — dikelola admin panel, JANGAN pernah di-overwrite saat deploy ──
-# Semua file di folder ini (logo, berita, galeri, kepala sekolah, dll.) disimpan
-# di sini oleh server dan harus tetap utuh saat ada update source code.
+# ── Legacy flat-file data — sudah diganti PostgreSQL (Prisma) ────────────────
+# Folder ini sudah tidak dipakai untuk persistent storage.
+# Data kini disimpan di database via Prisma (lihat prisma/schema.prisma).
+# Tetap di-ignore agar file JSON lama tidak masuk ke repo.
 data/
 
 # ── Server logs ───────────────────────────────────────────────────────────────
@@ -22,3 +23,5 @@ node_modules/
 Thumbs.db
 *.swp
 *.swo
+
+/src/generated/prisma

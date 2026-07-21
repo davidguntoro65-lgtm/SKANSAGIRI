@@ -40,7 +40,7 @@ MAX_LOG_LINES=2000
 
 # Folder/file yang wajib dilindungi dari git reset --hard (lapisan kedua)
 # Catatan: data/ juga ada di .gitignore (lapisan pertama — git tidak menyentuhnya)
-PROTECTED_FILES=("data" "logs" ".env" "app.js" ".htaccess")
+PROTECTED_FILES=("logs" ".env" "app.js" ".htaccess")
 
 # ── Warna terminal ────────────────────────────────────────────────────────────
 if [ -t 1 ]; then
@@ -193,10 +193,33 @@ if [ "${1:-}" = "--post-reset" ]; then
     log_err "Verifikasi restore GAGAL. Backup ada di: $PROTECT_DIR"
     exit 1
   fi
-  log_ok "data/, logs/, .env, app.js, .htaccess aman — tidak tersentuh git."
+  log_ok "logs/, .env, app.js, .htaccess aman — tidak tersentuh git."
 
   # Tandai restore berhasil — backup boleh dihapus saat cleanup
   RESTORE_DONE=1
+
+  # ── Install dependencies (termasuk @prisma/client yang di-externalize) ───
+  log_info "[3.5a/6] Menginstall dependencies Node.js..."
+  if (cd "$APP_DIR" && npm install --omit=dev 2>&1 | sed 's/^/  [npm] /' | tee -a "$LOG_FILE"); then
+    log_ok "npm install berhasil."
+  else
+    log_err "npm install GAGAL — deploy dibatalkan."
+    exit 1
+  fi
+
+  # ── Jalankan Prisma migrate deploy ───────────────────────────────────────
+  log_info "[3.5b/6] Menjalankan prisma migrate deploy..."
+  if command -v npx >/dev/null 2>&1; then
+    if (cd "$APP_DIR" && npx prisma migrate deploy 2>&1 | sed 's/^/  [prisma] /' | tee -a "$LOG_FILE"); then
+      log_ok "Prisma migrate deploy berhasil."
+    else
+      log_err "Prisma migrate deploy GAGAL — periksa DATABASE_URL di .env"
+      log_err "Pastikan DATABASE_URL diset di environment variables cPanel."
+      exit 1
+    fi
+  else
+    log_warn "npx tidak ditemukan — skip prisma migrate."
+  fi
 
   # ── Bersihkan file aset usang yang tidak terlacak git ────────────────────
   # git reset --hard tidak menghapus file untracked; ini wajib untuk mencegah
@@ -295,7 +318,7 @@ if [ "${1:-}" = "--post-reset" ]; then
   log_ok   "DEPLOY BERHASIL ✓"
   log_info "Commit  : $COMMIT_AFTER"
   log_info "Branch  : $BRANCH"
-  log_info "data/     : AMAN (logo, berita, galeri, kepala sekolah, dll. tidak tersentuh)"
+  log_info "Database  : data disimpan di PostgreSQL (DATABASE_URL di .env)"
   log_info "logs/     : AMAN"
   log_info ".env      : AMAN"
   log_info "app.js    : AMAN"

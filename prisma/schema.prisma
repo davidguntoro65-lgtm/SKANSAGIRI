@@ -1,0 +1,109 @@
+// Prisma schema — SMKN 1 Wonogiri Portal
+// Generator + datasource
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-1.0.x", "rhel-openssl-3.0.x", "debian-openssl-1.1.x", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ── Key-value store: replaces all "replace-whole-collection" JSON files ────────
+// Keys: competencies | milestones | gallery | alumni | news | partners |
+//       branding | kepala-sekolah | manajemen-sekolah | visi-misi |
+//       social-media | about
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+// ── Admin credentials ──────────────────────────────────────────────────────────
+model AdminCredential {
+  id       Int    @id @default(1)
+  username String
+  password String
+}
+
+// ── Session store (replaces sessions.json) ────────────────────────────────────
+model Session {
+  token     String   @id
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+// ── Tracer study submissions ───────────────────────────────────────────────────
+model TracerEntry {
+  id        String   @id
+  data      Json
+  createdAt DateTime @default(now())
+}
+
+// ── Contact form messages ──────────────────────────────────────────────────────
+model ContactMessage {
+  id        String   @id @default(uuid())
+  nama      String
+  email     String
+  noHp      String   @default("")
+  keperluan String
+  pesan     String
+  waktu     DateTime @default(now())
+  dibaca    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// ── Aduan publik (complaints) ──────────────────────────────────────────────────
+model AduanPublik {
+  id          String   @id @default(uuid())
+  namaLengkap String
+  noHp        String   @default("")
+  alamat      String   @default("")
+  judul       String
+  isi         String
+  tanggal     String
+  lokasi      String
+  kategori    String
+  anonim      Boolean  @default(false)
+  rahasia     Boolean  @default(false)
+  status      String   @default("BARU")
+  catatan     String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ── Suara Skansagiri: student works / articles ─────────────────────────────────
+model KaryaSiswa {
+  id            String          @id @default(uuid())
+  title         String
+  slug          String          @unique
+  content       String
+  excerpt       String
+  category      String
+  status        String          @default("REVIEW")
+  feedback      String?
+  views         Int             @default(0)
+  likes         Int             @default(0)
+  authorName    String
+  authorClass   String
+  authorJurusan String          @default("")
+  tags          String[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  publishedAt   DateTime?
+  komentar      KomentarSuara[]
+}
+
+// ── Comments on student works ──────────────────────────────────────────────────
+model KomentarSuara {
+  id           String     @id @default(uuid())
+  artikelId    String
+  artikelTitle String
+  authorName   String
+  authorClass  String     @default("")
+  content      String
+  status       String     @default("PENDING")
+  createdAt    DateTime   @default(now())
+  karya        KaryaSiswa @relation(fields: [artikelId], references: [id], onDelete: Cascade)
+}
