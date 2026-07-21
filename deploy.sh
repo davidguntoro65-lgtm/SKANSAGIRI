@@ -199,12 +199,40 @@ if [ "${1:-}" = "--post-reset" ]; then
   RESTORE_DONE=1
 
   # ── Install dependencies (termasuk @prisma/client yang di-externalize) ───
+  # CloudLinux NodeJS Selector menyimpan node_modules sebagai symlink ke virtual
+  # environment di ~/nodevenv/. npm install harus dijalankan lewat venv itu,
+  # bukan npm sistem, agar tidak konflik dengan symlink tersebut.
   log_info "[3.5a/6] Menginstall dependencies Node.js..."
-  if (cd "$APP_DIR" && npm install --omit=dev 2>&1 | sed 's/^/  [npm] /' | tee -a "$LOG_FILE"); then
-    log_ok "npm install berhasil."
+
+  # Cari activate script venv cPanel: ~/nodevenv/<rel_path>/<node_major>/bin/activate
+  VENV_ACTIVATE=""
+  APP_REL="$(realpath --relative-to="$HOME" "$APP_DIR" 2>/dev/null || echo "")"
+  if [ -n "$APP_REL" ]; then
+    NODE_MAJOR="$(node --version | sed 's/v\([0-9]*\).*/\1/')"
+    CANDIDATE="$HOME/nodevenv/$APP_REL/$NODE_MAJOR/bin/activate"
+    [ -f "$CANDIDATE" ] && VENV_ACTIVATE="$CANDIDATE"
+  fi
+
+  if [ -n "$VENV_ACTIVATE" ]; then
+    log_info "  Menggunakan CloudLinux venv: $VENV_ACTIVATE"
+    # shellcheck disable=SC1090
+    if (source "$VENV_ACTIVATE" && cd "$APP_DIR" && npm install --omit=dev 2>&1 | sed 's/^/  [npm] /' | tee -a "$LOG_FILE"); then
+      log_ok "npm install (venv) berhasil."
+    else
+      log_err "npm install GAGAL — deploy dibatalkan."
+      exit 1
+    fi
   else
-    log_err "npm install GAGAL — deploy dibatalkan."
-    exit 1
+    log_warn "  Virtual environment cPanel tidak ditemukan — mencoba npm langsung..."
+    log_warn "  (Jika gagal, buka cPanel → Setup Node.js App → klik 'Run NPM Install')"
+    if (cd "$APP_DIR" && npm install --omit=dev 2>&1 | sed 's/^/  [npm] /' | tee -a "$LOG_FILE"); then
+      log_ok "npm install berhasil."
+    else
+      log_err "npm install GAGAL."
+      log_err "Solusi manual: cPanel → Setup Node.js App → app '/id' → klik 'Run NPM Install'"
+      log_err "Setelah itu jalankan ulang: bash deploy.sh"
+      exit 1
+    fi
   fi
 
   # ── Jalankan Prisma migrate deploy ───────────────────────────────────────
