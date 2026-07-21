@@ -223,6 +223,15 @@ if [ "${1:-}" = "--post-reset" ]; then
 
   if [ -n "$VENV_NPM" ]; then
     log_info "  Menggunakan CloudLinux venv npm: $VENV_NPM"
+
+    # CloudLinux mengharuskan node_modules berupa SYMLINK ke venv, bukan folder biasa.
+    # Jika ada folder real (sisa install lama), hapus dulu agar venv bisa membuat symlink.
+    if [ -d "$APP_DIR/node_modules" ] && [ ! -L "$APP_DIR/node_modules" ]; then
+      log_warn "  node_modules adalah folder biasa (bukan symlink) — menghapus..."
+      rm -rf "$APP_DIR/node_modules"
+      log_ok "  node_modules folder dihapus — venv akan membuat symlink baru."
+    fi
+
     if (cd "$APP_DIR" && "$VENV_NPM" install --omit=dev 2>&1 | sed 's/^/  [npm] /' | tee -a "$LOG_FILE"); then
       log_ok "npm install (venv) berhasil."
     else
