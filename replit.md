@@ -9,6 +9,16 @@ A full-stack school website for SMK Negeri 1 Wonogiri built with **React + Vite 
 - **Database**: PostgreSQL via Prisma ORM (replaces flat-file JSON storage)
 - **Auth**: Session-based admin login (server-side, sessions stored in DB)
 
+## Replit setup (first time)
+
+```bash
+npm install          # install all dependencies
+npm run db:migrate   # apply Prisma migrations to the Replit PostgreSQL database
+npm run dev          # start the dev server
+```
+
+The `Start application` workflow runs `npm run dev` automatically. On first run the server seeds default data into the database.
+
 ## How to run
 
 ```
