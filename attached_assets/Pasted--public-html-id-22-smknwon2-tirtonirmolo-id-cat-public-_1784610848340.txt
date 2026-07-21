@@ -1,0 +1,114 @@
+[public_html/id (22)] [smknwon2@tirtonirmolo id]$ cat ~/public_html/id/.htaccess | tail -20
+    AddType application/json .json
+    AddType image/svg+xml .svg
+    AddType application/manifest+json .webmanifest
+</IfModule>
+
+# ─── 4. COMPRESSION ──────────────────────────────────────────────────────────
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json
+</IfModule>
+
+# ─── 5. CACHE ────────────────────────────────────────────────────────────────
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/jpeg "access plus 1 month"
+    ExpiresByType image/png "access plus 1 month"
+    ExpiresByType image/webp "access plus 1 month"
+    ExpiresByType image/svg+xml "access plus 1 month"
+    ExpiresByType text/css "access plus 1 week"
+    ExpiresByType application/javascript "access plus 1 week"
+</IfModule>
+[public_html/id (22)] [smknwon2@tirtonirmolo id]$ cat ~/public_html/id/.htaccess | tail -20
+    AddType application/json .json
+    AddType image/svg+xml .svg
+    AddType application/manifest+json .webmanifest
+</IfModule>
+
+# ─── 4. COMPRESSION ──────────────────────────────────────────────────────────
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json
+</IfModule>
+
+# ─── 5. CACHE ────────────────────────────────────────────────────────────────
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/jpeg "access plus 1 month"
+    ExpiresByType image/png "access plus 1 month"
+    ExpiresByType image/webp "access plus 1 month"
+    ExpiresByType image/svg+xml "access plus 1 month"
+    ExpiresByType text/css "access plus 1 week"
+    ExpiresByType application/javascript "access plus 1 week"
+</IfModule>
+[public_html/id (22)] [smknwon2@tirtonirmolo id]$ cd ~/public_html/id
+[public_html/id (22)] [smknwon2@tirtonirmolo id]$ git pull origin main
+remote: Enumerating objects: 12, done.
+remote: Counting objects: 100% (12/12), done.
+remote: Compressing objects: 100% (6/6), done.
+remote: Total 9 (delta 4), reused 8 (delta 3), pack-reused 0 (from 0)
+Unpacking objects: 100% (9/9), 558.94 KiB | 2.19 MiB/s, done.
+From https://github.com/davidguntoro65-lgtm/SKANSAGIRI
+ * branch            main       -> FETCH_HEAD
+   5debafd..5ebfc15  main       -> origin/main
+Updating 5debafd..5ebfc15
+Fast-forward
+ attached_assets/image_1784610166665.png | Bin 0 -> 206785 bytes
+ attached_assets/image_1784610178027.png | Bin 0 -> 182976 bytes
+ attached_assets/image_1784610194866.png | Bin 0 -> 240660 bytes
+ deploy.sh                               |   6 +++++-
+ 4 files changed, 5 insertions(+), 1 deletion(-)
+ create mode 100644 attached_assets/image_1784610166665.png
+ create mode 100644 attached_assets/image_1784610178027.png
+ create mode 100644 attached_assets/image_1784610194866.png
+[public_html/id (22)] [smknwon2@tirtonirmolo id]$ bash deploy.sh
+[2026-07-21 12:12:41] [INFO] ══════════════════════════════════════════════════
+[2026-07-21 12:12:41] [INFO] DEPLOY DIMULAI — 21 July 2026 12:12:41
+[2026-07-21 12:12:41] [INFO] Branch  : main
+[2026-07-21 12:12:41] [INFO] App dir : /home/smknwon2/public_html/id
+[2026-07-21 12:12:41] [INFO] ══════════════════════════════════════════════════
+[2026-07-21 12:12:41] [INFO] [1/5] Memeriksa prasyarat...
+[2026-07-21 12:12:42] [ OK ] node=v22.23.0  git=2.48.2
+[2026-07-21 12:12:42] [ OK ] Prasyarat OK.
+[2026-07-21 12:12:42] [INFO] [2/5] Backup file yang dilindungi...
+[2026-07-21 12:12:42] [INFO]   Backup: data
+[2026-07-21 12:12:42] [INFO]   Backup: .env
+[2026-07-21 12:12:42] [INFO]   Backup: app.js
+[2026-07-21 12:12:42] [INFO]   Backup: .htaccess
+[2026-07-21 12:12:42] [INFO] Commit saat ini: 5ebfc15
+[2026-07-21 12:12:42] [INFO] [3/5] Menarik perubahan dari GitHub (branch: main)...
+  [git] From https://github.com/davidguntoro65-lgtm/SKANSAGIRI
+  [git]  * branch            main       -> FETCH_HEAD
+  [git] HEAD is now at 5ebfc15 fix: protect .htaccess from git reset to preserve cPanel LiteSpeed proxy block
+[2026-07-21 12:12:43] [WARN] Tidak ada commit baru (sudah up-to-date di 5ebfc15).
+[2026-07-21 12:12:43] [INFO] [4/5] Memulihkan file yang dilindungi...
+[2026-07-21 12:12:43] [INFO]   Dipulihkan: data
+[2026-07-21 12:12:43] [INFO]   Dipulihkan: .env
+[2026-07-21 12:12:43] [INFO]   Dipulihkan: app.js
+[2026-07-21 12:12:43] [INFO]   Dipulihkan: .htaccess
+[2026-07-21 12:12:43] [ OK ] data/, .env, app.js aman — tidak tersentuh git.
+[2026-07-21 12:12:43] [INFO] Memverifikasi dist/ dari repo...
+[2026-07-21 12:12:43] [ OK ]   ✓ dist/server.cjs  (1.3M)
+[2026-07-21 12:12:43] [ OK ]   ✓ dist/index.html  (12K)
+[2026-07-21 12:12:43] [ OK ]   ✓ dist/assets  (3.1M)
+[2026-07-21 12:12:43] [ OK ]   ✓ Base path /id/ terdeteksi di index.html
+[2026-07-21 12:12:43] [ OK ]   ✓ dist/server.cjs ukuran OK (1244KB)
+[2026-07-21 12:12:43] [INFO] [5/5] Merestart aplikasi Node.js di cPanel...
+[2026-07-21 12:12:43] [ OK ] tmp/restart.txt diperbarui.
+[2026-07-21 12:12:43] [WARN] uapi NodeJS restart_app tidak tersedia di server ini — restart manual diperlukan.
+[2026-07-21 12:12:43] [WARN]   → cPanel → Setup Node.js App → cari app '/id' → klik RESTART
+[2026-07-21 12:12:43] [INFO] ══════════════════════════════════════════════════
+[2026-07-21 12:12:43] [ OK ] DEPLOY BERHASIL ✓
+[2026-07-21 12:12:43] [INFO] Commit  : 5ebfc15110a944bfc4fbe005d4afe017523569f6
+[2026-07-21 12:12:43] [INFO] Branch  : main
+[2026-07-21 12:12:43] [INFO] Data DB   : TIDAK DIUBAH
+[2026-07-21 12:12:43] [INFO] app.js    : TIDAK DIUBAH (dari cPanel)
+[2026-07-21 12:12:43] [INFO] .htaccess : DIPERBARUI dari repo
+[2026-07-21 12:12:43] [INFO] Log     : /home/smknwon2/public_html/id/deploy.log
+[2026-07-21 12:12:43] [INFO] ══════════════════════════════════════════════════
+[2026-07-21 12:12:43] [INFO]
+[2026-07-21 12:12:43] [INFO] Jika site belum merespons dalam 30 detik:
+[2026-07-21 12:12:43] [INFO]   cPanel → Node.js App → klik RESTART secara manual.
+[2026-07-21 12:12:43] [INFO] Test: curl https://smkn1wonogiri.sch.id/id/api/health
+[2026-07-21 12:12:43] [INFO] ══════════════════════════════════════════════════
+[public_html/id (22)] [smknwon2@tirtonirmolo id]$ ^C
+[public_html/id (22)] [smknwon2@tirtonirmolo id]$
