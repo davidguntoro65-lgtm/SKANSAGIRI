@@ -1,0 +1,109 @@
+[public_html/id (22)] [smknwon2@tirtonirmolo id]$ bash deploy.sh
+[2026-07-21 13:12:35] [INFO] ══════════════════════════════════════════════════
+[2026-07-21 13:12:35] [INFO] DEPLOY DIMULAI — 21 July 2026 13:12:35
+[2026-07-21 13:12:35] [INFO] Branch  : main
+[2026-07-21 13:12:35] [INFO] App dir : /home/smknwon2/public_html/id
+[2026-07-21 13:12:35] [INFO] ══════════════════════════════════════════════════
+[2026-07-21 13:12:35] [INFO] [1/5] Memeriksa prasyarat...
+[2026-07-21 13:12:36] [ OK ] node=v22.23.0  git=2.48.2
+[2026-07-21 13:12:36] [ OK ] Prasyarat OK.
+[2026-07-21 13:12:36] [INFO] [2/5] Backup file yang dilindungi...
+[2026-07-21 13:12:37] [INFO]   Backup: data
+[2026-07-21 13:12:37] [INFO]   Backup: .env
+[2026-07-21 13:12:37] [INFO]   Backup: app.js
+[2026-07-21 13:12:37] [INFO]   Backup: .htaccess
+[2026-07-21 13:12:37] [INFO] Commit saat ini: 5ebfc15
+[2026-07-21 13:12:37] [INFO] [3/5] Menarik perubahan dari GitHub (branch: main)...
+  [git] From https://github.com/davidguntoro65-lgtm/SKANSAGIRI
+  [git]  * branch            main       -> FETCH_HEAD
+  [git]    5ebfc15..bdec8f6  main       -> origin/main
+  [git] HEAD is now at bdec8f6 Add distribution tarball and attached asset images
+[2026-07-21 13:12:50] [ OK ] 5ebfc15 → bdec8f6 (6 file berubah)
+[2026-07-21 13:12:50] [INFO]   changelog: bdec8f6 Add distribution tarball and attached asset images
+[2026-07-21 13:12:50] [INFO]   changelog: af7bbc4 Add investigation notes on deploy.sh execution and server errors
+[2026-07-21 13:12:50] [INFO]   changelog: 8f2fc65 Add pasted content and image attachments
+[2026-07-21 13:12:50] [INFO] [4/5] Memulihkan file yang dilindungi...
+[2026-07-21 13:12:50] [INFO]   Dipulihkan: data
+[2026-07-21 13:12:50] [INFO]   Dipulihkan: .env
+[2026-07-21 13:12:50] [INFO]   Dipulihkan: app.js
+[2026-07-21 13:12:50] [INFO]   Dipulihkan: .htaccess
+[2026-07-21 13:12:50] [ OK ] data/, .env, app.js aman — tidak tersentuh git.
+[2026-07-21 13:12:50] [INFO] Memverifikasi dist/ dari repo...
+[2026-07-21 13:12:50] [ OK ]   ✓ dist/server.cjs  (1.3M)
+[2026-07-21 13:12:50] [ OK ]   ✓ dist/index.html  (12K)
+[2026-07-21 13:12:50] [ OK ]   ✓ dist/assets  (3.1M)
+[2026-07-21 13:12:50] [ OK ]   ✓ Base path /id/ terdeteksi di index.html
+[2026-07-21 13:12:50] [ OK ]   ✓ dist/server.cjs ukuran OK (1244KB)
+[2026-07-21 13:12:50] [INFO] [5/5] Merestart aplikasi Node.js di cPanel...
+[2026-07-21 13:12:50] [ OK ] tmp/restart.txt diperbarui.
+[2026-07-21 13:12:51] [WARN] uapi NodeJS restart_app tidak tersedia di server ini — restart manual diperlukan.
+[2026-07-21 13:12:51] [WARN]   → cPanel → Setup Node.js App → cari app '/id' → klik RESTART
+[2026-07-21 13:12:51] [INFO] ══════════════════════════════════════════════════
+[2026-07-21 13:12:51] [ OK ] DEPLOY BERHASIL ✓
+[2026-07-21 13:12:51] [INFO] Commit  : bdec8f6af31bc4350aa2f9e809746b8c42b2b685
+[2026-07-21 13:12:51] [INFO] Branch  : main
+[2026-07-21 13:12:51] [INFO] Data DB   : TIDAK DIUBAH
+[2026-07-21 13:12:51] [INFO] app.js    : TIDAK DIUBAH (dari cPanel)
+[2026-07-21 13:12:51] [INFO] .htaccess : DIPERBARUI dari repo
+[2026-07-21 13:12:51] [INFO] Log     : /home/smknwon2/public_html/id/deploy.log
+[2026-07-21 13:12:51] [INFO] ══════════════════════════════════════════════════
+[2026-07-21 13:12:51] [INFO]
+[2026-07-21 13:12:51] [INFO] Jika site belum merespons dalam 30 detik:
+[2026-07-21 13:12:51] [INFO]   cPanel → Node.js App → klik RESTART secara manual.
+[2026-07-21 13:12:51] [INFO] Test: curl https://smkn1wonogiri.sch.id/id/api/health
+[2026-07-21 13:12:51] [INFO] ══════════════════════════════════════════════════
+[public_html/id (22)] [smknwon2@tirtonirmolo id]$ cd ~/public_html/id
+[public_html/id (22)] [smknwon2@tirtonirmolo id]$ bash deploy.sh
+[2026-07-21 13:22:08] [INFO] ══════════════════════════════════════════════════
+[2026-07-21 13:22:08] [INFO] DEPLOY DIMULAI — 21 July 2026 13:22:08
+[2026-07-21 13:22:08] [INFO] Branch  : main
+[2026-07-21 13:22:08] [INFO] App dir : /home/smknwon2/public_html/id
+[2026-07-21 13:22:08] [INFO] ══════════════════════════════════════════════════
+[2026-07-21 13:22:08] [INFO] [1/5] Memeriksa prasyarat...
+[2026-07-21 13:22:10] [ OK ] node=v22.23.0  git=2.48.2
+[2026-07-21 13:22:10] [ OK ] Prasyarat OK.
+[2026-07-21 13:22:10] [INFO] [2/5] Backup file yang dilindungi...
+[2026-07-21 13:22:11] [INFO]   Backup: data
+[2026-07-21 13:22:11] [INFO]   Backup: .env
+[2026-07-21 13:22:11] [INFO]   Backup: app.js
+[2026-07-21 13:22:11] [INFO]   Backup: .htaccess
+[2026-07-21 13:22:11] [INFO] Commit saat ini: bdec8f6
+[2026-07-21 13:22:11] [INFO] [3/5] Menarik perubahan dari GitHub (branch: main)...
+  [git] From https://github.com/davidguntoro65-lgtm/SKANSAGIRI
+  [git]  * branch            main       -> FETCH_HEAD
+  [git]    bdec8f6..9631f25  main       -> origin/main
+  [git] HEAD is now at 9631f25 Add bash error output and related screenshot assets
+[2026-07-21 13:22:14] [ OK ] bdec8f6 → 9631f25 (9 file berubah)
+[2026-07-21 13:22:14] [INFO]   changelog: 9631f25 Add bash error output and related screenshot assets
+[2026-07-21 13:22:14] [INFO]   changelog: e363fb9 Fix deploy: clean stale assets, improve Node.js restart (SIGTERM fallback)
+[2026-07-21 13:22:14] [INFO] [4/5] Memulihkan file yang dilindungi...
+[2026-07-21 13:22:14] [INFO]   Dipulihkan: data
+[2026-07-21 13:22:14] [INFO]   Dipulihkan: .env
+[2026-07-21 13:22:14] [INFO]   Dipulihkan: app.js
+[2026-07-21 13:22:14] [INFO]   Dipulihkan: .htaccess
+[2026-07-21 13:22:14] [ OK ] data/, .env, app.js aman — tidak tersentuh git.
+[2026-07-21 13:22:14] [INFO] Memverifikasi dist/ dari repo...
+[2026-07-21 13:22:14] [ OK ]   ✓ dist/server.cjs  (1.3M)
+[2026-07-21 13:22:14] [ OK ]   ✓ dist/index.html  (12K)
+[2026-07-21 13:22:14] [ OK ]   ✓ dist/assets  (3.1M)
+[2026-07-21 13:22:14] [ OK ]   ✓ Base path /id/ terdeteksi di index.html
+[2026-07-21 13:22:14] [ OK ]   ✓ dist/server.cjs ukuran OK (1244KB)
+[2026-07-21 13:22:14] [INFO] [5/5] Merestart aplikasi Node.js di cPanel...
+[2026-07-21 13:22:14] [ OK ] tmp/restart.txt diperbarui.
+[2026-07-21 13:22:16] [WARN] uapi NodeJS restart_app tidak tersedia di server ini — restart manual diperlukan.
+[2026-07-21 13:22:16] [WARN]   → cPanel → Setup Node.js App → cari app '/id' → klik RESTART
+[2026-07-21 13:22:16] [INFO] ══════════════════════════════════════════════════
+[2026-07-21 13:22:16] [ OK ] DEPLOY BERHASIL ✓
+[2026-07-21 13:22:16] [INFO] Commit  : 9631f25fb87a41067d6253b48bf642cb988840d1
+[2026-07-21 13:22:16] [INFO] Branch  : main
+[2026-07-21 13:22:16] [INFO] Data DB   : TIDAK DIUBAH
+[2026-07-21 13:22:16] [INFO] app.js    : TIDAK DIUBAH (dari cPanel)
+[2026-07-21 13:22:16] [INFO] .htaccess : DIPERBARUI dari repo
+[2026-07-21 13:22:16] [INFO] Log     : /home/smknwon2/public_html/id/deploy.log
+[2026-07-21 13:22:16] [INFO] ══════════════════════════════════════════════════
+[2026-07-21 13:22:16] [INFO]
+[2026-07-21 13:22:16] [INFO] Jika site belum merespons dalam 30 detik:
+[2026-07-21 13:22:16] [INFO]   cPanel → Node.js App → klik RESTART secara manual.
+[2026-07-21 13:22:16] [INFO] Test: curl https://smkn1wonogiri.sch.id/id/api/health
+[2026-07-21 13:22:16] [INFO] ══════════════════════════════════════════════════
+[public_html/id (22)] [smknwon2@tirtonirmolo id]$
