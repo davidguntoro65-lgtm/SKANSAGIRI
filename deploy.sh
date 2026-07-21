@@ -27,7 +27,11 @@ LOG_FILE="$APP_DIR/deploy.log"
 MAX_LOG_LINES=2000
 
 # Folder/file yang wajib dilindungi dari git reset --hard
-PROTECTED_FILES=("data" ".env" "app.js")
+# PENTING: .htaccess dilindungi karena cPanel Node.js Selector menulis blok proxy
+# (RewriteRule ke localhost:PORT) ke dalam .htaccess saat app di-Restart dari UI cPanel.
+# git reset --hard akan menghapus blok itu → API 404. Solusi: backup .htaccess sebelum
+# reset, pulihkan sesudahnya sehingga blok proxy cPanel tetap ada.
+PROTECTED_FILES=("data" ".env" "app.js" ".htaccess")
 
 # ── Warna terminal ────────────────────────────────────────────────────────────
 if [ -t 1 ]; then
