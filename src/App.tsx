@@ -19,7 +19,6 @@ import News from "./components/News";
 import PPDBcta from "./components/PPDBcta";
 import Footer from "./components/Footer";
 import AdminPanel from "./components/AdminPanel";
-import AdminAkademik from "./pages/AdminAkademik";
 import WhatsNewNotification from "./components/WhatsNewNotification";
 import KepalaSokolah from "./pages/KepalaSokolah";
 import ManajemenSekolah from "./pages/ManajemenSekolah";
@@ -38,12 +37,13 @@ import AdminOsis from "./pages/AdminOsis";
 import { DataStore } from "./dataStore";
 import { navigate, getAppPath } from "./utils/navigation";
 
-type AppPath = "/" | "/adm-panel" | "/admin/akademik" | "/tentang/kepala-sekolah" | "/tentang/manajemen-sekolah" | "/tentang/visi-misi" | "/tracer-studi" | "/admin/tracer-studi" | "/berita" | "/hubungi-kami" | "/modul-integrasi" | "/suara-skansagiri" | "/admin/suara-skansagiri" | "/aduan-publik" | "/admin/aduan-publik" | "/osis" | "/osis/adm-panel";
+type AppPath = "/" | "/adm-panel" | "/tentang/kepala-sekolah" | "/tentang/manajemen-sekolah" | "/tentang/visi-misi" | "/tracer-studi" | "/admin/tracer-studi" | "/berita" | "/hubungi-kami" | "/modul-integrasi" | "/suara-skansagiri" | "/admin/suara-skansagiri" | "/aduan-publik" | "/admin/aduan-publik" | "/osis" | "/osis/adm-panel";
 
 function getPath(): AppPath {
   const p = getAppPath();
   if (p === "/adm-panel") return "/adm-panel";
-  if (p === "/admin/akademik") return "/admin/akademik";
+  // Legacy academic-admin URLs are handled by the single admin shell.
+  if (p === "/admin/akademik") return "/adm-panel";
   if (p === "/tentang/kepala-sekolah") return "/tentang/kepala-sekolah";
   if (p === "/tentang/manajemen-sekolah") return "/tentang/manajemen-sekolah";
   if (p === "/tentang/visi-misi") return "/tentang/visi-misi";
@@ -113,6 +113,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (getAppPath() === "/admin/akademik") {
+      navigate("/adm-panel");
+      setCurrentPath("/adm-panel");
+    }
+  }, []);
+
+  useEffect(() => {
     if (currentPath !== "/") return;
     const hash = window.location.hash;
     if (!hash) return;
@@ -151,10 +158,6 @@ export default function App() {
         onBackToFrontpage={() => navigate("/")}
       />
     );
-  }
-
-  if (currentPath === "/admin/akademik") {
-    return <AdminAkademik theme={theme} onBack={() => navigate("/adm-panel")} />;
   }
 
   const containerClass = `relative min-h-screen ${theme === "dark" ? "bg-slate-950 text-slate-100" : "bg-white text-slate-900"} font-sans antialiased overflow-x-hidden selection:bg-amber-500 selection:text-slate-950 transition-colors duration-500`;

@@ -45,7 +45,7 @@ function badgeClass(status: string) {
   return "bg-slate-500/10 text-slate-600";
 }
 
-export default function AdminAkademik({ theme = "light", onBack }: { theme?: Theme; onBack: () => void }) {
+export default function AdminAkademik({ theme = "light", embedded = false, onBack }: { theme?: Theme; embedded?: boolean; onBack: () => void }) {
   const dark = theme === "dark";
   const [loggedIn, setLoggedIn] = useState(() => Boolean(token()));
   const [username, setUsername] = useState("");
@@ -192,7 +192,7 @@ export default function AdminAkademik({ theme = "light", onBack }: { theme?: The
     { id: "dashboard", label: "Ringkasan", icon: LayoutDashboard }, { id: "master", label: "Master data", icon: BookOpen }, { id: "import", label: "Import XLS", icon: FileSpreadsheet }, { id: "requests", label: "Permintaan guru", icon: Users }, { id: "audit", label: "Aktivitas", icon: History },
   ];
   return (
-    <main className={`relative z-10 min-h-screen ${shell}`}>
+    <main className={`relative z-10 min-h-screen ${shell} ${embedded ? "-mx-6 -mt-6 md:-mx-8" : ""}`}>
       <header className={`sticky top-0 z-30 border-b backdrop-blur-xl ${dark ? "bg-[#07111f]/90 border-white/10" : "bg-white/90 border-slate-200"}`}>
         <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10 py-3.5 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0"><div className="w-10 h-10 shrink-0 rounded-xl bg-amber-400 flex items-center justify-center"><GraduationCap className="text-slate-950" /></div><div className="min-w-0"><p className="text-[10px] uppercase tracking-[.2em] text-amber-600 font-black truncate">SMKN 1 Wonogiri</p><h1 className="font-black truncate">Core Platform</h1></div></div>

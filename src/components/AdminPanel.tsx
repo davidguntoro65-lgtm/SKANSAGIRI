@@ -13,7 +13,7 @@ import {
 import { Competency, Milestone, GalleryItem, Alumnus, NewsArticle, IndustriPartner } from "../data";
 import { DataStore } from "../dataStore";
 import { useBranding, Branding } from "../hooks/useBranding";
-import { navigate } from "../utils/navigation";
+import AdminAkademik from "../pages/AdminAkademik";
 
 export default function AdminPanel({ 
   theme = "dark", 
@@ -35,7 +35,7 @@ export default function AdminPanel({
   const [loginLoading, setLoginLoading] = useState(false);
 
   // Active Admin Sidebar Tab
-  const [activeTab, setActiveTab] = useState<"competencies" | "milestones" | "gallery" | "alumni" | "news" | "partners" | "branding" | "about" | "kepala-sekolah" | "manajemen-sekolah" | "visi-misi" | "social-media" | "inbox-pesan" | "server-monitor" | "tracer-studi">("competencies");
+  const [activeTab, setActiveTab] = useState<"competencies" | "milestones" | "gallery" | "alumni" | "news" | "partners" | "branding" | "about" | "kepala-sekolah" | "manajemen-sekolah" | "visi-misi" | "social-media" | "inbox-pesan" | "server-monitor" | "tracer-studi" | "core-platform">("competencies");
   const { branding, saveBranding, getLogo } = useBranding();
   const [brandingDraft, setBrandingDraft] = useState<Branding | null>(null);
   const [brandingLoading, setBrandingLoading] = useState(false);
@@ -1399,10 +1399,6 @@ export default function AdminPanel({
                       <button
                         key={tab.id}
                         onClick={() => {
-                          if (tab.id === "core-platform") {
-                            navigate("/admin/akademik");
-                            return;
-                          }
                           setActiveTab(tab.id as any);
                           setEditingItem(null);
                           setIsAddingNew(false);
@@ -1458,6 +1454,14 @@ export default function AdminPanel({
 
             {/* Dashboard Workspace */}
             <main className="flex-1 p-6 md:p-8 overflow-y-auto">
+              {activeTab === "core-platform" ? (
+                <AdminAkademik
+                  theme={theme}
+                  embedded
+                  onBack={() => setActiveTab("competencies")}
+                />
+              ) : (
+                <>
               
               {/* Tab Header Action Space */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-light-edge border-slate-200 pb-6 mb-8 text-left">
@@ -4489,6 +4493,8 @@ export default function AdminPanel({
                 </div>
               )}
 
+                </>
+              )}
             </main>
           </div>
 

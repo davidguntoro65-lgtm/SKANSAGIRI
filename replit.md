@@ -84,8 +84,9 @@ npx tsx scripts/seed-from-json.ts  # one-time: import existing data/ JSON files 
 
 - `/` — Public homepage
 - `/berita` — News & articles page
-- `/adm-panel` — Admin login & management panel
-- `/admin/akademik` — Core Platform: master data akademik, import XLS, dan approval assignment guru
+- `/adm-panel` — Satu-satunya shell admin: login, content management, dan Core Platform akademik
+- `/api/v1/akademik/*` — Backend API internal untuk master data, import XLS, audit, dan approval assignment guru
+- `/admin/akademik` — URL lama yang diarahkan ke `/adm-panel` untuk kompatibilitas
 
 ## Core Platform (Wave 1)
 
