@@ -4,3 +4,4 @@
 - [cPanel .htaccess Passenger API routing bug](htaccess-passenger-bug.md) — RewriteRule to a physical file (app.js) serves it as static, bypassing Passenger; use `RewriteRule ^ - [L]` for API routes.
 - [Image upload cPanel crash fix](image-upload-cpanel.md) — cPanel/Apache LimitRequestBody kills large base64 uploads; fix = client compress + server size guard + atomic writes.
 - [Prisma 7 migration & DB architecture](prisma-migration.md) — Migrated from JSON files to PostgreSQL with Prisma 7; all storage now in DB; binaryTargets set for cPanel.
+- [Imported project dependency setup](imported-project-dependencies.md) — Imported repositories may have a lockfile but no node_modules; install declared packages before diagnosing workflow failures.

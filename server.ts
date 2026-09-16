@@ -42,11 +42,11 @@ serverLog("INFO", `server.ts loaded — PORT=${PORT}  NODE_ENV=${process.env.NOD
 const SESSION_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
 
 // ─── DB-backed session helpers ────────────────────────────────────────────────
-async function addSession(token: string) {
+async function addSession(token: string, coreUserId?: string) {
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
   // Purge expired sessions while we're here
   await db.session.deleteMany({ where: { expiresAt: { lt: new Date() } } }).catch(() => {});
-  await db.session.create({ data: { token, expiresAt } });
+  await db.session.create({ data: { token, expiresAt, coreUserId } });
 }
 
 async function hasSession(token: string): Promise<boolean> {
@@ -300,6 +300,79 @@ app.get("/api/auth/verify", async (req, res) => {
   const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
   if (token && (await hasSession(token))) return res.json({ valid: true });
   return res.status(401).json({ valid: false });
+});
+
+// ─── Core identity auth ───────────────────────────────────────────────────────
+function hashPassword(password: string, salt = crypto.randomBytes(16).toString("hex")) {
+  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password: string, encoded: string | null) {
+  if (!encoded) return false;
+  const [salt, expected] = encoded.split(":");
+  if (!salt || !expected) return false;
+  const actual = crypto.scryptSync(password, salt, 64).toString("hex");
+  return crypto.timingSafeEqual(Buffer.from(actual, "hex"), Buffer.from(expected, "hex"));
+}
+
+function hashToken(token: string) {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+app.post("/api/v1/auth/login", async (req, res) => {
+  const ip = (req.headers["x-forwarded-for"] as string || req.socket.remoteAddress || "unknown").split(",")[0].trim();
+  const { allowed, secondsLeft } = checkRateLimit(ip);
+  if (!allowed) return res.status(429).json({ success: false, error: { code: "RATE_LIMITED", message: `Terlalu banyak percobaan login. Coba lagi dalam ${secondsLeft} detik.` } });
+  const email = String(req.body.email || "").trim().toLowerCase();
+  const password = String(req.body.password || "");
+  const user = email ? await db.coreUser.findUnique({ where: { email }, include: { roles: { include: { role: true } }, teacher: true, student: true } }) : null;
+  if (!user || user.status !== "ACTIVE" || !verifyPassword(password, user.passwordHash)) {
+    recordFailedAttempt(ip);
+    return res.status(401).json({ success: false, error: { code: "INVALID_CREDENTIALS", message: "Email atau password tidak valid." } });
+  }
+  clearAttempts(ip);
+  const token = crypto.randomBytes(48).toString("hex");
+  await addSession(token, user.id);
+  return res.json({ success: true, data: { token, user: { id: user.id, email: user.email, fullName: user.fullName, roles: user.roles.map(({ role }) => role.name), teacher: user.teacher, student: user.student } } });
+});
+
+app.get("/api/v1/auth/session", async (req, res) => {
+  const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
+  const session = token ? await db.session.findUnique({ where: { token }, include: { coreUser: { include: { roles: { include: { role: true } }, teacher: true, student: true } } } }) : null;
+  if (!session || session.expiresAt < new Date() || !session.coreUser) return res.status(401).json({ success: false, error: { code: "UNAUTHENTICATED", message: "Session tidak valid." } });
+  return res.json({ success: true, data: { user: { ...session.coreUser, roles: session.coreUser.roles.map(({ role }) => role.name) } } });
+});
+
+app.get("/api/v1/me", async (req, res) => {
+  const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
+  const session = token ? await db.session.findUnique({ where: { token }, include: { coreUser: { include: { roles: { include: { role: true } }, teacher: true, student: true } } } }) : null;
+  if (!session?.coreUser || session.expiresAt < new Date()) return res.status(401).json({ success: false, error: { code: "UNAUTHENTICATED", message: "Session tidak valid." } });
+  return res.json({ success: true, data: { ...session.coreUser, roles: session.coreUser.roles.map(({ role }) => role.name) } });
+});
+
+app.post("/api/v1/auth/activate", async (req, res) => {
+  const token = String(req.body.token || "");
+  const password = String(req.body.password || "");
+  if (password.length < 8 || !token) return res.status(400).json({ success: false, error: { code: "INVALID_ACTIVATION", message: "Token dan password minimal 8 karakter wajib diisi." } });
+  const user = await db.coreUser.findFirst({ where: { activationTokenHash: hashToken(token), activationExpiresAt: { gt: new Date() }, status: "INVITED" } });
+  if (!user) return res.status(400).json({ success: false, error: { code: "INVALID_ACTIVATION", message: "Token aktivasi tidak valid atau sudah kedaluwarsa." } });
+  await db.coreUser.update({ where: { id: user.id }, data: { status: "ACTIVE", passwordHash: hashPassword(password), activationTokenHash: null, activationExpiresAt: null, activatedAt: new Date() } });
+  await db.coreAuditLog.create({ data: { action: "USER_STATUS_CHANGE", entity: "CoreUser", entityId: user.id, actor: user.id, metadata: { from: "INVITED", to: "ACTIVE" } as any, userId: user.id } });
+  return res.json({ success: true, data: { message: "Akun berhasil diaktifkan." } });
+});
+
+app.post("/api/v1/auth/change-password", async (req, res) => {
+  const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
+  const session = token ? await db.session.findUnique({ where: { token } }) : null;
+  const newPassword = String(req.body.newPassword || "");
+  if (!session?.coreUserId) return res.status(401).json({ success: false, error: { code: "UNAUTHENTICATED", message: "Session tidak valid." } });
+  if (newPassword.length < 8) return res.status(400).json({ success: false, error: { code: "INVALID_PASSWORD", message: "Password baru minimal 8 karakter." } });
+  const user = await db.coreUser.findUnique({ where: { id: session.coreUserId } });
+  if (!user || !verifyPassword(String(req.body.currentPassword || ""), user.passwordHash)) return res.status(401).json({ success: false, error: { code: "INVALID_PASSWORD", message: "Password saat ini salah." } });
+  await db.coreUser.update({ where: { id: user.id }, data: { passwordHash: hashPassword(newPassword) } });
+  await db.coreAuditLog.create({ data: { action: "USER_STATUS_CHANGE", entity: "CoreUser", entityId: user.id, actor: user.id, metadata: { action: "PASSWORD_CHANGED" } as any, userId: user.id } });
+  return res.json({ success: true, data: { message: "Password berhasil diubah." } });
 });
 
 // ─── Health Check ─────────────────────────────────────────────────────────────

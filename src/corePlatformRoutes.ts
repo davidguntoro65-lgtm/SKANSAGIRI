@@ -167,6 +167,17 @@ function statusValue(value: unknown) {
   return VALID_STATUSES.has(status) ? status : "ACTIVE";
 }
 
+function pageParams(req: { query: Record<string, unknown> }) {
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const pageSize = Math.min(100, Math.max(10, Number(req.query.pageSize) || 25));
+  const search = clean(req.query.search);
+  return { page, pageSize, search };
+}
+
+async function audit(action: string, entity: string, entityId: string | undefined, metadata: Record<string, unknown> = {}) {
+  await db.coreAuditLog.create({ data: { action, entity, entityId, actor: "ADMIN_SESSION", metadata: metadata as any } });
+}
+
 async function commitRows(type: ImportType, rows: PreviewRow[], actor: string) {
   const validRows = rows.filter((row) => row.status === "VALID" || row.status === "UNCHANGED");
   return db.$transaction(async (tx) => {
@@ -240,16 +251,166 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
     return ok(res, { academicYear, totals: { teachers, students, subjects, classes }, pendingRequests, lastImport });
   });
 
-  app.get("/api/v1/akademik/master", requireAuth, async (_req, res) => {
+  app.get("/api/v1/akademik/master", requireAuth, async (req, res) => {
+    const { page, pageSize, search } = pageParams(req);
+    const contains = search ? { contains: search, mode: "insensitive" as const } : undefined;
     const [academicYears, departments, subjects, classes, teachers, students] = await Promise.all([
-      db.academicYear.findMany({ orderBy: { code: "desc" } }),
-      db.department.findMany({ orderBy: { code: "asc" } }),
-      db.subject.findMany({ include: { department: true }, orderBy: { code: "asc" } }),
-      db.academicClass.findMany({ include: { academicYear: true, department: true }, orderBy: { code: "asc" } }),
-      db.coreTeacher.findMany({ orderBy: { nip: "asc" } }),
-      db.coreStudent.findMany({ orderBy: { nisn: "asc" }, take: 100 }),
+      db.academicYear.findMany({ where: contains ? { OR: [{ code: contains }, { name: contains }] } : undefined, orderBy: { code: "desc" } }),
+      db.department.findMany({ where: contains ? { OR: [{ code: contains }, { name: contains }] } : undefined, orderBy: { code: "asc" } }),
+      db.subject.findMany({ where: contains ? { OR: [{ code: contains }, { name: contains }] } : undefined, include: { department: true }, orderBy: { code: "asc" } }),
+      db.academicClass.findMany({ where: contains ? { OR: [{ code: contains }, { name: contains }] } : undefined, include: { academicYear: true, department: true }, orderBy: { code: "asc" } }),
+      db.coreTeacher.findMany({ where: contains ? { OR: [{ nip: contains }, { fullName: contains }] } : undefined, orderBy: { nip: "asc" }, skip: (page - 1) * pageSize, take: pageSize }),
+      db.coreStudent.findMany({ where: contains ? { OR: [{ nisn: contains }, { fullName: contains }] } : undefined, orderBy: { nisn: "asc" }, skip: (page - 1) * pageSize, take: pageSize }),
     ]);
-    return ok(res, { academicYears, departments, subjects, classes, teachers, students });
+    return ok(res, { academicYears, departments, subjects, classes, teachers, students, page, pageSize, search });
+  });
+
+  app.get("/api/v1/akademik/audit", requireAuth, async (req, res) => {
+    const { page, pageSize, search } = pageParams(req);
+    const where = search ? { OR: [{ action: { contains: search, mode: "insensitive" as const } }, { entity: { contains: search, mode: "insensitive" as const } }, { actor: { contains: search, mode: "insensitive" as const } }] } : undefined;
+    const [items, total] = await Promise.all([
+      db.coreAuditLog.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize }),
+      db.coreAuditLog.count({ where }),
+    ]);
+    return ok(res, { items, total, page, pageSize, pages: Math.max(1, Math.ceil(total / pageSize)) });
+  });
+
+  app.get("/api/v1/akademik/import/jobs", requireAuth, async (req, res) => {
+    const { page, pageSize } = pageParams(req);
+    const [items, total] = await Promise.all([
+      db.coreImportJob.findMany({ orderBy: { createdAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize }),
+      db.coreImportJob.count(),
+    ]);
+    return ok(res, { items, total, page, pageSize, pages: Math.max(1, Math.ceil(total / pageSize)) });
+  });
+
+  app.get("/api/v1/akademik/import/jobs/:jobId/errors", requireAuth, async (req, res) => {
+    const job = await db.coreImportJob.findUnique({ where: { id: req.params.jobId }, select: { id: true, fileName: true, errors: true, errorRows: true } });
+    if (!job) return fail(res, 404, "IMPORT_NOT_FOUND", "Riwayat import tidak ditemukan.");
+    return ok(res, job);
+  });
+
+  app.post("/api/v1/akademik/tahun-ajaran", requireAuth, async (req, res) => {
+    const code = clean(req.body.code);
+    const name = clean(req.body.name);
+    if (!code || !name) return fail(res, 400, "REQUIRED_FIELD", "Kode dan nama tahun ajaran wajib diisi.");
+    try {
+      const item = await db.$transaction(async (tx) => {
+        const isActive = Boolean(req.body.isActive);
+        if (isActive) await tx.academicYear.updateMany({ where: { isActive: true }, data: { isActive: false } });
+        const created = await tx.academicYear.create({ data: { code, name, isActive, status: statusValue(req.body.status) as "ACTIVE" | "INACTIVE" | "ARCHIVED" } });
+        await tx.coreAuditLog.create({ data: { action: "MASTER_CREATE", entity: "AcademicYear", entityId: created.id, actor: "ADMIN_SESSION", metadata: { code } } });
+        return created;
+      });
+      return ok(res, item);
+    } catch (error) {
+      if ((error as { code?: string }).code === "P2002") return fail(res, 409, "DUPLICATE_CODE", "Kode tahun ajaran sudah digunakan.");
+      return fail(res, 500, "MASTER_CREATE_FAILED", "Tahun ajaran gagal dibuat.");
+    }
+  });
+
+  app.patch("/api/v1/akademik/tahun-ajaran/:id", requireAuth, async (req, res) => {
+    try {
+      const item = await db.$transaction(async (tx) => {
+        if (Boolean(req.body.isActive)) await tx.academicYear.updateMany({ where: { isActive: true, id: { not: req.params.id } }, data: { isActive: false } });
+        const updated = await tx.academicYear.update({ where: { id: req.params.id }, data: { ...(req.body.code !== undefined ? { code: clean(req.body.code) } : {}), ...(req.body.name !== undefined ? { name: clean(req.body.name) } : {}), ...(req.body.isActive !== undefined ? { isActive: Boolean(req.body.isActive) } : {}), ...(req.body.status !== undefined ? { status: statusValue(req.body.status) as "ACTIVE" | "INACTIVE" | "ARCHIVED" } : {}) } });
+        await tx.coreAuditLog.create({ data: { action: "MASTER_UPDATE", entity: "AcademicYear", entityId: updated.id, actor: "ADMIN_SESSION", metadata: { code: updated.code } } });
+        return updated;
+      });
+      return ok(res, item);
+    } catch (error) {
+      if ((error as { code?: string }).code === "P2025") return fail(res, 404, "NOT_FOUND", "Tahun ajaran tidak ditemukan.");
+      if ((error as { code?: string }).code === "P2002") return fail(res, 409, "DUPLICATE_CODE", "Kode tahun ajaran sudah digunakan.");
+      return fail(res, 500, "MASTER_UPDATE_FAILED", "Tahun ajaran gagal diperbarui.");
+    }
+  });
+
+  app.post("/api/v1/akademik/jurusan", requireAuth, async (req, res) => {
+    const code = clean(req.body.code);
+    const name = clean(req.body.name);
+    if (!code || !name) return fail(res, 400, "REQUIRED_FIELD", "Kode dan nama jurusan wajib diisi.");
+    try {
+      const item = await db.department.create({ data: { code, name, status: statusValue(req.body.status) as "ACTIVE" | "INACTIVE" | "ARCHIVED" } });
+      await audit("MASTER_CREATE", "Department", item.id, { code });
+      return ok(res, item);
+    } catch (error) {
+      if ((error as { code?: string }).code === "P2002") return fail(res, 409, "DUPLICATE_CODE", "Kode jurusan sudah digunakan.");
+      return fail(res, 500, "MASTER_CREATE_FAILED", "Jurusan gagal dibuat.");
+    }
+  });
+
+  app.patch("/api/v1/akademik/jurusan/:id", requireAuth, async (req, res) => {
+    try {
+      const item = await db.department.update({ where: { id: req.params.id }, data: { ...(req.body.code !== undefined ? { code: clean(req.body.code) } : {}), ...(req.body.name !== undefined ? { name: clean(req.body.name) } : {}), ...(req.body.status !== undefined ? { status: statusValue(req.body.status) as "ACTIVE" | "INACTIVE" | "ARCHIVED" } : {}) } });
+      await audit("MASTER_UPDATE", "Department", item.id, { code: item.code });
+      return ok(res, item);
+    } catch (error) {
+      if ((error as { code?: string }).code === "P2025") return fail(res, 404, "NOT_FOUND", "Jurusan tidak ditemukan.");
+      if ((error as { code?: string }).code === "P2002") return fail(res, 409, "DUPLICATE_CODE", "Kode jurusan sudah digunakan.");
+      return fail(res, 500, "MASTER_UPDATE_FAILED", "Jurusan gagal diperbarui.");
+    }
+  });
+
+  app.post("/api/v1/akademik/mapel", requireAuth, async (req, res) => {
+    const code = clean(req.body.code);
+    const name = clean(req.body.name);
+    if (!code || !name) return fail(res, 400, "REQUIRED_FIELD", "Kode dan nama mapel wajib diisi.");
+    const department = clean(req.body.departmentId) ? await db.department.findUnique({ where: { id: clean(req.body.departmentId) } }) : null;
+    if (req.body.departmentId && !department) return fail(res, 422, "REFERENCE_NOT_FOUND", "Jurusan tidak ditemukan.");
+    try {
+      const item = await db.subject.create({ data: { code, name, departmentId: department?.id, status: statusValue(req.body.status) as "ACTIVE" | "INACTIVE" | "ARCHIVED" } });
+      await audit("MASTER_CREATE", "Subject", item.id, { code });
+      return ok(res, item);
+    } catch (error) {
+      if ((error as { code?: string }).code === "P2002") return fail(res, 409, "DUPLICATE_CODE", "Kode mapel sudah digunakan.");
+      return fail(res, 500, "MASTER_CREATE_FAILED", "Mapel gagal dibuat.");
+    }
+  });
+
+  app.patch("/api/v1/akademik/mapel/:id", requireAuth, async (req, res) => {
+    try {
+      const departmentId = req.body.departmentId === null ? null : (req.body.departmentId ? clean(req.body.departmentId) : undefined);
+      if (departmentId && !(await db.department.findUnique({ where: { id: departmentId } }))) return fail(res, 422, "REFERENCE_NOT_FOUND", "Jurusan tidak ditemukan.");
+      const item = await db.subject.update({ where: { id: req.params.id }, data: { ...(req.body.code !== undefined ? { code: clean(req.body.code) } : {}), ...(req.body.name !== undefined ? { name: clean(req.body.name) } : {}), ...(departmentId !== undefined ? { departmentId } : {}), ...(req.body.status !== undefined ? { status: statusValue(req.body.status) as "ACTIVE" | "INACTIVE" | "ARCHIVED" } : {}) } });
+      await audit("MASTER_UPDATE", "Subject", item.id, { code: item.code });
+      return ok(res, item);
+    } catch (error) {
+      if ((error as { code?: string }).code === "P2025") return fail(res, 404, "NOT_FOUND", "Mapel tidak ditemukan.");
+      if ((error as { code?: string }).code === "P2002") return fail(res, 409, "DUPLICATE_CODE", "Kode mapel sudah digunakan.");
+      return fail(res, 500, "MASTER_UPDATE_FAILED", "Mapel gagal diperbarui.");
+    }
+  });
+
+  app.post("/api/v1/akademik/kelas", requireAuth, async (req, res) => {
+    const code = clean(req.body.code);
+    const name = clean(req.body.name);
+    const grade = clean(req.body.grade);
+    const year = await db.academicYear.findUnique({ where: { id: clean(req.body.academicYearId) } });
+    if (!code || !name || !["X", "XI", "XII"].includes(grade) || !year) return fail(res, 422, "INVALID_REFERENCE", "Kode, nama, tingkat X/XI/XII, dan tahun ajaran valid wajib diisi.");
+    const department = clean(req.body.departmentId) ? await db.department.findUnique({ where: { id: clean(req.body.departmentId) } }) : null;
+    if (req.body.departmentId && !department) return fail(res, 422, "REFERENCE_NOT_FOUND", "Jurusan tidak ditemukan.");
+    try {
+      const item = await db.academicClass.create({ data: { code, name, grade, academicYearId: year.id, departmentId: department?.id, status: statusValue(req.body.status) as "ACTIVE" | "INACTIVE" | "ARCHIVED" } });
+      await audit("MASTER_CREATE", "AcademicClass", item.id, { code });
+      return ok(res, item);
+    } catch (error) {
+      if ((error as { code?: string }).code === "P2002") return fail(res, 409, "DUPLICATE_CODE", "Kode kelas sudah digunakan.");
+      return fail(res, 500, "MASTER_CREATE_FAILED", "Kelas gagal dibuat.");
+    }
+  });
+
+  app.patch("/api/v1/akademik/kelas/:id", requireAuth, async (req, res) => {
+    try {
+      const academicYearId = req.body.academicYearId ? clean(req.body.academicYearId) : undefined;
+      if (academicYearId && !(await db.academicYear.findUnique({ where: { id: academicYearId } }))) return fail(res, 422, "REFERENCE_NOT_FOUND", "Tahun ajaran tidak ditemukan.");
+      const item = await db.academicClass.update({ where: { id: req.params.id }, data: { ...(req.body.code !== undefined ? { code: clean(req.body.code) } : {}), ...(req.body.name !== undefined ? { name: clean(req.body.name) } : {}), ...(req.body.grade !== undefined ? { grade: clean(req.body.grade) } : {}), ...(academicYearId ? { academicYearId } : {}), ...(req.body.departmentId !== undefined ? { departmentId: req.body.departmentId ? clean(req.body.departmentId) : null } : {}), ...(req.body.status !== undefined ? { status: statusValue(req.body.status) as "ACTIVE" | "INACTIVE" | "ARCHIVED" } : {}) } });
+      await audit("MASTER_UPDATE", "AcademicClass", item.id, { code: item.code });
+      return ok(res, item);
+    } catch (error) {
+      if ((error as { code?: string }).code === "P2025") return fail(res, 404, "NOT_FOUND", "Kelas tidak ditemukan.");
+      if ((error as { code?: string }).code === "P2002") return fail(res, 409, "DUPLICATE_CODE", "Kode kelas sudah digunakan.");
+      return fail(res, 500, "MASTER_UPDATE_FAILED", "Kelas gagal diperbarui.");
+    }
   });
 
   app.get("/api/v1/akademik/assignments", requireAuth, async (_req, res) => {
@@ -260,6 +421,90 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
   app.get("/api/v1/akademik/teacher-requests", requireAuth, async (_req, res) => {
     const requests = await db.teacherSelectionRequest.findMany({ include: { teacher: true, academicYear: true, items: { include: { subject: true, class: true } } }, orderBy: { createdAt: "desc" } });
     return ok(res, requests);
+  });
+
+  async function coreTeacherFromSession(req: Request) {
+    const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
+    if (!token) return null;
+    const session = await db.session.findUnique({ where: { token }, include: { coreUser: { include: { teacher: true } } } });
+    if (!session || session.expiresAt < new Date() || !session.coreUser?.teacher || session.coreUser.status !== "ACTIVE") return null;
+    return { session, user: session.coreUser, teacher: session.coreUser.teacher };
+  }
+
+  async function selectionPayload(req: Request, teacherId: string) {
+    const academicYearId = clean(req.body.academicYearId) || (await db.academicYear.findFirst({ where: { isActive: true, status: "ACTIVE" }, orderBy: { code: "desc" } }))?.id;
+    const items = Array.isArray(req.body.items) ? req.body.items : [];
+    if (!academicYearId || !items.length) throw new Error("Tahun ajaran aktif dan minimal satu pilihan wajib diisi.");
+    const year = await db.academicYear.findUnique({ where: { id: academicYearId } });
+    if (!year) throw new Error("Tahun ajaran tidak ditemukan.");
+    const pairs = new Set<string>();
+    const normalized: { subjectId: string; classId: string }[] = [];
+    for (const raw of items) {
+      const subjectId = clean(raw?.subjectId);
+      const classId = clean(raw?.classId);
+      const pair = `${subjectId}|${classId}`;
+      if (!subjectId || !classId || pairs.has(pair)) throw new Error("Pilihan mapel dan kelas tidak valid atau duplikat.");
+      pairs.add(pair);
+      const [subject, classroom] = await Promise.all([
+        db.subject.findUnique({ where: { id: subjectId } }),
+        db.academicClass.findUnique({ where: { id: classId } }),
+      ]);
+      if (!subject || subject.status !== "ACTIVE" || !classroom || classroom.status !== "ACTIVE" || classroom.academicYearId !== academicYearId) throw new Error("Mapel atau kelas tidak tersedia pada tahun ajaran yang dipilih.");
+      normalized.push({ subjectId, classId });
+    }
+    return { academicYearId, normalized };
+  }
+
+  app.post("/api/v1/akademik/teacher-requests", async (req, res) => {
+    const actor = await coreTeacherFromSession(req);
+    if (!actor) return fail(res, 401, "UNAUTHENTICATED", "Login guru aktif diperlukan.");
+    try {
+      const { academicYearId, normalized } = await selectionPayload(req, actor.teacher.id);
+      const request = await db.$transaction(async (tx) => {
+        const saved = await tx.teacherSelectionRequest.upsert({
+          where: { teacherId_academicYearId: { teacherId: actor.teacher.id, academicYearId } },
+          update: { status: "SUBMITTED", submittedAt: new Date(), reviewNote: null, reviewedAt: null, reviewedBy: null },
+          create: { teacherId: actor.teacher.id, academicYearId, status: "SUBMITTED", submittedAt: new Date() },
+        });
+        await tx.teacherSelectionItem.deleteMany({ where: { requestId: saved.id } });
+        await tx.teacherSelectionItem.createMany({ data: normalized.map((item) => ({ requestId: saved.id, ...item })) });
+        await tx.coreAuditLog.create({ data: { action: "TEACHER_REQUEST_SUBMIT", entity: "TeacherSelectionRequest", entityId: saved.id, actor: actor.user.id, userId: actor.user.id, metadata: { itemCount: normalized.length } as any } });
+        return tx.teacherSelectionRequest.findUnique({ where: { id: saved.id }, include: { academicYear: true, items: { include: { subject: true, class: true } } } });
+      });
+      return ok(res, request);
+    } catch (error) {
+      return fail(res, 422, "REQUEST_INVALID", error instanceof Error ? error.message : "Pengajuan tidak valid.");
+    }
+  });
+
+  app.patch("/api/v1/akademik/teacher-requests/:id", async (req, res) => {
+    const actor = await coreTeacherFromSession(req);
+    if (!actor) return fail(res, 401, "UNAUTHENTICATED", "Login guru aktif diperlukan.");
+    const existing = await db.teacherSelectionRequest.findUnique({ where: { id: req.params.id } });
+    if (!existing || existing.teacherId !== actor.teacher.id) return fail(res, 404, "NOT_FOUND", "Pengajuan tidak ditemukan.");
+    if (!["DRAFT", "NEEDS_REVISION"].includes(existing.status)) return fail(res, 409, "INVALID_STATE", "Pengajuan hanya dapat diedit saat draft atau perlu revisi.");
+    try {
+      const { academicYearId, normalized } = await selectionPayload(req, actor.teacher.id);
+      const updated = await db.$transaction(async (tx) => {
+        const saved = await tx.teacherSelectionRequest.update({ where: { id: existing.id }, data: { academicYearId, status: "DRAFT", reviewNote: null } });
+        await tx.teacherSelectionItem.deleteMany({ where: { requestId: saved.id } });
+        await tx.teacherSelectionItem.createMany({ data: normalized.map((item) => ({ requestId: saved.id, ...item })) });
+        await tx.coreAuditLog.create({ data: { action: "TEACHER_REQUEST_SUBMIT", entity: "TeacherSelectionRequest", entityId: saved.id, actor: actor.user.id, userId: actor.user.id, metadata: { action: "REVISION", itemCount: normalized.length } as any } });
+        return saved;
+      });
+      return ok(res, updated);
+    } catch (error) {
+      return fail(res, 422, "REQUEST_INVALID", error instanceof Error ? error.message : "Revisi tidak valid.");
+    }
+  });
+
+  app.post("/api/v1/akademik/users/:id/invite", requireAuth, async (req, res) => {
+    const user = await db.coreUser.findUnique({ where: { id: req.params.id } });
+    if (!user) return fail(res, 404, "NOT_FOUND", "User tidak ditemukan.");
+    const activationToken = crypto.randomBytes(32).toString("hex");
+    await db.coreUser.update({ where: { id: user.id }, data: { status: "INVITED", activationTokenHash: crypto.createHash("sha256").update(activationToken).digest("hex"), activationExpiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000) } });
+    await audit("USER_STATUS_CHANGE", "CoreUser", user.id, { status: "INVITED", action: "INVITATION_CREATED" });
+    return ok(res, { userId: user.id, email: user.email, activationToken, expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000) });
   });
 
   app.patch("/api/v1/akademik/teacher-requests/:id/review", requireAuth, async (req, res) => {

@@ -110,9 +110,25 @@ Endpoint utama:
 - `POST /api/v1/akademik/import/:type/preview`
 - `POST /api/v1/akademik/import/:type/commit`
 - `GET /api/v1/akademik/teacher-requests`
+- `POST /api/v1/akademik/teacher-requests` — submit pengajuan guru dari CoreUser session
+- `PATCH /api/v1/akademik/teacher-requests/:id` — revisi pengajuan milik guru
 - `PATCH /api/v1/akademik/teacher-requests/:id/review`
+- `GET /api/v1/akademik/audit`
+- `GET /api/v1/akademik/import/jobs`
+- `GET /api/v1/akademik/import/jobs/:jobId/errors`
+- `POST /api/v1/akademik/users/:id/invite`
+
+Core Platform juga menyediakan identity session server-side:
+
+- `POST /api/v1/auth/login`
+- `GET /api/v1/auth/session`
+- `GET /api/v1/me`
+- `POST /api/v1/auth/activate`
+- `POST /api/v1/auth/change-password`
 
 Semua endpoint Core Platform memerlukan session admin existing. Import menerima file XLS/XLSX melalui payload base64 maksimum 10 MB, menyimpan checksum dan audit log, dan tidak menulis data sebelum tahap commit.
+
+Dashboard `/admin/akademik` saat ini mencakup CRUD manual tahun ajaran/jurusan/mapel/kelas, pencarian master, preview dan commit import, history/error report, review pengajuan dengan catatan, serta audit activity feed. Migration identity tambahan perlu diterapkan dengan `npx prisma migrate deploy`.
 
 ## Build for production
 

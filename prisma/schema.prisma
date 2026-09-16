@@ -32,6 +32,8 @@ model Session {
   token     String   @id
   expiresAt DateTime
   createdAt DateTime @default(now())
+  coreUserId String?
+  coreUser  CoreUser? @relation(fields: [coreUserId], references: [id], onDelete: Cascade)
 }
 
 // ── Tracer study submissions ───────────────────────────────────────────────────
@@ -277,17 +279,21 @@ enum ImportStatus {
 }
 
 model CoreUser {
-  id          String         @id @default(uuid())
-  email       String         @unique
-  fullName    String
-  status      CoreUserStatus @default(INVITED)
-  activatedAt DateTime?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  roles       CoreUserRole[]
-  teacher     CoreTeacher?
-  student     CoreStudent?
-  auditLogs   CoreAuditLog[]
+  id                    String         @id @default(uuid())
+  email                 String         @unique
+  fullName              String
+  status                CoreUserStatus @default(INVITED)
+  passwordHash          String?
+  activationTokenHash   String?
+  activationExpiresAt   DateTime?
+  activatedAt           DateTime?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  roles                 CoreUserRole[]
+  teacher               CoreTeacher?
+  student               CoreStudent?
+  auditLogs             CoreAuditLog[]
+  sessions              Session[]
 }
 
 model CoreRole {
