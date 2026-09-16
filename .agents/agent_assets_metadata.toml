@@ -6,21 +6,39 @@ id = "itX9DmNT0XRxNOWQFInjK"
 uri = "file://dist-cpanel-fix.tar.gz"
 type = "unspecified"
 title = "dist-cpanel-fix.tar.gz — Build terbaru untuk cPanel"
+logical_id = "9415d305-fc47-405d-a247-e02220dd33e2"
 
 [[outputs]]
 id = "B4kmT3GPP--baaHYpRl_B"
 uri = "file://dist-cpanel-edit-suara.tar.gz"
 type = "unspecified"
 title = "dist-cpanel-edit-suara.tar.gz — Build dengan fitur Edit Karya"
+logical_id = "fc23a939-2935-4f91-8145-bb8ed778f5ff"
 
 [[outputs]]
 id = "UA2Zestu1fdseBsR36Su_"
 uri = "file://dist-cpanel-deploy.tar.gz"
 type = "unspecified"
 title = "dist-cpanel-deploy.tar.gz — Upload ke cPanel"
+logical_id = "afc14cb5-18c4-44db-bed6-50c8692a7125"
 
 [[outputs]]
 id = "myGlrp5SIb7gvtfAsxc_5"
 uri = "file://patch-htaccess-server.tar.gz"
 type = "unspecified"
 title = "Patch Fix — .htaccess + dist/server.cjs"
+logical_id = "c815a4df-ee81-4c95-9204-c7571ff34659"
+
+[[outputs]]
+id = "P6lPNeGfVx3tccY2IHYhT"
+uri = "file://docs/PRD-ROADMAP-SISTEM-SEKOLAH-TERINTEGRASI.md"
+type = "text"
+title = "PRD & Roadmap Final — Sistem Sekolah Terintegrasi"
+description = "Dokumen baseline implementasi final untuk portal publik, core identity, LMS AI, Google Drive per user, portofolio, absensi, dan keuangan. Termasuk requirement bernomor, kontrak API, model domain, quality gates, risiko, dan roadmap Sprint 0–24."
+logical_id = "aa94def6-e5f7-4674-bdf8-14ee48b898dc"
+content_hash = "sha256:ca90b290bca937bf6154019b477fc52e2b331e8f2a4a60fb00513c7cbd7ee891"
+size = 42484
+mtime_ms = 1789549722580
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:cf2e2b6f-7262-498b-a31d-5f8c1fbbaf96/aa94def6-e5f7-4674-bdf8-14ee48b898dc/37f180ec-73dd-4344-ab01-504b6d09ad31"
+storage_version_token = "1789549738830404"
+content_type = "text/markdown"
