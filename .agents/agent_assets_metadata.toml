@@ -56,3 +56,17 @@ mtime_ms = 1789550045403
 storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:cf2e2b6f-7262-498b-a31d-5f8c1fbbaf96/e540ec24-f16b-425b-bd1b-87a53e89763b/c9966f05-4d2b-493b-b4a8-79809a1bb716"
 storage_version_token = "1789550057065478"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "IsvgRZ1sysXkyj3BKpBH3"
+uri = "file://generated/proposal-platform-sekolah-terintegrasi.docx"
+type = "word_document"
+title = "Proposal Platform Sekolah Terintegrasi"
+description = "Proposal DOCX profesional dan universal untuk pengajuan kepada management, tanpa menyebut nama sekolah tertentu. Mencakup latar belakang, tujuan, ruang lingkup, role, LMS, AI learning, operasional, delapan modul integrasi, roadmap, risiko, indikator keberhasilan, dan lampiran matriks modul."
+logical_id = "e6f36edd-2e52-4d47-8a7f-683ec0b8a419"
+content_hash = "sha256:675a1a6dbd02bdff1d684beda4a26b428765c6544fbafd9d82d595dbd4cdcb64"
+size = 18917
+mtime_ms = 1789554767937
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:5625179b-ff61-480f-8064-f822848cb7be/e6f36edd-2e52-4d47-8a7f-683ec0b8a419/22f184ee-24dd-42a6-8911-9e860e27ab1b"
+storage_version_token = "1789554787804839"
+content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
