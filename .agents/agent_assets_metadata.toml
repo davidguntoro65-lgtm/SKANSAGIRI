@@ -42,3 +42,17 @@ mtime_ms = 1789549722580
 storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:cf2e2b6f-7262-498b-a31d-5f8c1fbbaf96/aa94def6-e5f7-4674-bdf8-14ee48b898dc/37f180ec-73dd-4344-ab01-504b6d09ad31"
 storage_version_token = "1789549738830404"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "4l2sRQS_cK-pa3CHvOz_m"
+uri = "file://docs/ROADMAP-IMPLEMENTASI-SISTEM-SEKOLAH-TERINTEGRASI.md"
+type = "text"
+title = "Roadmap Implementasi Final — Sistem Sekolah Terintegrasi"
+description = "Roadmap terpisah dari PRD: Sprint 0–24, Wave 0–7, target release, dependency map, exit criteria, quality gates, risiko, dan Definition of Done."
+logical_id = "e540ec24-f16b-425b-bd1b-87a53e89763b"
+content_hash = "sha256:a1b93d4fc7ca120fc8e837e306096df324c379ffd6523661d557eb07d6ae0d6a"
+size = 24777
+mtime_ms = 1789550045403
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:cf2e2b6f-7262-498b-a31d-5f8c1fbbaf96/e540ec24-f16b-425b-bd1b-87a53e89763b/c9966f05-4d2b-493b-b4a8-79809a1bb716"
+storage_version_token = "1789550057065478"
+content_type = "text/markdown"
