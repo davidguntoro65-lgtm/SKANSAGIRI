@@ -75539,6 +75539,35 @@ function registerCorePlatformRoutes(app2, requireAuth2) {
     }
   });
   app2.get("/api/v1/akademik/import/templates", requireAuth2, (_req, res) => ok(res, Object.entries(TEMPLATE_DEFINITIONS).map(([type, definition]) => ({ type, ...definition }))));
+  app2.get("/api/v1/akademik/import/templates/bank", requireAuth2, (_req, res) => {
+    const workbook = XLSX.utils.book_new();
+    const guideRows = [
+      ["BANK DATA TEMPLATE AKADEMIK"],
+      ["Gunakan sheet sesuai jenis data. Jangan mengubah nama kolom pada baris pertama."],
+      [],
+      ["Sheet", "Jenis data", "Kolom wajib", "Kolom tersedia"],
+      ...Object.entries(TEMPLATE_DEFINITIONS).map(([type, definition]) => [
+        definition.label,
+        type,
+        REQUIRED_HEADERS[type].join(", "),
+        definition.headers.join(", ")
+      ])
+    ];
+    const guideSheet = XLSX.utils.aoa_to_sheet(guideRows);
+    guideSheet["!cols"] = [{ wch: 28 }, { wch: 22 }, { wch: 48 }, { wch: 80 }];
+    XLSX.utils.book_append_sheet(workbook, guideSheet, "Petunjuk");
+    Object.entries(TEMPLATE_DEFINITIONS).forEach(([type, definition]) => {
+      const example = definition.headers.map((header) => header === "isActive" ? "YA" : "");
+      const sheet = XLSX.utils.aoa_to_sheet([definition.headers, example]);
+      sheet["!cols"] = definition.headers.map(() => ({ wch: 22 }));
+      const sheetName = definition.label.slice(0, 31);
+      XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
+    });
+    const file = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+    res.setHeader("Content-Disposition", 'attachment; filename="bank-data-template-akademik.xlsx"');
+    res.type("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    return res.send(file);
+  });
   app2.get("/api/v1/akademik/import/templates/:type", requireAuth2, (req, res) => {
     const type = req.params.type;
     const definition = TEMPLATE_DEFINITIONS[type];
