@@ -234,8 +234,8 @@ export default function AdminOsis() {
 }
 
 /* ─── Shared sub-components ─────────────────────────────────────────── */
-function SectionCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <div className={`bg-slate-900 border border-slate-800 rounded-2xl ${className}`}>{children}</div>;
+function SectionCard({ children, className = "", onClick }: { children: React.ReactNode; className?: string; onClick?: () => void }) {
+  return <div className={`bg-slate-900 border border-slate-800 rounded-2xl ${className}`} onClick={onClick}>{children}</div>;
 }
 function InputField({ label, ...props }: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
   return (

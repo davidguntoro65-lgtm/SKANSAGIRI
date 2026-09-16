@@ -12,6 +12,7 @@ import {
   NEWS_COMPILATION,
   INDUSTRI_PARTNERS
 } from "./src/data";
+import { registerCorePlatformRoutes } from "./src/corePlatformRoutes";
 
 const app = express();
 const PORT = parseInt(process.env.PORT || "5000", 10);
@@ -324,6 +325,9 @@ app.get("/api/health", async (_req, res) => {
     database: dbStatus,
   });
 });
+
+// ─── Core Platform: identity and academic master data ─────────────────────────
+registerCorePlatformRoutes(app, requireAuth as any);
 
 // ─── Logs Endpoint ────────────────────────────────────────────────────────────
 app.get("/api/logs", requireAuth as any, (_req, res) => {

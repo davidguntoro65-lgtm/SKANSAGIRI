@@ -131,60 +131,60 @@ model OsisInfo {
 
 // ── Pengurus OSIS ──────────────────────────────────────────────────────────────
 model OsisPengurus {
-  id          String   @id @default(uuid())
-  nama        String
-  jabatan     String
-  bidang      String   @default("")
-  foto        String?
-  tugasPokok  String   @default("")
-  instagram   String   @default("")
-  email       String   @default("")
-  urutan      Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(uuid())
+  nama       String
+  jabatan    String
+  bidang     String   @default("")
+  foto       String?
+  tugasPokok String   @default("")
+  instagram  String   @default("")
+  email      String   @default("")
+  urutan     Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 // ── Program Kerja OSIS ────────────────────────────────────────────────────────
 model OsisProgramKerja {
-  id          String   @id @default(uuid())
-  nama        String
-  bidang      String
-  deskripsi   String   @default("")
-  status      String   @default("DIRENCANAKAN") // DIRENCANAKAN | BERLANGSUNG | SELESAI
-  progress    Int      @default(0)  // 0-100
-  targetDate  String   @default("")
-  penanggungJawab String @default("")
-  urutan      Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(uuid())
+  nama            String
+  bidang          String
+  deskripsi       String   @default("")
+  status          String   @default("DIRENCANAKAN") // DIRENCANAKAN | BERLANGSUNG | SELESAI
+  progress        Int      @default(0) // 0-100
+  targetDate      String   @default("")
+  penanggungJawab String   @default("")
+  urutan          Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 // ── Agenda / Event ────────────────────────────────────────────────────────────
 model OsisAgenda {
-  id          String   @id @default(uuid())
-  nama        String
-  tanggal     String
-  waktu       String   @default("")
-  tempat      String   @default("")
-  deskripsi   String   @default("")
-  jenis       String   @default("RUTIN") // RUTIN | BESAR | KOLABORASI
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(uuid())
+  nama      String
+  tanggal   String
+  waktu     String   @default("")
+  tempat    String   @default("")
+  deskripsi String   @default("")
+  jenis     String   @default("RUTIN") // RUTIN | BESAR | KOLABORASI
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ── Ekstrakurikuler ───────────────────────────────────────────────────────────
 model OsisEkskul {
-  id           String   @id @default(uuid())
-  nama         String
-  kategori     String   @default("AKADEMIK") // AKADEMIK | SENI | OLAHRAGA | KEAGAMAAN | TEKNOLOGI
-  deskripsi    String   @default("")
-  jadwal       String   @default("")
-  pembina      String   @default("")
-  jumlahAnggota Int     @default(0)
-  foto         String?
-  urutan       Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            String   @id @default(uuid())
+  nama          String
+  kategori      String   @default("AKADEMIK") // AKADEMIK | SENI | OLAHRAGA | KEAGAMAAN | TEKNOLOGI
+  deskripsi     String   @default("")
+  jadwal        String   @default("")
+  pembina       String   @default("")
+  jumlahAnggota Int      @default(0)
+  foto          String?
+  urutan        Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 // ── Galeri Kegiatan OSIS ──────────────────────────────────────────────────────
@@ -192,7 +192,7 @@ model OsisGaleri {
   id        String   @id @default(uuid())
   judul     String
   kategori  String   @default("KEGIATAN")
-  foto      String   // base64 or URL
+  foto      String // base64 or URL
   createdAt DateTime @default(now())
 }
 
@@ -221,4 +221,291 @@ model OsisAspirasi {
   publik    Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ── Core Platform: identity and academic master data ─────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+
+enum CoreUserStatus {
+  INVITED
+  ACTIVE
+  DISABLED
+}
+
+enum CoreRoleName {
+  ADMIN
+  OPERATOR
+  GURU
+  SISWA
+  WALI_KELAS
+  BENDAHARA
+  KEPALA_SEKOLAH
+  EDITOR_PUBLIC
+}
+
+enum CoreRecordStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum AssignmentStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum AssignmentSource {
+  ADMIN_IMPORT
+  ADMIN_MANUAL
+  TEACHER_REQUEST
+}
+
+enum TeacherRequestStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  NEEDS_REVISION
+}
+
+enum ImportStatus {
+  PREVIEWED
+  COMMITTED
+  FAILED
+}
+
+model CoreUser {
+  id          String         @id @default(uuid())
+  email       String         @unique
+  fullName    String
+  status      CoreUserStatus @default(INVITED)
+  activatedAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  roles       CoreUserRole[]
+  teacher     CoreTeacher?
+  student     CoreStudent?
+  auditLogs   CoreAuditLog[]
+}
+
+model CoreRole {
+  id        String         @id @default(uuid())
+  name      CoreRoleName   @unique
+  users     CoreUserRole[]
+  createdAt DateTime       @default(now())
+}
+
+model CoreUserRole {
+  userId    String
+  roleId    String
+  user      CoreUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      CoreRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, roleId])
+}
+
+model AcademicYear {
+  id          String                    @id @default(uuid())
+  code        String                    @unique
+  name        String
+  isActive    Boolean                   @default(false)
+  status      CoreRecordStatus          @default(ACTIVE)
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+  classes     AcademicClass[]
+  assignments TeachingAssignment[]
+  requests    TeacherSelectionRequest[]
+  enrollments StudentEnrollment[]
+}
+
+model Department {
+  id        String           @id @default(uuid())
+  code      String           @unique
+  name      String
+  status    CoreRecordStatus @default(ACTIVE)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  subjects  Subject[]
+  classes   AcademicClass[]
+}
+
+model Subject {
+  id            String                 @id @default(uuid())
+  code          String                 @unique
+  name          String
+  departmentId  String?
+  status        CoreRecordStatus       @default(ACTIVE)
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  department    Department?            @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  assignments   TeachingAssignment[]
+  teacherSkills TeacherSubject[]
+  requestItems  TeacherSelectionItem[]
+}
+
+model AcademicClass {
+  id             String                 @id @default(uuid())
+  code           String                 @unique
+  name           String
+  grade          String
+  academicYearId String
+  departmentId   String?
+  homeroomId     String?
+  status         CoreRecordStatus       @default(ACTIVE)
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  academicYear   AcademicYear           @relation(fields: [academicYearId], references: [id])
+  department     Department?            @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  homeroom       CoreTeacher?           @relation("HomeroomClasses", fields: [homeroomId], references: [id], onDelete: SetNull)
+  assignments    TeachingAssignment[]
+  enrollments    StudentEnrollment[]
+  requestItems   TeacherSelectionItem[]
+
+  @@index([academicYearId, status])
+}
+
+model CoreTeacher {
+  id                String                    @id @default(uuid())
+  nip               String                    @unique
+  fullName          String
+  email             String?
+  phone             String?
+  status            CoreRecordStatus          @default(ACTIVE)
+  userId            String?                   @unique
+  user              CoreUser?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  subjects          TeacherSubject[]
+  assignments       TeachingAssignment[]
+  selectionRequests TeacherSelectionRequest[]
+  homeroomClasses   AcademicClass[]           @relation("HomeroomClasses")
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+}
+
+model CoreStudent {
+  id          String              @id @default(uuid())
+  nisn        String              @unique
+  fullName    String
+  email       String?
+  phone       String?
+  gender      String?
+  birthPlace  String?
+  birthDate   DateTime?
+  status      CoreRecordStatus    @default(ACTIVE)
+  userId      String?             @unique
+  user        CoreUser?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  enrollments StudentEnrollment[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+}
+
+model TeacherSubject {
+  teacherId String
+  subjectId String
+  status    CoreRecordStatus @default(ACTIVE)
+  source    AssignmentSource @default(ADMIN_IMPORT)
+  teacher   CoreTeacher      @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  subject   Subject          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@id([teacherId, subjectId])
+}
+
+model TeachingAssignment {
+  id             String           @id @default(uuid())
+  teacherId      String
+  subjectId      String
+  classId        String
+  academicYearId String
+  status         AssignmentStatus @default(ACTIVE)
+  source         AssignmentSource @default(ADMIN_MANUAL)
+  approvedBy     String?
+  approvedAt     DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  teacher        CoreTeacher      @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  subject        Subject          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  academicClass  AcademicClass    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  academicYear   AcademicYear     @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+
+  @@unique([teacherId, subjectId, classId, academicYearId])
+  @@index([academicYearId, status])
+}
+
+model TeacherSelectionRequest {
+  id             String                 @id @default(uuid())
+  teacherId      String
+  academicYearId String
+  status         TeacherRequestStatus   @default(DRAFT)
+  submittedAt    DateTime?
+  reviewedBy     String?
+  reviewedAt     DateTime?
+  reviewNote     String?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  teacher        CoreTeacher            @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  academicYear   AcademicYear           @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  items          TeacherSelectionItem[]
+
+  @@unique([teacherId, academicYearId])
+}
+
+model TeacherSelectionItem {
+  id        String                  @id @default(uuid())
+  requestId String
+  subjectId String
+  classId   String
+  request   TeacherSelectionRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  subject   Subject                 @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  class     AcademicClass           @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, subjectId, classId])
+}
+
+model StudentEnrollment {
+  id             String           @id @default(uuid())
+  studentId      String
+  classId        String
+  academicYearId String
+  status         CoreRecordStatus @default(ACTIVE)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  student        CoreStudent      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  academicClass  AcademicClass    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  academicYear   AcademicYear     @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, academicYearId])
+  @@index([classId, academicYearId])
+}
+
+model CoreImportJob {
+  id           String       @id @default(uuid())
+  templateType String
+  fileName     String
+  fileChecksum String
+  status       ImportStatus @default(PREVIEWED)
+  totalRows    Int          @default(0)
+  successRows  Int          @default(0)
+  errorRows    Int          @default(0)
+  errors       Json?
+  uploadedBy   String
+  createdAt    DateTime     @default(now())
+  committedAt  DateTime?
+
+  @@index([templateType, createdAt])
+}
+
+model CoreAuditLog {
+  id        String    @id @default(uuid())
+  action    String
+  entity    String
+  entityId  String?
+  actor     String
+  metadata  Json?
+  createdAt DateTime  @default(now())
+  userId    String?
+  user      CoreUser? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([entity, createdAt])
 }

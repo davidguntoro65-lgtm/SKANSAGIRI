@@ -85,6 +85,34 @@ npx tsx scripts/seed-from-json.ts  # one-time: import existing data/ JSON files 
 - `/` — Public homepage
 - `/berita` — News & articles page
 - `/adm-panel` — Admin login & management panel
+- `/admin/akademik` — Core Platform: master data akademik, import XLS, dan approval assignment guru
+
+## Core Platform (Wave 1)
+
+Core Platform mempertahankan modular monolith existing dan memakai PostgreSQL/Prisma untuk identity serta master akademik. Alur setup yang didukung:
+
+1. Tahun ajaran
+2. Jurusan / program keahlian
+3. Mata pelajaran
+4. Kelas
+5. Guru
+6. Siswa
+7. Assignment guru
+8. Enrollment siswa
+
+Dashboard `/admin/akademik` menyediakan template XLS terpisah, preview validasi, deteksi duplikat, commit transaksional, dan audit import. Assignment yang dipilih guru tetap menjadi pengajuan sampai disetujui operator/admin.
+
+Endpoint utama:
+
+- `GET /api/v1/akademik/overview`
+- `GET /api/v1/akademik/master`
+- `GET /api/v1/akademik/import/templates/:type`
+- `POST /api/v1/akademik/import/:type/preview`
+- `POST /api/v1/akademik/import/:type/commit`
+- `GET /api/v1/akademik/teacher-requests`
+- `PATCH /api/v1/akademik/teacher-requests/:id/review`
+
+Semua endpoint Core Platform memerlukan session admin existing. Import menerima file XLS/XLSX melalui payload base64 maksimum 10 MB, menyimpan checksum dan audit log, dan tidak menulis data sebelum tahap commit.
 
 ## Build for production
 

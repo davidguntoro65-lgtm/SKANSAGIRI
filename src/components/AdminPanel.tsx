@@ -13,6 +13,7 @@ import {
 import { Competency, Milestone, GalleryItem, Alumnus, NewsArticle, IndustriPartner } from "../data";
 import { DataStore } from "../dataStore";
 import { useBranding, Branding } from "../hooks/useBranding";
+import { navigate } from "../utils/navigation";
 
 export default function AdminPanel({ 
   theme = "dark", 
@@ -1390,6 +1391,7 @@ export default function AdminPanel({
                     { id: "inbox-pesan", label: "Inbox Pesan Masuk", icon: Inbox, count: contactMessages.filter(m => !m.dibaca).length || null },
                     { id: "tracer-studi", label: "Tracer Study", icon: BarChart3, count: tracerEntries.length || null },
                     { id: "server-monitor", label: "Monitor Server", icon: Activity, count: null }
+                    ,{ id: "core-platform", label: "Core Platform Akademik", icon: GraduationCap, count: null }
                   ].map((tab) => {
                     const TabIcon = tab.icon;
                     const isActive = activeTab === tab.id;
@@ -1397,6 +1399,10 @@ export default function AdminPanel({
                       <button
                         key={tab.id}
                         onClick={() => {
+                          if (tab.id === "core-platform") {
+                            navigate("/admin/akademik");
+                            return;
+                          }
                           setActiveTab(tab.id as any);
                           setEditingItem(null);
                           setIsAddingNew(false);

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { motion, useScroll, useTransform } from "motion/react";
+import { motion, useScroll, useTransform, type Variants } from "motion/react";
 import { ArrowDown, GraduationCap, ArrowUpRight, Sparkles, Calendar, ChevronRight, Newspaper, Instagram, Youtube, Globe, Facebook } from "lucide-react";
 import { DataStore } from "../dataStore";
 import { navigate as navigateTo } from "../utils/navigation";
@@ -72,7 +72,7 @@ export default function Hero({ theme }: { theme: "light" | "dark" }) {
   const mainTitleWords = "Center of Excellence".split(" ");
   const subTitleText = "for Business, Culinary, Fashion & Digital Innovation";
 
-  const containerVariants = {
+  const containerVariants: Variants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
@@ -80,7 +80,7 @@ export default function Hero({ theme }: { theme: "light" | "dark" }) {
     }
   };
 
-  const itemVariants = {
+  const itemVariants: Variants = {
     hidden: { y: 20, opacity: 0 },
     visible: {
       y: 0,
