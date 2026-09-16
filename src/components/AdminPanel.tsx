@@ -956,6 +956,27 @@ export default function AdminPanel({
 
   // Render Login state vs Dashboard state
   const isDarkTheme = theme === "dark";
+  const [frontendMenuOpen, setFrontendMenuOpen] = useState(true);
+  const frontendTabs = [
+    { id: "competencies", label: "Jurusan / Kompetensi", icon: BookOpen, count: competencies.length },
+    { id: "milestones", label: "Milestones / Sejarah", icon: Trophy, count: milestones.length },
+    { id: "gallery", label: "Galeri Campus Life", icon: Camera, count: gallery.length },
+    { id: "alumni", label: "Testimoni Alumni", icon: Users, count: alumni.length },
+    { id: "news", label: "Warta & Agenda", icon: Newspaper, count: news.length },
+    { id: "partners", label: "Mitra Dunia Industri", icon: Handshake, count: partners.length },
+    { id: "branding", label: "Identitas & Logo", icon: Image, count: null },
+    { id: "about", label: "Foto Gedung Sekolah", icon: Camera, count: null },
+    { id: "kepala-sekolah", label: "Kepala Sekolah", icon: User, count: null },
+    { id: "manajemen-sekolah", label: "Manajemen Sekolah", icon: Users, count: null },
+    { id: "visi-misi", label: "Visi & Misi", icon: Target, count: null },
+    { id: "social-media", label: "Media Sosial", icon: Globe, count: null },
+  ] as const;
+  const frontendTabIds: readonly string[] = frontendTabs.map((tab) => tab.id);
+  const selectAdminTab = (tabId: string) => {
+    setActiveTab(tabId as typeof activeTab);
+    setEditingItem(null);
+    setIsAddingNew(false);
+  };
 
   return (
     <div className={`min-h-screen font-sans ${isDarkTheme ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"} antialiased transition-colors duration-300 relative`}>
@@ -1370,39 +1391,82 @@ export default function AdminPanel({
                 
                 <div className="text-left">
                   <span className={`text-[10px] font-mono tracking-widest uppercase font-bold ${isDarkTheme ? "text-slate-500" : "text-slate-400"}`}>
-                    Koleksi Konten
+                    Admin Frontend
                   </span>
                 </div>
 
                 <nav className="space-y-1.5 text-left flex flex-col">
+                  <button
+                    type="button"
+                    onClick={() => setFrontendMenuOpen((open) => !open)}
+                    aria-expanded={frontendMenuOpen}
+                    className={`w-full px-4 py-3 cursor-pointer rounded-xl flex items-center justify-between text-xs font-bold transition-all duration-150 ${
+                      frontendTabIds.includes(activeTab)
+                        ? "bg-amber-500 text-slate-950 shadow-md"
+                        : isDarkTheme
+                          ? "text-slate-300 hover:text-white hover:bg-white/5"
+                          : "text-slate-700 hover:bg-slate-200/50"
+                    }`}
+                    id="btn-sidebar-admin-frontend"
+                  >
+                    <div className="flex items-center gap-3">
+                      <LayoutDashboard className="w-4 h-4 shrink-0" />
+                      <span>Admin Frontend</span>
+                    </div>
+                    <ChevronDown className={`w-4 h-4 transition-transform ${frontendMenuOpen ? "rotate-180" : ""}`} />
+                  </button>
+
+                  {frontendMenuOpen && (
+                    <div className={`ml-3 pl-3 border-l space-y-1 ${isDarkTheme ? "border-white/10" : "border-slate-200"}`}>
+                      {frontendTabs.map((tab) => {
+                        const TabIcon = tab.icon;
+                        const isActive = activeTab === tab.id;
+                        return (
+                          <button
+                            type="button"
+                            key={tab.id}
+                            onClick={() => selectAdminTab(tab.id)}
+                            className={`w-full px-3 py-2.5 cursor-pointer rounded-lg flex items-center justify-between text-xs font-semibold transition-all duration-150 ${
+                              isActive
+                                ? "bg-amber-500 text-slate-950 shadow-md font-bold"
+                                : isDarkTheme
+                                  ? "text-slate-400 hover:text-white hover:bg-white/5"
+                                  : "text-slate-700 hover:bg-slate-200/50"
+                            }`}
+                            id={`btn-sidebar-tab-${tab.id}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <TabIcon className="w-4 h-4 shrink-0" />
+                              <span className="text-left">{tab.label}</span>
+                            </div>
+                            {tab.count !== null && (
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                                isActive
+                                  ? "bg-slate-950/20 text-slate-950"
+                                  : isDarkTheme ? "bg-slate-950 border border-white/5 text-slate-300" : "bg-slate-200 text-slate-700"
+                              }`}>
+                                {tab.count}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   {[
-                    { id: "competencies", label: "Jurusan / Kompetensi", icon: BookOpen, count: competencies.length },
-                    { id: "milestones", label: "Milestones / Sejarah", icon: Trophy, count: milestones.length },
-                    { id: "gallery", label: "Galeri Campus Life", icon: Camera, count: gallery.length },
-                    { id: "alumni", label: "Testimoni Alumni", icon: Users, count: alumni.length },
-                    { id: "news", label: "Warta & Agenda", icon: Newspaper, count: news.length },
-                    { id: "partners", label: "Mitra Dunia Industri", icon: Handshake, count: partners.length },
-                    { id: "branding", label: "Identitas & Logo", icon: Image, count: null },
-                    { id: "about", label: "Foto Gedung Sekolah", icon: Camera, count: null },
-                    { id: "kepala-sekolah", label: "Kepala Sekolah", icon: User, count: null },
-                    { id: "manajemen-sekolah", label: "Manajemen Sekolah", icon: Users, count: null },
-                    { id: "visi-misi", label: "Visi & Misi", icon: Target, count: null },
-                    { id: "social-media", label: "Media Sosial", icon: Globe, count: null },
                     { id: "inbox-pesan", label: "Inbox Pesan Masuk", icon: Inbox, count: contactMessages.filter(m => !m.dibaca).length || null },
                     { id: "tracer-studi", label: "Tracer Study", icon: BarChart3, count: tracerEntries.length || null },
-                    { id: "server-monitor", label: "Monitor Server", icon: Activity, count: null }
-                    ,{ id: "core-platform", label: "Core Platform Akademik", icon: GraduationCap, count: null }
+                    { id: "server-monitor", label: "Monitor Server", icon: Activity, count: null },
+                    { id: "core-platform", label: "Core Platform Akademik", icon: GraduationCap, count: null },
                   ].map((tab) => {
                     const TabIcon = tab.icon;
                     const isActive = activeTab === tab.id;
                     return (
                       <button
+                        type="button"
                         key={tab.id}
-                        onClick={() => {
-                          setActiveTab(tab.id as any);
-                          setEditingItem(null);
-                          setIsAddingNew(false);
-                        }}
+                        onClick={() => selectAdminTab(tab.id)}
                         className={`w-full px-4 py-3 cursor-pointer rounded-xl flex items-center justify-between text-xs font-semibold transition-all duration-150 ${
                           isActive 
                             ? "bg-amber-500 text-slate-950 shadow-md font-bold" 
