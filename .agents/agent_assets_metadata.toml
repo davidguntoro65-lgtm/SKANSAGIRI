@@ -70,3 +70,31 @@ mtime_ms = 1789554767937
 storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:5625179b-ff61-480f-8064-f822848cb7be/e6f36edd-2e52-4d47-8a7f-683ec0b8a419/22f184ee-24dd-42a6-8911-9e860e27ab1b"
 storage_version_token = "1789554787804839"
 content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+[[outputs]]
+id = "lcweBDSYOJ247KBDoNa9p"
+uri = "file://generated/infografis-platform-sekolah-terintegrasi-4k.png"
+type = "image"
+title = "Infografis Platform Sekolah Terintegrasi — 4K"
+description = "Infografis landscape 3840×2160 px untuk management umum. Menjelaskan masalah, core platform, dampak, delapan modul integrasi, dan roadmap empat release secara ringkas."
+logical_id = "7e5fb58b-baf9-44e9-953c-8f0cbb023d08"
+content_hash = "sha256:5acfe2bdfd7241c47253bf200e1e60c525438f9b92e1394d4e6106585438ba56"
+size = 757507
+mtime_ms = 1789554921289
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:5625179b-ff61-480f-8064-f822848cb7be/7e5fb58b-baf9-44e9-953c-8f0cbb023d08/f5ceed40-bfb2-4f00-9800-ebf91b71575f"
+storage_version_token = "1789554939568624"
+content_type = "image/png"
+
+[[outputs]]
+id = "YsUGjlkYu4c6Pq5KjWvcC"
+uri = "file://generated/infografis-platform-sekolah-terintegrasi-4k.svg"
+type = "image"
+title = "Infografis Platform Sekolah Terintegrasi — SVG"
+description = "Versi vector 3840×2160 px yang tetap tajam saat diperbesar dan dapat digunakan sebagai sumber untuk editing atau cetak."
+logical_id = "343e0153-59ea-49a4-8f51-cf45a73d80fd"
+content_hash = "sha256:4e8846bbeac9b38a76dbe19c5c1f03d08a26d1c9067b11f3798936a556808ff2"
+size = 28681
+mtime_ms = 1789554918535
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:5625179b-ff61-480f-8064-f822848cb7be/343e0153-59ea-49a4-8f51-cf45a73d80fd/a7de9c8f-7fbc-47c4-a7f3-826ebf9db2c3"
+storage_version_token = "1789554940921829"
+content_type = "image/svg+xml"
