@@ -78,6 +78,7 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
   const navLinks = [
     { name: "Kompetensi", href: "#kompetensi" },
     { name: "Modul Integrasi", href: "/modul-integrasi" },
+    { name: "Kelas Virtual", href: "/kelas-virtual" },
     { name: "Tracer Studi", href: "/tracer-studi" },
     { name: "Hubungi Kami", href: "/hubungi-kami" },
   ];
@@ -101,6 +102,7 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
   const isBeritaActive = currentPath === "/berita";
   const isHubungiActive = currentPath === "/hubungi-kami";
   const isModulIntegrasiActive = currentPath === "/modul-integrasi";
+  const isKelasVirtualActive = currentPath === "/kelas-virtual";
 
   const navScrolledBg = isDark
     ? "bg-slate-950/80 backdrop-blur-xl border-b border-white/5 shadow-2xl shadow-black/40"
@@ -237,7 +239,8 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
               const isActive =
                 link.href === "/tracer-studi" ? isTracerActive :
                 link.href === "/hubungi-kami" ? isHubungiActive :
-                link.href === "/modul-integrasi" ? isModulIntegrasiActive : false;
+                link.href === "/modul-integrasi" ? isModulIntegrasiActive :
+                link.href === "/kelas-virtual" ? isKelasVirtualActive : false;
               return (
                 <a
                   key={link.name}
@@ -473,7 +476,9 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
           {navLinks.map((link) => {
             const isActive =
               link.href === "/tracer-studi" ? isTracerActive :
-              link.href === "/hubungi-kami" ? isHubungiActive : false;
+              link.href === "/hubungi-kami" ? isHubungiActive :
+              link.href === "/modul-integrasi" ? isModulIntegrasiActive :
+              link.href === "/kelas-virtual" ? isKelasVirtualActive : false;
             return (
               <a
                 key={link.name}
