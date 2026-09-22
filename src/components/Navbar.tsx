@@ -102,7 +102,7 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
   const isBeritaActive = currentPath === "/berita";
   const isHubungiActive = currentPath === "/hubungi-kami";
   const isModulIntegrasiActive = currentPath === "/modul-integrasi";
-  const isKelasVirtualActive = currentPath === "/kelas-virtual";
+  const isKelasVirtualActive = currentPath.startsWith("/kelas-virtual");
 
   const navScrolledBg = isDark
     ? "bg-slate-950/80 backdrop-blur-xl border-b border-white/5 shadow-2xl shadow-black/40"

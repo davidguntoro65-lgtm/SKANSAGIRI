@@ -1,14 +1,9 @@
-import { useState } from "react";
 import { motion } from "motion/react";
 import {
   ArrowLeft,
   ArrowUpRight,
-  BookOpen,
-  CalendarDays,
-  Check,
   ChevronRight,
   GraduationCap,
-  Layers3,
   Sparkles,
 } from "lucide-react";
 import { navigate } from "../utils/navigation";
@@ -50,16 +45,8 @@ const CLASS_OPTIONS = [
   },
 ] as const;
 
-const BENEFITS = [
-  { icon: BookOpen, label: "Materi terstruktur" },
-  { icon: CalendarDays, label: "Jadwal terpusat" },
-  { icon: Layers3, label: "Satu ruang belajar" },
-];
-
 export default function KelasVirtual({ theme }: KelasVirtualProps) {
   const isDark = theme === "dark";
-  const [selectedClass, setSelectedClass] = useState<(typeof CLASS_OPTIONS)[number]["id"]>("X");
-  const selected = CLASS_OPTIONS.find((item) => item.id === selectedClass) ?? CLASS_OPTIONS[0];
 
   return (
     <section
@@ -128,25 +115,27 @@ export default function KelasVirtual({ theme }: KelasVirtualProps) {
 
         <div className="mb-10 grid grid-cols-1 gap-5 md:grid-cols-3">
           {CLASS_OPTIONS.map((item, index) => {
-            const isSelected = selectedClass === item.id;
             return (
-              <motion.button
+              <motion.a
                 key={item.id}
+                href={`/kelas-virtual/kelas-${item.id.toLowerCase()}`}
                 type="button"
                 initial={{ opacity: 0, y: 28 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: index * 0.08 }}
-                onClick={() => setSelectedClass(item.id)}
+                onClick={(event) => {
+                  event.preventDefault();
+                  navigate(`/kelas-virtual/kelas-${item.id.toLowerCase()}`);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
                 className={`group relative overflow-hidden rounded-[1.65rem] border p-7 text-left shadow-xl transition-all duration-300 hover:-translate-y-1 ${
-                  isSelected
-                    ? `${item.glow} border-blue-400/60 shadow-2xl`
-                    : isDark
-                      ? "border-white/10 bg-slate-900/60 hover:border-white/20"
-                      : "border-slate-200 bg-white/80 hover:border-blue-200 hover:shadow-blue-100/70"
+                  isDark
+                    ? "border-white/10 bg-slate-900/60 hover:border-blue-300/40 hover:shadow-blue-950/30"
+                    : "border-slate-200 bg-white/80 hover:border-blue-200 hover:shadow-blue-100/70"
                 }`}
               >
                 <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${item.accent} transition-opacity ${
-                  isSelected ? "opacity-100" : "opacity-40 group-hover:opacity-80"
+                  "opacity-60 group-hover:opacity-100"
                 }`} />
                 <div className="absolute -right-4 -top-8 select-none text-[8rem] font-black leading-none tracking-[-0.12em] text-blue-500/[0.06]">
                   {item.id}
@@ -177,62 +166,15 @@ export default function KelasVirtual({ theme }: KelasVirtualProps) {
                     {item.modules}
                   </span>
                   <span className={`flex h-8 w-8 items-center justify-center rounded-full transition-all ${
-                    isSelected
-                      ? "bg-blue-600 text-white"
-                      : isDark ? "bg-white/5 text-slate-400 group-hover:bg-blue-500/15 group-hover:text-blue-300" : "bg-slate-50 text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600"
+                    isDark ? "bg-white/5 text-slate-400 group-hover:bg-blue-500/15 group-hover:text-blue-300" : "bg-slate-50 text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600"
                   }`}>
-                    {isSelected ? <Check className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
+                    <ArrowUpRight className="h-4 w-4" />
                   </span>
                 </div>
-              </motion.button>
+              </motion.a>
             );
           })}
         </div>
-
-        <motion.div
-          key={selected.id}
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35 }}
-          className={`relative overflow-hidden rounded-[1.65rem] border p-6 md:p-8 ${
-            isDark ? "border-white/10 bg-slate-900/55" : "border-slate-200 bg-white/75 shadow-xl shadow-slate-200/40"
-          }`}
-        >
-          <div className={`absolute left-0 top-0 h-full w-1 bg-gradient-to-b ${selected.accent}`} />
-          <div className="relative flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-start gap-4">
-              <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${
-                isDark ? "bg-blue-500/15 text-blue-300" : "bg-blue-50 text-blue-600"
-              }`}>
-                <Layers3 className="h-5 w-5" />
-              </div>
-              <div>
-                <p className={`mb-1 text-[10px] font-bold uppercase tracking-[0.2em] ${isDark ? "text-cyan-300" : "text-blue-600"}`}>
-                  Pilihanmu
-                </p>
-                <h3 className={`text-xl font-black ${isDark ? "text-white" : "text-slate-950"}`}>
-                  Ruang belajar {selected.title}
-                </h3>
-                <p className={`mt-1 text-sm ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                  Konten pembelajaran untuk tingkat {selected.id} akan hadir di sini.
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2.5">
-              {BENEFITS.map(({ icon: Icon, label }) => (
-                <span
-                  key={label}
-                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-[10px] font-semibold ${
-                    isDark ? "border-white/10 bg-white/5 text-slate-300" : "border-slate-200 bg-slate-50 text-slate-600"
-                  }`}
-                >
-                  <Icon className="h-3.5 w-3.5 text-blue-500" />
-                  {label}
-                </span>
-              ))}
-            </div>
-          </div>
-        </motion.div>
       </div>
     </section>
   );

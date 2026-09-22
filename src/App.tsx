@@ -35,10 +35,11 @@ import AdminAduanPublik from "./pages/AdminAduanPublik";
 import OsisPage from "./pages/OsisPage";
 import AdminOsis from "./pages/AdminOsis";
 import KelasVirtual from "./pages/KelasVirtual";
+import KelasKompetensi from "./pages/KelasKompetensi";
 import { DataStore } from "./dataStore";
 import { navigate, getAppPath } from "./utils/navigation";
 
-type AppPath = "/" | "/adm-panel" | "/tentang/kepala-sekolah" | "/tentang/manajemen-sekolah" | "/tentang/visi-misi" | "/tracer-studi" | "/admin/tracer-studi" | "/berita" | "/hubungi-kami" | "/modul-integrasi" | "/kelas-virtual" | "/suara-skansagiri" | "/admin/suara-skansagiri" | "/aduan-publik" | "/admin/aduan-publik" | "/osis" | "/osis/adm-panel";
+type AppPath = "/" | "/adm-panel" | "/tentang/kepala-sekolah" | "/tentang/manajemen-sekolah" | "/tentang/visi-misi" | "/tracer-studi" | "/admin/tracer-studi" | "/berita" | "/hubungi-kami" | "/modul-integrasi" | "/kelas-virtual" | "/kelas-virtual/kelas-x" | "/kelas-virtual/kelas-xi" | "/kelas-virtual/kelas-xii" | "/suara-skansagiri" | "/admin/suara-skansagiri" | "/aduan-publik" | "/admin/aduan-publik" | "/osis" | "/osis/adm-panel";
 
 function getPath(): AppPath {
   const p = getAppPath();
@@ -54,6 +55,9 @@ function getPath(): AppPath {
   if (p === "/hubungi-kami") return "/hubungi-kami";
   if (p === "/modul-integrasi") return "/modul-integrasi";
   if (p === "/kelas-virtual") return "/kelas-virtual";
+  if (p === "/kelas-virtual/kelas-x") return "/kelas-virtual/kelas-x";
+  if (p === "/kelas-virtual/kelas-xi") return "/kelas-virtual/kelas-xi";
+  if (p === "/kelas-virtual/kelas-xii") return "/kelas-virtual/kelas-xii";
   if (p === "/suara-skansagiri") return "/suara-skansagiri";
   if (p === "/admin/suara-skansagiri") return "/admin/suara-skansagiri";
   if (p === "/aduan-publik") return "/aduan-publik";
@@ -260,6 +264,18 @@ export default function App() {
         <GlobalPageBg theme={theme} />
         <Navbar theme={theme} toggleTheme={toggleTheme} />
         <KelasVirtual theme={theme} />
+        <Footer theme={theme} />
+      </div>
+    );
+  }
+
+  if (currentPath === "/kelas-virtual/kelas-x" || currentPath === "/kelas-virtual/kelas-xi" || currentPath === "/kelas-virtual/kelas-xii") {
+    const grade = currentPath.endsWith("kelas-x") ? "X" : currentPath.endsWith("kelas-xi") ? "XI" : "XII";
+    return (
+      <div className={containerClass} id="application-container">
+        <GlobalPageBg theme={theme} />
+        <Navbar theme={theme} toggleTheme={toggleTheme} />
+        <KelasKompetensi theme={theme} grade={grade} />
         <Footer theme={theme} />
       </div>
     );
