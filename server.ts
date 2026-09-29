@@ -45,42 +45,41 @@ const SESSION_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
 async function addSession(token: string, coreUserId?: string) {
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
   // Purge expired sessions while we're here
-  await db.session.deleteMany({ where: { expiresAt: { lt: new Date() } } }).catch(() => {});
-  // Do not pass an explicit `undefined` for the optional relation field.
-  // Prisma clients generated against different versions handle that value
-  // differently, and the cPanel runtime can retain an older generated client.
-  const data = coreUserId
-    ? { token, expiresAt, coreUserId }
-    : { token, expiresAt };
-  try {
-    await db.session.create({ data });
-  } catch (err) {
-    // Admin sessions do not need the Core Identity relation. Keep the admin
-    // panel usable when production is one migration behind and its generated
-    // client/schema disagrees about the optional relation column.
-    if (coreUserId) throw err;
-    serverLog("WARN", `Session ORM insert failed; retrying legacy-compatible insert: ${err instanceof Error ? err.message : String(err)}`);
-    await db.$executeRaw`INSERT INTO "Session" ("token", "expiresAt") VALUES (${token}, ${expiresAt})`;
+  await db.$executeRaw`DELETE FROM "Session" WHERE "expiresAt" < NOW()`.catch(() => {});
+
+  if (coreUserId) {
+    await db.session.create({ data: { token, expiresAt, coreUserId } });
+    return;
   }
+
+  // Admin sessions only need the three columns from the original Session
+  // table. Using SQL here avoids Prisma selecting the optional coreUserId
+  // relation column, which may not exist until the latest cPanel migration.
+  await db.$executeRaw`INSERT INTO "Session" ("token", "expiresAt") VALUES (${token}, ${expiresAt})`;
 }
 
 async function hasSession(token: string): Promise<boolean> {
   if (!token) return false;
-  const sess = await db.session.findUnique({ where: { token } });
+  // Read only columns shared by every deployed Session schema. This keeps
+  // admin authentication compatible while cPanel applies newer migrations.
+  const rows = await db.$queryRaw<Array<{ expiresAt: Date }>>`
+    SELECT "expiresAt" FROM "Session" WHERE "token" = ${token} LIMIT 1
+  `;
+  const sess = rows[0];
   if (!sess) return false;
   if (sess.expiresAt < new Date()) {
-    await db.session.delete({ where: { token } }).catch(() => {});
+    await db.$executeRaw`DELETE FROM "Session" WHERE "token" = ${token}`.catch(() => {});
     return false;
   }
   return true;
 }
 
 async function removeSession(token: string) {
-  await db.session.delete({ where: { token } }).catch(() => {});
+  await db.$executeRaw`DELETE FROM "Session" WHERE "token" = ${token}`.catch(() => {});
 }
 
 async function removeAllSessions() {
-  await db.session.deleteMany({});
+  await db.$executeRaw`DELETE FROM "Session"`;
 }
 
 // Login rate limiter: max 5 attempts per IP, then 60s lockout
@@ -123,7 +122,12 @@ async function requireAuth(req: express.Request, res: express.Response, next: ex
 
 // ─── Admin credentials helpers ────────────────────────────────────────────────
 async function getAdminCredentials(): Promise<{ username: string; password: string }> {
-  const cred = await db.adminCredential.findFirst();
+  // Keep this query independent from newer Prisma-generated relation metadata.
+  // AdminCredential has been stable since the first production migration.
+  const rows = await db.$queryRaw<Array<{ username: string; password: string }>>`
+    SELECT "username", "password" FROM "AdminCredential" WHERE "id" = 1 LIMIT 1
+  `;
+  const cred = rows[0];
   if (cred) return { username: cred.username, password: cred.password };
   return {
     username: process.env.ADMIN_USERNAME || "jobenenterprise",

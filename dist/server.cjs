@@ -40677,11 +40677,10 @@ var require_default = __commonJS({
   }
 });
 
-// node_modules/@prisma/client/index.js
-var require_client5 = __commonJS({
-  "node_modules/@prisma/client/index.js"(exports2, module2) {
+// node_modules/@prisma/client/default.js
+var require_default2 = __commonJS({
+  "node_modules/@prisma/client/default.js"(exports2, module2) {
     module2.exports = {
-      // https://github.com/prisma/prisma/pull/12907
       ...require_default()
     };
   }
@@ -74975,7 +74974,7 @@ var PrismaPgAdapterFactory = class {
 };
 
 // src/db.ts
-var import_client = __toESM(require_client5(), 1);
+var import_client = __toESM(require_default2(), 1);
 var adapter = new PrismaPgAdapterFactory({ connectionString: process.env.DATABASE_URL });
 var globalForPrisma = globalThis;
 var db = globalForPrisma.db ?? new import_client.PrismaClient({ adapter });
@@ -76329,34 +76328,34 @@ serverLog("INFO", `server.ts loaded \u2014 PORT=${PORT}  NODE_ENV=${process.env.
 var SESSION_TTL_MS = 48 * 60 * 60 * 1e3;
 async function addSession(token, coreUserId) {
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
-  await db.session.deleteMany({ where: { expiresAt: { lt: /* @__PURE__ */ new Date() } } }).catch(() => {
+  await db.$executeRaw`DELETE FROM "Session" WHERE "expiresAt" < NOW()`.catch(() => {
   });
-  const data = coreUserId ? { token, expiresAt, coreUserId } : { token, expiresAt };
-  try {
-    await db.session.create({ data });
-  } catch (err) {
-    if (coreUserId) throw err;
-    serverLog("WARN", `Session ORM insert failed; retrying legacy-compatible insert: ${err instanceof Error ? err.message : String(err)}`);
-    await db.$executeRaw`INSERT INTO "Session" ("token", "expiresAt") VALUES (${token}, ${expiresAt})`;
+  if (coreUserId) {
+    await db.session.create({ data: { token, expiresAt, coreUserId } });
+    return;
   }
+  await db.$executeRaw`INSERT INTO "Session" ("token", "expiresAt") VALUES (${token}, ${expiresAt})`;
 }
 async function hasSession(token) {
   if (!token) return false;
-  const sess = await db.session.findUnique({ where: { token } });
+  const rows = await db.$queryRaw`
+    SELECT "expiresAt" FROM "Session" WHERE "token" = ${token} LIMIT 1
+  `;
+  const sess = rows[0];
   if (!sess) return false;
   if (sess.expiresAt < /* @__PURE__ */ new Date()) {
-    await db.session.delete({ where: { token } }).catch(() => {
+    await db.$executeRaw`DELETE FROM "Session" WHERE "token" = ${token}`.catch(() => {
     });
     return false;
   }
   return true;
 }
 async function removeSession(token) {
-  await db.session.delete({ where: { token } }).catch(() => {
+  await db.$executeRaw`DELETE FROM "Session" WHERE "token" = ${token}`.catch(() => {
   });
 }
 async function removeAllSessions() {
-  await db.session.deleteMany({});
+  await db.$executeRaw`DELETE FROM "Session"`;
 }
 var loginAttempts = /* @__PURE__ */ new Map();
 function checkRateLimit(ip) {
@@ -76395,7 +76394,10 @@ async function requireAuth(req, res, next) {
   next();
 }
 async function getAdminCredentials() {
-  const cred = await db.adminCredential.findFirst();
+  const rows = await db.$queryRaw`
+    SELECT "username", "password" FROM "AdminCredential" WHERE "id" = 1 LIMIT 1
+  `;
+  const cred = rows[0];
   if (cred) return { username: cred.username, password: cred.password };
   return {
     username: process.env.ADMIN_USERNAME || "jobenenterprise",

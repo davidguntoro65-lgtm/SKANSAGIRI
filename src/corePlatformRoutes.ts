@@ -478,7 +478,7 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
         const existingVotes = await tx.pilketosVote.findMany({
           where: { electionId, studentId: student.id },
           select: { grade: true, candidateId: true },
-        });
+        }) as Array<{ grade: string; candidateId: string }>;
         const existingByGrade = new Map(existingVotes.map((vote) => [vote.grade, vote]));
         for (const candidate of candidates) {
           const existing = existingByGrade.get(candidate.grade);
