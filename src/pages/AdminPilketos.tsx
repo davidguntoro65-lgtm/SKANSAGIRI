@@ -117,17 +117,27 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
 
   async function addCandidate(event: FormEvent) {
     event.preventDefault();
-    if (!election) {
-      setNotice({ type: "error", text: "Simpan pengaturan pemilihan terlebih dahulu." });
-      return;
-    }
     setSaving(true);
     try {
-      const response = await fetch(`/api/v1/pilketos/admin/election/${election.id}/candidates`, { method: "POST", headers: headers(), body: JSON.stringify({ ...candidate, candidateNo: Number(candidate.candidateNo) }) });
+      let targetElection = election;
+      if (!targetElection) {
+        const electionResponse = await fetch("/api/v1/pilketos/admin/election", {
+          method: "POST",
+          headers: headers(),
+          body: JSON.stringify({ ...form, status: "DRAFT" }),
+        });
+        const electionPayload = await electionResponse.json().catch(() => ({}));
+        if (!electionResponse.ok) throw new Error(electionPayload.error?.message || "Draft pemilihan belum dapat dibuat.");
+        targetElection = electionPayload.data?.election as Election | null;
+        if (!targetElection?.id) throw new Error("Draft pemilihan belum dapat dibuat.");
+        setElection(targetElection);
+      }
+
+      const response = await fetch(`/api/v1/pilketos/admin/election/${targetElection.id}/candidates`, { method: "POST", headers: headers(), body: JSON.stringify({ ...candidate, candidateNo: Number(candidate.candidateNo) }) });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error?.message || "Kandidat belum tersimpan.");
       setCandidate({ grade: "XI", candidateNo: "", name: "", photoData: "" });
-      setNotice({ type: "success", text: "Kandidat berhasil ditambahkan." });
+      setNotice({ type: "success", text: election ? "Kandidat berhasil ditambahkan." : "Draft pemilihan dan kandidat pertama berhasil dibuat." });
       await load();
     } catch (error) {
       setNotice({ type: "error", text: error instanceof Error ? error.message : "Kandidat belum tersimpan." });
@@ -197,6 +207,7 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
         <div className={`rounded-3xl border p-5 sm:p-6 ${card}`}>
           <div className="flex items-center justify-between gap-3"><div><h3 className="font-black">Daftar pilihan kandidat</h3><p className={`mt-1 text-xs ${muted}`}>{election?.candidates.length || 0}/8 kandidat terdaftar · masing-masing kelas wajib 4.</p></div><span className="rounded-lg bg-amber-400/15 px-2 py-1 text-xs font-black text-amber-600">Nama + foto</span></div>
           <form onSubmit={addCandidate} className="mt-6 rounded-2xl border border-dashed border-current/15 p-4">
+            {!election && <p className={`mb-4 rounded-xl bg-amber-400/10 px-3 py-2.5 text-xs leading-relaxed ${muted}`}>Draft pemilihan akan dibuat otomatis saat pilihan kandidat pertama ditambahkan.</p>}
             <div className="grid gap-3 sm:grid-cols-[120px_100px_1fr]">
               <label className={`text-xs font-bold ${muted}`}>Kelas<select required value={candidate.grade} onChange={(event) => setCandidate({ ...candidate, grade: event.target.value as "X" | "XI" })} className={`mt-2 w-full rounded-xl border px-3 py-3 text-sm outline-none focus:border-amber-400 ${input}`}><option value="X">Kelas X</option><option value="XI">Kelas XI</option></select></label>
               <label className={`text-xs font-bold ${muted}`}>Nomor<input required type="number" min={1} max={99} value={candidate.candidateNo} onChange={(event) => setCandidate({ ...candidate, candidateNo: event.target.value })} className={`mt-2 w-full rounded-xl border px-3 py-3 text-sm outline-none focus:border-amber-400 ${input}`} placeholder="1" /></label>
@@ -205,7 +216,7 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <label className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-bold transition hover:border-amber-400 ${input}`}><ImagePlus className="h-4 w-4 text-amber-500" />{candidate.photoData ? "Ganti foto" : "Upload foto"}<input type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadPhoto} className="sr-only" /></label>
               {candidate.photoData && <img src={candidate.photoData} alt="Preview kandidat" className="h-12 w-12 rounded-xl object-cover" />}
-              <button disabled={!election || saving} className="ml-auto inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-black text-white transition hover:bg-slate-800 disabled:opacity-40 dark:bg-white dark:text-slate-950"><Plus className="h-4 w-4" />Tambah pilihan</button>
+              <button disabled={saving} className="ml-auto inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-slate-950"><Plus className="h-4 w-4" />{saving ? "Menyimpan..." : "Tambah pilihan"}</button>
             </div>
           </form>
           <div className="mt-5 space-y-3">{election?.candidates.map((item) => <div key={item.id} className="flex items-center gap-3 rounded-2xl border border-current/10 p-3"><div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-amber-400/15 text-lg font-black text-amber-600">{item.photoData ? <img src={item.photoData} alt="" className="h-full w-full object-cover" /> : item.candidateNo}</div><div className="min-w-0 flex-1"><p className="text-[10px] font-black uppercase tracking-widest text-amber-500">Kelas {item.grade} · Nomor {item.candidateNo}</p><p className="truncate font-black">{item.name}</p>{election.status !== "DRAFT" && <p className={`text-xs ${muted}`}>{item.voteCount || 0} suara tercatat</p>}</div>{election.status === "DRAFT" ? <button onClick={() => void removeCandidate(item.id)} className="rounded-lg p-2 text-rose-500 transition hover:bg-rose-500/10" title="Hapus kandidat"><Trash2 className="h-4 w-4" /></button> : <CheckCircle2 className="h-5 w-5 text-emerald-500" />}</div>)}{!election?.candidates.length && <div className={`rounded-2xl border border-dashed p-8 text-center text-sm ${muted}`}>Belum ada kandidat. Tambahkan 4 kandidat kelas X dan 4 kandidat kelas XI untuk membuka pemilihan.</div>}</div>
