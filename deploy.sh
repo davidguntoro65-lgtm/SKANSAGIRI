@@ -407,21 +407,23 @@ PRISMA_CONFIG
     migration_status="$MIGRATION_STATUS"
 
     # A database created before Prisma Migrate was introduced has no
-    # _prisma_migrations table, so migrate deploy returns P3005. Never guess
-    # that the schema is current: only an explicit operator flag may enable
-    # recovery, and only after Prisma confirms the live schema is identical to
-    # schema.prisma. This marks history; it does not alter application data.
+    # _prisma_migrations table, so migrate deploy returns P3005. Never mark the
+    # whole current schema as applied: the legacy database may contain only the
+    # first migration while the repository has since added Core/Pilketos tables.
+    # Only an explicit operator flag may enable recovery. It verifies the
+    # legacy contract, marks only the first migration as applied, then lets
+    # migrate deploy apply every later non-destructive migration.
     if [ "$migration_status" -ne 0 ] &&
        printf '%s\n' "$migration_output" | grep -q 'P3005' &&
        [ "${BASELINE_EXISTING_SCHEMA:-0}" = "1" ]; then
-      log_warn "P3005 terdeteksi; memeriksa apakah schema production sudah identik dengan schema.prisma..."
+      log_warn "P3005 terdeteksi; memeriksa schema legacy terhadap migration awal..."
 
       local diff_output diff_status
       if diff_output="$(
         PRISMA_APP_DIR="$APP_DIR" \
         "${PRISMA_RUNNER[@]}" migrate diff \
           --from-config-datasource \
-          --to-schema "$APP_DIR/prisma/schema.prisma" \
+          --to-schema "$APP_DIR/prisma/legacy-baseline.prisma" \
           --script --exit-code \
           --config "$config_file" 2>&1
       )"; then
@@ -434,8 +436,8 @@ PRISMA_CONFIG
 
       if [ "$diff_status" -ne 0 ]; then
         if [ "$diff_status" -eq 2 ]; then
-          log_err "Schema production berbeda dari schema.prisma; baseline dibatalkan."
-          log_err "Tinjau diff di deploy.log dan buat migration non-destruktif yang sesuai."
+          log_err "Schema production tidak identik dengan migration awal; baseline dibatalkan."
+          log_err "Database mungkin hanya sebagian ter-migrasi atau memiliki drift. Tinjau diff di deploy.log."
         else
           log_err "Pemeriksaan kesetaraan schema gagal; baseline dibatalkan."
         fi
@@ -443,34 +445,30 @@ PRISMA_CONFIG
         return 1
       fi
 
-      local migration_dir migration_name
-      for migration_dir in "$APP_DIR"/prisma/migrations/*; do
-        [ -d "$migration_dir" ] || continue
-        migration_name="$(basename "$migration_dir")"
-        log_info "Mendaftarkan migration existing sebagai applied: $migration_name"
-        local resolve_output resolve_status
-        if resolve_output="$(
-          PRISMA_APP_DIR="$APP_DIR" \
-          "${PRISMA_RUNNER[@]}" migrate resolve \
-            --applied "$migration_name" \
-            --config "$config_file" 2>&1
-        )"; then
-          resolve_status=0
-        else
-          resolve_status=$?
-        fi
-        printf '%s\n' "$resolve_output" |
-          sed 's/^/  [prisma-resolve] /' | tee -a "$LOG_FILE"
-        if [ "$resolve_status" -ne 0 ] ||
-           printf '%s\n' "$resolve_output" |
-             grep -qE 'Failed to load config|(^|[[:space:]])Error:|P[0-9]{4}:'; then
-          log_err "Gagal mendaftarkan migration $migration_name — deploy dibatalkan."
-          rm -f "$config_file"
-          return 1
-        fi
-      done
+      local baseline_migration="20260721114333_init"
+      log_info "Mendaftarkan hanya migration awal sebagai applied: $baseline_migration"
+      local resolve_output resolve_status
+      if resolve_output="$(
+        PRISMA_APP_DIR="$APP_DIR" \
+        "${PRISMA_RUNNER[@]}" migrate resolve \
+          --applied "$baseline_migration" \
+          --config "$config_file" 2>&1
+      )"; then
+        resolve_status=0
+      else
+        resolve_status=$?
+      fi
+      printf '%s\n' "$resolve_output" |
+        sed 's/^/  [prisma-resolve] /' | tee -a "$LOG_FILE"
+      if [ "$resolve_status" -ne 0 ] ||
+         printf '%s\n' "$resolve_output" |
+           grep -qE 'Failed to load config|(^|[[:space:]])Error:|P[0-9]{4}:'; then
+        log_err "Gagal mendaftarkan migration awal — deploy dibatalkan."
+        rm -f "$config_file"
+        return 1
+      fi
 
-      log_ok "Baseline schema existing selesai; tidak ada data aplikasi yang diubah."
+      log_ok "Baseline migration awal selesai; migration Core/Pilketos akan diterapkan berikutnya."
       run_migrate_deploy
       migration_output="$MIGRATION_OUTPUT"
       migration_status="$MIGRATION_STATUS"

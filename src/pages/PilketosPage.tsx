@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { GlobalPageBg } from "../components/BackgroundSystem";
 import { useBranding } from "../hooks/useBranding";
+import { apiFetch } from "../utils/navigation";
 
 type Candidate = {
   id: string;
@@ -92,7 +93,7 @@ export default function PilketosPage() {
   );
 
   async function loadElection() {
-    const response = await fetch("/api/v1/pilketos/active", { headers: authHeaders() });
+    const response = await apiFetch("/api/v1/pilketos/active", { headers: authHeaders() });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error?.message || "Data pemilihan tidak dapat dimuat.");
     const next = payload.data?.election as Election | null;
@@ -121,7 +122,7 @@ export default function PilketosPage() {
       try {
         await loadElection();
         if (!getStoredToken()) return;
-        const response = await fetch("/api/v1/auth/session", { headers: authHeaders() });
+        const response = await apiFetch("/api/v1/auth/session", { headers: authHeaders() });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || !payload.data?.user?.roles?.includes("SISWA")) {
           localStorage.removeItem(TOKEN_KEY);
@@ -158,7 +159,7 @@ export default function PilketosPage() {
     setLoginError("");
     setLoginBusy(true);
     try {
-      const response = await fetch("/api/v1/auth/login", {
+      const response = await apiFetch("/api/v1/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ identifier: identifier.trim(), password }),
@@ -182,7 +183,7 @@ export default function PilketosPage() {
     if (!election || selected.length !== 2 || voteBusy) return;
     setVoteBusy(true);
     try {
-      const response = await fetch("/api/v1/pilketos/vote", {
+      const response = await apiFetch("/api/v1/pilketos/vote", {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({ electionId: election.id, candidateIds: selected.map((candidate) => candidate.id) }),
@@ -200,7 +201,7 @@ export default function PilketosPage() {
   }
 
   async function logout() {
-    await fetch("/api/v1/auth/logout", { method: "POST", headers: authHeaders() }).catch(() => {});
+    await apiFetch("/api/v1/auth/logout", { method: "POST", headers: authHeaders() }).catch(() => {});
     localStorage.removeItem(TOKEN_KEY);
     setUser(null);
     setSelectedCandidates({ X: "", XI: "" });

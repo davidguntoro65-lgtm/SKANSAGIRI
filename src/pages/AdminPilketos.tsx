@@ -1,5 +1,6 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { CheckCircle2, ImagePlus, Loader2, Plus, Save, Trash2, Vote } from "lucide-react";
+import { apiFetch } from "../utils/navigation";
 
 type Candidate = {
   id: string;
@@ -84,7 +85,7 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
   async function load() {
     setLoading(true);
     try {
-      const response = await fetch("/api/v1/pilketos/admin", { headers: headers() });
+      const response = await apiFetch("/api/v1/pilketos/admin", { headers: headers() });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error?.message || "Data Pilketos tidak dapat dimuat.");
       const next = payload.data?.election as Election | null;
@@ -104,7 +105,7 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
     event.preventDefault();
     setSaving(true);
     try {
-      const response = await fetch("/api/v1/pilketos/admin/election", { method: "POST", headers: headers(), body: JSON.stringify({ ...form, id: election?.id }) });
+      const response = await apiFetch("/api/v1/pilketos/admin/election", { method: "POST", headers: headers(), body: JSON.stringify({ ...form, id: election?.id }) });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error?.message || "Pengaturan belum tersimpan.");
       setNotice({ type: "success", text: "Pengaturan pemilihan berhasil disimpan." });
@@ -135,7 +136,7 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
     try {
       let targetElection = election;
       if (!targetElection) {
-        const electionResponse = await fetch("/api/v1/pilketos/admin/election", {
+        const electionResponse = await apiFetch("/api/v1/pilketos/admin/election", {
           method: "POST",
           headers: headers(),
           body: JSON.stringify({ ...form, status: "DRAFT" }),
@@ -147,7 +148,7 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
         setElection(targetElection);
       }
 
-      const response = await fetch(`/api/v1/pilketos/admin/election/${targetElection.id}/candidates`, { method: "POST", headers: headers(), body: JSON.stringify({ ...candidate, candidateNo: Number(candidate.candidateNo) }) });
+      const response = await apiFetch(`/api/v1/pilketos/admin/election/${targetElection.id}/candidates`, { method: "POST", headers: headers(), body: JSON.stringify({ ...candidate, candidateNo: Number(candidate.candidateNo) }) });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error?.message || "Kandidat belum tersimpan.");
       setCandidate({ grade: "XI", candidateNo: "", name: "", photoData: "" });
@@ -164,7 +165,7 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
     if (!window.confirm("Hapus kandidat ini dari draft pemilihan?")) return;
     setSaving(true);
     try {
-      const response = await fetch(`/api/v1/pilketos/admin/candidates/${id}`, { method: "DELETE", headers: headers() });
+      const response = await apiFetch(`/api/v1/pilketos/admin/candidates/${id}`, { method: "DELETE", headers: headers() });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error?.message || "Kandidat belum dihapus.");
       setNotice({ type: "success", text: "Kandidat berhasil dihapus." });

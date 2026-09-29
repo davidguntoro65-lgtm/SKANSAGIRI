@@ -15,16 +15,17 @@ Keep database migrations before the Node restart, load `DATABASE_URL` from the a
 ## Existing database baseline
 
 If `prisma migrate deploy` returns `P3005` because a pre-existing database has no
-`_prisma_migrations` history, baseline only after `prisma migrate diff
---from-config-datasource --to-schema prisma/schema.prisma --exit-code` confirms
-that the live schema is identical. The deployment script exposes this as the
-explicit `BASELINE_EXISTING_SCHEMA=1` recovery path and records every repository
-migration as applied before rerunning `migrate deploy`.
+`_prisma_migrations` history, compare it with
+`prisma/legacy-baseline.prisma`, which represents only the original migration.
+The deployment script exposes this as the explicit
+`BASELINE_EXISTING_SCHEMA=1` recovery path, marks only
+`20260721114333_init` as applied, then reruns `migrate deploy` so newer Core
+Platform and Pilketos migrations are actually executed.
 
-**Why:** Marking migration history without comparing schemas can hide missing
-tables or columns and make the next migration either fail or leave the running
-bundle incompatible with production data.
+**Why:** Marking every repository migration as applied when only the initial
+tables exist hides missing Core/Pilketos tables and leaves the running bundle
+incompatible with production data.
 
 **How to apply:** Never use the baseline flag for a partially migrated or
-unknown schema. If the diff is non-empty, stop and create/apply the required
-non-destructive migration instead.
+unknown schema. If the legacy baseline diff is non-empty, stop and create/apply
+the required non-destructive migration instead.

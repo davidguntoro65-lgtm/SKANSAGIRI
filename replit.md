@@ -45,17 +45,18 @@ Starts the Express server on **port 5000**, which also serves the Vite dev clien
 1. On cPanel, create the Node.js app with **Node.js 22**, set `DATABASE_URL` in the Node.js app environment variables (e.g. pointing to a Neon/Supabase/Aiven PostgreSQL instance), and use `app.js` as the startup file.
 2. Build on Replit: `VITE_BASE_PATH=/id/ npm run build` then commit `dist/` to GitHub.
 3. On cPanel, run `bash deploy.sh` — this pulls from GitHub and runs `prisma migrate deploy` automatically.
-   If the existing production database was created before Prisma Migrate and the
-   deploy log reports `P3005`, first verify that its schema is already identical
-   to the repository schema, then run:
+    If the existing production database was created before Prisma Migrate and the
+    deploy log reports `P3005`, run the explicit legacy recovery path:
 
    ```bash
    BASELINE_EXISTING_SCHEMA=1 bash deploy.sh
    ```
 
-   The script runs `prisma migrate diff` before marking migration history as
-   applied. It aborts when the live schema differs, and it never resets, seeds,
-   or deletes application data.
+    The script compares the live database with
+    `prisma/legacy-baseline.prisma` (the schema from the first migration), marks
+    only `20260721114333_init` as applied, and then applies all later migrations
+    including Core Platform and Pilketos. It aborts when the legacy schema
+    differs, and it never resets, seeds, or deletes application data.
 
 ### External PostgreSQL options (free tier):
 - **Neon** — https://neon.tech (recommended, serverless, generous free tier)
