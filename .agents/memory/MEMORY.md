@@ -7,3 +7,4 @@
 - [Imported project dependency setup](imported-project-dependencies.md) — Imported repositories may have a lockfile but no node_modules; install declared packages before diagnosing workflow failures.
 - [Prisma 7 TypeScript import quirk](prisma7-typescript-import.md) — With this generated client and bundler resolution, import PrismaClient from @prisma/client/index when the package root type is not exposed.
 - [SPA trailing-slash routing](spa-trailing-slash-routing.md) — Normalize pathname trailing slashes before matching client-side routes, including deployed subpaths.
+- [cPanel production migrations](cpanel-production-migrations.md) — Apply only pending non-destructive Prisma migrations before restart; production data stays outside Git.

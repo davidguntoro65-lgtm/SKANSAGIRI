@@ -3,13 +3,13 @@
 # deploy.sh — SMKN 1 Wonogiri Portal
 # =============================================================================
 # Tarik perubahan dari GitHub (termasuk dist/ yang sudah dibangun di Replit),
-# lalu restart Node.js di cPanel.
+# apply migration PostgreSQL yang aman, lalu restart Node.js di cPanel.
 #
 # Build dilakukan di Replit (VITE_BASE_PATH=/id/ npm run build), lalu di-commit
 # ke GitHub. Script ini TIDAK perlu build ulang di server.
 #
 # Yang TIDAK PERNAH diubah oleh script ini:
-#   - data/       (database JSON flat-file — logo, berita, galeri, kepala sekolah, dll.)
+#   - database    (isi PostgreSQL tidak pernah di-reset atau di-seed ulang)
 #   - logs/       (server log files)
 #   - .env        (variabel lingkungan / secrets)
 #   - app.js      (Passenger startup file — spesifik cPanel, JANGAN di-overwrite)
@@ -27,7 +27,8 @@
 #
 # KEAMANAN DATA:
 #   data/ kini ada di .gitignore — git reset --hard TIDAK menyentuhnya.
-#   Backup/restore berfungsi sebagai lapisan perlindungan kedua.
+#   Database PostgreSQL berada di luar repo dan tidak disentuh git.
+#   Backup/restore berfungsi sebagai lapisan perlindungan konfigurasi kedua.
 #   EXIT trap di Fase 1 dibersihkan sebelum exec agar backup tidak terhapus
 #   sebelum Fase 2 sempat melakukan restore.
 # =============================================================================
@@ -179,9 +180,9 @@ if [ "${1:-}" = "--post-reset" ]; then
       log_info "Backup sementara dibersihkan."
     else
       log_warn "══════════════════════════════════════════════════"
-      log_warn "PERHATIAN: Restore belum dikonfirmasi selesai."
-      log_warn "Backup data MASIH ADA di: $PROTECT_DIR"
-      log_warn "Pulihkan manual dengan: cp -rp '$PROTECT_DIR/data' '$APP_DIR/data'"
+      log_warn "PERHATIAN: Seluruh proses deploy belum dikonfirmasi selesai."
+      log_warn "Backup konfigurasi MASIH ADA di: $PROTECT_DIR"
+      log_warn "File yang dapat dipulihkan: .env, app.js, .htaccess, dan logs/"
       log_warn "══════════════════════════════════════════════════"
     fi
   }
@@ -191,7 +192,7 @@ if [ "${1:-}" = "--post-reset" ]; then
   log_info "[4/6] Memulihkan file yang dilindungi..."
   if ! restore_protected "$PROTECT_DIR"; then
     log_err "Restore gagal. Backup ada di: $PROTECT_DIR"
-    log_err "Pulihkan manual: cp -rp '$PROTECT_DIR/data' '$APP_DIR/data'"
+    log_err "Backup konfigurasi tetap tersedia di: $PROTECT_DIR"
     exit 1
   fi
 
@@ -203,23 +204,97 @@ if [ "${1:-}" = "--post-reset" ]; then
   fi
   log_ok "logs/, .env, app.js, .htaccess aman — tidak tersentuh git."
 
-  # Tandai restore berhasil — backup boleh dihapus saat cleanup
-  RESTORE_DONE=1
+  # ── Database migration ──────────────────────────────────────────────────────
+  # dist/server.cjs self-contained untuk runtime aplikasi, tetapi prisma migrate
+  # deploy membutuhkan Prisma CLI. Dependency production hanya dipasang bila
+  # CLI belum tersedia; tidak ada seed, db push, reset, atau deleteMany.
+  load_database_url() {
+    if [ -n "${DATABASE_URL:-}" ]; then
+      export DATABASE_URL
+      return 0
+    fi
 
-  # ── npm install DIHAPUS ───────────────────────────────────────────────────
-  # dist/server.cjs sudah di-bundle lengkap di Replit (termasuk @prisma/client,
-  # @prisma/adapter-pg, pg). cPanel tidak perlu npm install sama sekali.
-  # Ini menghindari masalah CloudLinux nproc limit dan symlink node_modules.
-  log_info "[3.5a/6] Melewati npm install — semua deps sudah ter-bundle di dist/server.cjs"
-  log_ok "npm install tidak diperlukan (zero-dependency deployment)."
+    # cPanel dapat menyimpan DATABASE_URL di .env tanpa mewariskannya ke shell
+    # SSH. Ambil hanya nilai pasangan DATABASE_URL, jangan source .env sebagai
+    # shell script dan jangan pernah mencetak nilainya.
+    if [ -f "$APP_DIR/.env" ]; then
+      local value
+      value="$(awk -F= '
+        /^[[:space:]]*DATABASE_URL[[:space:]]*=/ {
+          sub(/^[^=]*=[[:space:]]*/, "", $0);
+          print $0;
+          exit;
+        }
+      ' "$APP_DIR/.env")"
+      value="${value#\"}"
+      value="${value%\"}"
+      value="${value#\'}"
+      value="${value%\'}"
+      if [ -n "$value" ]; then
+        export DATABASE_URL="$value"
+        return 0
+      fi
+    fi
+    return 1
+  }
 
-  # ── Prisma migrate deploy (opsional) ─────────────────────────────────────
-  # node_modules tidak ada di cPanel (deps sudah ter-bundle di dist/server.cjs).
-  # Migrations cukup dijalankan SEKALI saat pertama deploy atau saat schema berubah.
-  # Cara manual: jalankan SQL di prisma/migrations/*/migration.sql via phpMyAdmin/psql.
-  log_info "[3.5b/6] Skip prisma migrate — schema sudah di-apply via setup awal."
-  log_info "  Jika schema baru belum di-apply, jalankan manual:"
-  log_info "  psql \$DATABASE_URL -f prisma/migrations/20260721114333_init/migration.sql"
+  assert_migrations_non_destructive() {
+    local destructive
+    destructive="$(
+      grep -RIniE \
+        '(^|[[:space:];])(DROP[[:space:]]+TABLE|TRUNCATE([[:space:]]|$)|DELETE[[:space:]]+FROM|ALTER[[:space:]]+TABLE[^;]*DROP[[:space:]]+COLUMN)' \
+        "$APP_DIR/prisma/migrations" \
+        --include='migration.sql' 2>/dev/null || true
+    )"
+    if [ -n "$destructive" ] && [ "${ALLOW_DESTRUCTIVE_MIGRATIONS:-0}" != "1" ]; then
+      log_err "Migration berisi operasi yang berpotensi menghapus data."
+      log_err "Deploy dibatalkan. Tinjau SQL migration secara manual; gunakan"
+      log_err "ALLOW_DESTRUCTIVE_MIGRATIONS=1 hanya setelah backup database diverifikasi."
+      printf '%s\n' "$destructive" | sed 's/^/  [migration] /' >> "$LOG_FILE"
+      return 1
+    fi
+    if [ -n "$destructive" ]; then
+      log_warn "ALLOW_DESTRUCTIVE_MIGRATIONS=1 aktif; migration destruktif diizinkan."
+    else
+      log_ok "Migration lolos pemeriksaan non-destruktif."
+    fi
+  }
+
+  apply_database_migrations() {
+    load_database_url || {
+      log_err "DATABASE_URL tidak ditemukan di environment atau .env — deploy dibatalkan."
+      return 1
+    }
+
+    assert_migrations_non_destructive || return 1
+
+    if [ ! -x "$APP_DIR/node_modules/.bin/prisma" ]; then
+      command -v npm >/dev/null 2>&1 || {
+        log_err "'npm' tidak ada di PATH; Prisma CLI tidak bisa dipasang."
+        return 1
+      }
+      log_info "Prisma CLI belum tersedia; memasang dependency production tanpa script install..."
+      npm ci --omit=dev --ignore-scripts --no-audit --no-fund --prefer-offline 2>&1 |
+        sed 's/^/  [npm] /' | tee -a "$LOG_FILE"
+    fi
+
+    [ -x "$APP_DIR/node_modules/.bin/prisma" ] || {
+      log_err "Prisma CLI tidak tersedia setelah instalasi — deploy dibatalkan."
+      return 1
+    }
+
+    log_info "Menerapkan migration PostgreSQL yang belum pernah dijalankan..."
+    "$APP_DIR/node_modules/.bin/prisma" migrate deploy \
+      --schema "$APP_DIR/prisma/schema.prisma" 2>&1 |
+      sed 's/^/  [prisma] /' | tee -a "$LOG_FILE"
+    log_ok "Migration selesai; isi database tidak di-reset."
+  }
+
+  log_info "[3.5/6] Menyiapkan database production..."
+  if ! apply_database_migrations; then
+    log_err "Migration gagal. Proses yang sedang berjalan tidak dihentikan; backup konfigurasi dipertahankan di: $PROTECT_DIR"
+    exit 1
+  fi
 
   # ── Bersihkan file aset usang yang tidak terlacak git ────────────────────
   # git reset --hard tidak menghapus file untracked; ini wajib untuk mencegah
@@ -242,10 +317,11 @@ if [ "${1:-}" = "--post-reset" ]; then
     fi
   done
 
-  if grep -q '"/id/' "$APP_DIR/dist/index.html" 2>/dev/null || grep -q "'/id/" "$APP_DIR/dist/index.html" 2>/dev/null; then
-    log_ok "  ✓ Base path /id/ terdeteksi di index.html"
+  if grep -qE '(src|href)="/id/assets/' "$APP_DIR/dist/index.html" 2>/dev/null; then
+    log_ok "  ✓ Asset base path /id/ terdeteksi di index.html"
   else
-    log_warn "  ⚠ Base path /id/ tidak terdeteksi di index.html — pastikan build dengan VITE_BASE_PATH=/id/"
+    log_err "  ✗ Asset base path /id/ tidak terdeteksi — build ulang dengan VITE_BASE_PATH=/id/"
+    VERIFY_ERR=$((VERIFY_ERR + 1))
   fi
 
   SERVER_SIZE="$(du -k "$APP_DIR/dist/server.cjs" 2>/dev/null | cut -f1 || echo 0)"
@@ -331,6 +407,10 @@ if [ "${1:-}" = "--post-reset" ]; then
   else
     log_info "Test: curl https://smkn1wonogiri.sch.id/id/api/health"
   fi
+  # Seluruh perubahan file, migration, dan verifikasi sudah selesai. Jika
+  # cPanel tidak menyediakan metode restart otomatis, hanya restart manual
+  # yang tertunda; konfigurasi tetap sudah dipulihkan dengan benar.
+  RESTORE_DONE=1
   log_info "══════════════════════════════════════════════════"
   exit 0
 fi
