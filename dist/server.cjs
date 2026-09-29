@@ -40677,10 +40677,11 @@ var require_default = __commonJS({
   }
 });
 
-// node_modules/@prisma/client/default.js
-var require_default2 = __commonJS({
-  "node_modules/@prisma/client/default.js"(exports2, module2) {
+// node_modules/@prisma/client/index.js
+var require_client5 = __commonJS({
+  "node_modules/@prisma/client/index.js"(exports2, module2) {
     module2.exports = {
+      // https://github.com/prisma/prisma/pull/12907
       ...require_default()
     };
   }
@@ -74974,7 +74975,7 @@ var PrismaPgAdapterFactory = class {
 };
 
 // src/db.ts
-var import_client = __toESM(require_default2(), 1);
+var import_client = __toESM(require_client5(), 1);
 var adapter = new PrismaPgAdapterFactory({ connectionString: process.env.DATABASE_URL });
 var globalForPrisma = globalThis;
 var db = globalForPrisma.db ?? new import_client.PrismaClient({ adapter });
