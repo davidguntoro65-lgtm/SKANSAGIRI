@@ -13,6 +13,21 @@ function detectBase(): string {
 
 export const BASE_PATH = detectBase();
 
+// API requests must include the deployment prefix when the app is mounted
+// below the domain root (for example, /id on cPanel).
+export function apiPath(path: string): string {
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  if (!normalized.startsWith("/api/")) return normalized;
+  return `${BASE_PATH}${normalized}` || normalized;
+}
+
+export function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  if (typeof input === "string" && input.startsWith("/api/")) {
+    return window.fetch(apiPath(input), init);
+  }
+  return window.fetch(input, init);
+}
+
 function normalizePath(path: string): string {
   if (path.length <= 1) return "/";
   return path.replace(/\/+$/, "").toLowerCase();

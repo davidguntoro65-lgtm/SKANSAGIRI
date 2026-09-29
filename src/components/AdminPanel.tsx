@@ -15,6 +15,7 @@ import { DataStore } from "../dataStore";
 import { useBranding, Branding } from "../hooks/useBranding";
 import AdminAkademik from "../pages/AdminAkademik";
 import AdminPilketos from "../pages/AdminPilketos";
+import { apiFetch } from "../utils/navigation";
 
 export default function AdminPanel({ 
   theme = "dark", 
@@ -398,7 +399,7 @@ export default function AdminPanel({
   useEffect(() => {
     const token = localStorage.getItem("smkn1_adm_token");
     if (!token) return;
-    fetch("/api/auth/verify", { headers: { "Authorization": `Bearer ${token}` } })
+    apiFetch("/api/auth/verify", { headers: { "Authorization": `Bearer ${token}` } })
       .then(res => { if (!res.ok) { localStorage.removeItem("smkn1_adm_token"); setIsLoggedIn(false); } })
       .catch(() => {});
   }, []);
@@ -412,17 +413,17 @@ export default function AdminPanel({
       setAlumni(DataStore.getAlumni());
       setNews(DataStore.getNews());
       setPartners(DataStore.getPartners());
-      fetch("/api/about").then(r => r.json()).then(d => setAboutData(d)).catch(() => {});
-      fetch("/api/kepala-sekolah").then(r => r.json()).then(d => setKepalaSekolah(d)).catch(() => {});
-      fetch("/api/manajemen-sekolah").then(r => r.json()).then(d => setManajemenSekolah(Array.isArray(d) ? d : [])).catch(() => {});
-      fetch("/api/visi-misi").then(r => r.json()).then(d => setVisiMisi(d)).catch(() => {});
-      fetch("/api/social-media").then(r => r.json()).then(d => setSocialMedia(d)).catch(() => {});
+      apiFetch("/api/about").then(r => r.json()).then(d => setAboutData(d)).catch(() => {});
+      apiFetch("/api/kepala-sekolah").then(r => r.json()).then(d => setKepalaSekolah(d)).catch(() => {});
+      apiFetch("/api/manajemen-sekolah").then(r => r.json()).then(d => setManajemenSekolah(Array.isArray(d) ? d : [])).catch(() => {});
+      apiFetch("/api/visi-misi").then(r => r.json()).then(d => setVisiMisi(d)).catch(() => {});
+      apiFetch("/api/social-media").then(r => r.json()).then(d => setSocialMedia(d)).catch(() => {});
     }
   }, [isLoggedIn]);
 
   const loadContactMessages = () => {
     setContactLoading(true);
-    fetch("/api/contact", { headers: getAuthHeaders() })
+    apiFetch("/api/contact", { headers: getAuthHeaders() })
       .then(r => r.ok ? r.json() : [])
       .then(d => { setContactMessages(Array.isArray(d) ? d : []); setContactLoading(false); })
       .catch(() => setContactLoading(false));
@@ -456,7 +457,7 @@ export default function AdminPanel({
 
   const diagnoseServer = async (): Promise<{ status: ServerStatus; diagnosis: string; data?: HealthData }> => {
     try {
-      const res = await fetch("/api/health");
+      const res = await apiFetch("/api/health");
       const ct = res.headers.get("content-type") || "";
       if (!ct.includes("application/json")) {
         return {
@@ -538,7 +539,7 @@ export default function AdminPanel({
 
   const loadTracerEntries = () => {
     setTracerLoading(true); setTracerError("");
-    fetch("/api/tracer")
+    apiFetch("/api/tracer")
       .then(r => r.json())
       .then((d: TracerEntry[]) => { setTracerEntries(Array.isArray(d) ? d : []); setTracerLoading(false); })
       .catch(() => { setTracerError("Gagal memuat data tracer."); setTracerLoading(false); });
@@ -564,7 +565,7 @@ export default function AdminPanel({
     if (!window.confirm(`Hapus data "${nama}"?`)) return;
     setTracerDeleteId(id);
     try {
-      const res = await fetch(`/api/tracer/${id}`, { method: "DELETE", headers: getAuthHeaders() });
+      const res = await apiFetch(`/api/tracer/${id}`, { method: "DELETE", headers: getAuthHeaders() });
       if (res.ok) { setTracerEntries(prev => prev.filter(e => e.id !== id)); showTracerFeedback(`Data "${nama}" dihapus.`); }
       else showTracerFeedback("Gagal menghapus data.");
     } catch { showTracerFeedback("Gagal menghapus data."); }
@@ -681,7 +682,7 @@ export default function AdminPanel({
     setLoginError("");
     setLoginLoading(true);
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await apiFetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password })
@@ -708,7 +709,7 @@ export default function AdminPanel({
 
   const handleLogout = async () => {
     try {
-      await fetch("/api/auth/logout", { method: "POST", headers: getAuthHeaders() });
+      await apiFetch("/api/auth/logout", { method: "POST", headers: getAuthHeaders() });
     } catch { /* best-effort */ }
     localStorage.removeItem("smkn1_adm_token");
     setIsLoggedIn(false);
@@ -728,7 +729,7 @@ export default function AdminPanel({
     if (cpNewPass.length < 8) { setCpError("Password baru minimal 8 karakter."); return; }
     setCpLoading(true);
     try {
-      const res = await fetch("/api/auth/change-password", {
+      const res = await apiFetch("/api/auth/change-password", {
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify({ currentPassword: cpCurrentPass, newUsername: cpNewUser, newPassword: cpNewPass }),
@@ -3019,7 +3020,7 @@ export default function AdminPanel({
                       setBrandingLoading(true);
                       try {
                         const token = localStorage.getItem("smkn1_adm_token") || "";
-                        const res = await fetch("/api/branding", {
+                        const res = await apiFetch("/api/branding", {
                           method: "POST",
                           headers: { "Content-Type": "application/json", ...(token ? { "Authorization": `Bearer ${token}` } : {}) },
                           body: JSON.stringify(draft),
@@ -3318,7 +3319,7 @@ export default function AdminPanel({
                     const handleSaveAbout = async () => {
                       setAboutLoading(true);
                       try {
-                        const res = await fetch("/api/about", { method: "POST", headers: getAuthHeaders(), body: JSON.stringify(aboutData) });
+                        const res = await apiFetch("/api/about", { method: "POST", headers: getAuthHeaders(), body: JSON.stringify(aboutData) });
                         if (res.ok) {
                           showFeedback("Foto gedung berhasil disimpan!", "success");
                         } else {
@@ -3471,7 +3472,7 @@ export default function AdminPanel({
                     const handleSaveKepala = async () => {
                       setKepalaLoading(true);
                       try {
-                        const res = await fetch("/api/kepala-sekolah", { method: "POST", headers: getAuthHeaders(), body: JSON.stringify(kepalaSekolah) });
+                        const res = await apiFetch("/api/kepala-sekolah", { method: "POST", headers: getAuthHeaders(), body: JSON.stringify(kepalaSekolah) });
                         if (res.ok) {
                           showFeedback("Data Kepala Sekolah berhasil disimpan!", "success");
                         } else {
@@ -3583,7 +3584,7 @@ export default function AdminPanel({
                     const handleSaveManajemen = async () => {
                       setManajemenLoading(true);
                       try {
-                        const res = await fetch("/api/manajemen-sekolah", { method: "POST", headers: getAuthHeaders(), body: JSON.stringify(manajemenSekolah) });
+                        const res = await apiFetch("/api/manajemen-sekolah", { method: "POST", headers: getAuthHeaders(), body: JSON.stringify(manajemenSekolah) });
                         if (res.ok) {
                           showFeedback("Data Manajemen Sekolah berhasil disimpan!", "success");
                         } else {
@@ -3654,7 +3655,7 @@ export default function AdminPanel({
                     const handleSaveVisiMisi = async () => {
                       setVisiMisiLoading(true);
                       try {
-                        const res = await fetch("/api/visi-misi", { method: "POST", headers: getAuthHeaders(), body: JSON.stringify(visiMisi) });
+                        const res = await apiFetch("/api/visi-misi", { method: "POST", headers: getAuthHeaders(), body: JSON.stringify(visiMisi) });
                         if (res.ok) {
                           showFeedback("Visi & Misi berhasil disimpan!", "success");
                         } else {
@@ -3814,7 +3815,7 @@ export default function AdminPanel({
                             onClick={async () => {
                               setSocialMediaLoading(true);
                               try {
-                                const res = await fetch("/api/social-media", {
+                                const res = await apiFetch("/api/social-media", {
                                   method: "POST",
                                   headers: getAuthHeaders(),
                                   body: JSON.stringify(socialMedia)
@@ -3872,7 +3873,7 @@ export default function AdminPanel({
 
                     const markAsRead = async (id: string) => {
                       try {
-                        await fetch(`/api/contact/${id}/baca`, { method: "PATCH", headers: getAuthHeaders() });
+                        await apiFetch(`/api/contact/${id}/baca`, { method: "PATCH", headers: getAuthHeaders() });
                         setContactMessages(prev => prev.map(m => m.id === id ? { ...m, dibaca: true } : m));
                       } catch { showFeedback("Gagal menandai pesan.", "error"); }
                     };
@@ -3881,7 +3882,7 @@ export default function AdminPanel({
                       if (!window.confirm(`Hapus pesan dari "${nama}"? Tindakan ini tidak dapat dibatalkan.`)) return;
                       setContactDeleting(prev => new Set([...prev, id]));
                       try {
-                        const res = await fetch(`/api/contact/${id}`, { method: "DELETE", headers: getAuthHeaders() });
+                        const res = await apiFetch(`/api/contact/${id}`, { method: "DELETE", headers: getAuthHeaders() });
                         if (res.ok) {
                           setContactMessages(prev => prev.filter(m => m.id !== id));
                           if (selectedMessageId === id) setSelectedMessageId(null);
@@ -3894,7 +3895,7 @@ export default function AdminPanel({
                     const markAllRead = async () => {
                       const unread = contactMessages.filter(m => !m.dibaca);
                       for (const m of unread) {
-                        try { await fetch(`/api/contact/${m.id}/baca`, { method: "PATCH", headers: getAuthHeaders() }); } catch {}
+                        try { await apiFetch(`/api/contact/${m.id}/baca`, { method: "PATCH", headers: getAuthHeaders() }); } catch {}
                       }
                       setContactMessages(prev => prev.map(m => ({ ...m, dibaca: true })));
                       showFeedback(`${unread.length} pesan ditandai sudah dibaca.`, "success");
