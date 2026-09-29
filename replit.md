@@ -42,7 +42,7 @@ Starts the Express server on **port 5000**, which also serves the Vite dev clien
 
 ## cPanel Deployment
 
-1. On cPanel, set `DATABASE_URL` in the Node.js app environment variables (e.g. pointing to a Neon/Supabase/Aiven PostgreSQL instance).
+1. On cPanel, create the Node.js app with **Node.js 22**, set `DATABASE_URL` in the Node.js app environment variables (e.g. pointing to a Neon/Supabase/Aiven PostgreSQL instance), and use `app.js` as the startup file.
 2. Build on Replit: `VITE_BASE_PATH=/id/ npm run build` then commit `dist/` to GitHub.
 3. On cPanel, run `bash deploy.sh` — this pulls from GitHub and runs `prisma migrate deploy` automatically.
 

@@ -65,6 +65,15 @@ fi
 CPANEL_NODE_BIN="${CPANEL_NODE_BIN:-}"
 CPANEL_NPX_BIN="${CPANEL_NPX_BIN:-}"
 
+# cPanel Node.js App Manager menyimpan binary runtime di nodevenv/<app>/<version>.
+# Jangan bergantung pada PATH shell SSH karena bisa menunjuk ke Node sistem lain.
+if [ -z "$CPANEL_NODE_BIN" ] && [ -n "$CPANEL_NODEENV_DIR" ] && [ -x "$CPANEL_NODEENV_DIR/bin/node" ]; then
+  CPANEL_NODE_BIN="$CPANEL_NODEENV_DIR/bin/node"
+fi
+if [ -z "$CPANEL_NPX_BIN" ] && [ -n "$CPANEL_NODEENV_DIR" ] && [ -x "$CPANEL_NODEENV_DIR/bin/npx" ]; then
+  CPANEL_NPX_BIN="$CPANEL_NODEENV_DIR/bin/npx"
+fi
+
 # Folder/file yang wajib dilindungi dari git reset --hard (lapisan kedua)
 # Catatan: data/ juga ada di .gitignore (lapisan pertama — git tidak menyentuhnya)
 PROTECTED_FILES=("logs" ".env" "app.js" ".htaccess")
@@ -553,12 +562,21 @@ log_info "═══════════════════════�
 
 # ── Langkah 1: Prasyarat ──────────────────────────────────────────────────────
 log_info "[1/6] Memeriksa prasyarat..."
-for cmd in git node; do
-  command -v "$cmd" >/dev/null 2>&1 || { log_err "'$cmd' tidak ada di PATH."; exit 1; }
-done
+  command -v git >/dev/null 2>&1 || { log_err "'git' tidak ada di PATH."; exit 1; }
+  NODE_RUNTIME_BIN="${CPANEL_NODE_BIN:-$(command -v node 2>/dev/null || true)}"
+  [ -n "$NODE_RUNTIME_BIN" ] && [ -x "$NODE_RUNTIME_BIN" ] || {
+    log_err "Node.js tidak ditemukan. Pilih Node.js 22 pada cPanel Node.js App Manager."
+    exit 1
+  }
+  NODE_MAJOR="$("$NODE_RUNTIME_BIN" -p 'process.versions.node.split(".")[0]' 2>/dev/null || true)"
+  [ "$NODE_MAJOR" = "22" ] || {
+    log_err "Node.js 22 wajib dipakai; runtime yang terdeteksi: ${NODE_MAJOR:-tidak diketahui}."
+    log_err "Pastikan application '/id' memakai Node.js 22 pada cPanel."
+    exit 1
+  }
 git -C "$APP_DIR" rev-parse --git-dir >/dev/null 2>&1 || { log_err "$APP_DIR bukan repo git."; exit 1; }
 git -C "$APP_DIR" remote get-url origin >/dev/null 2>&1 || { log_err "Remote 'origin' belum dikonfigurasi."; exit 1; }
-log_ok "node=$(node --version)  git=$(git --version | awk '{print $3}')"
+ log_ok "node=$("$NODE_RUNTIME_BIN" --version)  git=$(git --version | awk '{print $3}')"
 log_ok "Prasyarat OK."
 
 # ── Langkah 2: Backup ─────────────────────────────────────────────────────────
