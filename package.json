@@ -14,7 +14,8 @@
     "postinstall": "npx prisma generate",
     "db:migrate": "npx prisma migrate deploy",
     "db:studio": "npx prisma studio",
-    "db:seed": "npx tsx scripts/seed-from-json.ts"
+    "db:seed": "npx tsx scripts/seed-from-json.ts",
+    "db:seed:pilketos": "npx tsx scripts/seed-pilketos-demo.ts"
   },
   "dependencies": {
     "@google/genai": "^2.24.0",

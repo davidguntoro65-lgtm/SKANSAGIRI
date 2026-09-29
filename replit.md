@@ -80,6 +80,8 @@ npm run db:studio     # open Prisma Studio GUI
 npx tsx scripts/seed-from-json.ts  # one-time: import existing data/ JSON files into DB
 ```
 
+Untuk membuat akun demo pemilih Pilketos secara idempoten, isi password melalui environment hanya saat seed dijalankan lalu jalankan `npm run db:seed:pilketos`. Seed membuat `CoreStudent` NIS `101010`, akun aktif, dan role `SISWA`; password tidak disimpan mentah di database maupun repository.
+
 ## Key routes
 
 - `/` — Public homepage
