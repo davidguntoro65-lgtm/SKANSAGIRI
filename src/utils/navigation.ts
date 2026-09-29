@@ -15,7 +15,7 @@ export const BASE_PATH = detectBase();
 
 function normalizePath(path: string): string {
   if (path.length <= 1) return "/";
-  return path.replace(/\/+$/, "");
+  return path.replace(/\/+$/, "").toLowerCase();
 }
 
 export function navigate(path: string) {
