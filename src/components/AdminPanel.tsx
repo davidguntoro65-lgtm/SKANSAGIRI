@@ -8,12 +8,13 @@ import {
   Upload, SlidersHorizontal, Sparkles, Crop, Check, Eye, EyeOff, Handshake, Target, Telescope,
   Inbox, Mail, MailOpen, Search, Phone, MessageSquare, MailCheck, Filter, ChevronDown,
   ShieldCheck, Settings, Activity, Server, Clock, Cpu, Database, Wifi, WifiOff,
-  FileSpreadsheet, BarChart3, Briefcase, Store, Download, TrendingUp, Banknote
+  FileSpreadsheet, BarChart3, Briefcase, Store, Download, TrendingUp, Banknote, Vote
 } from "lucide-react";
 import { Competency, Milestone, GalleryItem, Alumnus, NewsArticle, IndustriPartner } from "../data";
 import { DataStore } from "../dataStore";
 import { useBranding, Branding } from "../hooks/useBranding";
 import AdminAkademik from "../pages/AdminAkademik";
+import AdminPilketos from "../pages/AdminPilketos";
 
 export default function AdminPanel({ 
   theme = "dark", 
@@ -35,7 +36,7 @@ export default function AdminPanel({
   const [loginLoading, setLoginLoading] = useState(false);
 
   // Active Admin Sidebar Tab
-  const [activeTab, setActiveTab] = useState<"competencies" | "milestones" | "gallery" | "alumni" | "news" | "partners" | "branding" | "about" | "kepala-sekolah" | "manajemen-sekolah" | "visi-misi" | "social-media" | "inbox-pesan" | "server-monitor" | "tracer-studi" | "core-platform">("competencies");
+  const [activeTab, setActiveTab] = useState<"competencies" | "milestones" | "gallery" | "alumni" | "news" | "partners" | "branding" | "about" | "kepala-sekolah" | "manajemen-sekolah" | "visi-misi" | "social-media" | "inbox-pesan" | "server-monitor" | "tracer-studi" | "core-platform" | "pilketos">("competencies");
   const { branding, saveBranding, getLogo } = useBranding();
   const [brandingDraft, setBrandingDraft] = useState<Branding | null>(null);
   const [brandingLoading, setBrandingLoading] = useState(false);
@@ -1459,6 +1460,7 @@ export default function AdminPanel({
                     { id: "tracer-studi", label: "Tracer Study", icon: BarChart3, count: tracerEntries.length || null },
                     { id: "server-monitor", label: "Monitor Server", icon: Activity, count: null },
                     { id: "core-platform", label: "Core Platform Akademik", icon: GraduationCap, count: null },
+                    { id: "pilketos", label: "Pengelolaan Pilketos", icon: Vote, count: null },
                   ].map((tab) => {
                     const TabIcon = tab.icon;
                     const isActive = activeTab === tab.id;
@@ -1524,6 +1526,8 @@ export default function AdminPanel({
                   embedded
                   onBack={() => setActiveTab("competencies")}
                 />
+              ) : activeTab === "pilketos" ? (
+                <AdminPilketos theme={theme} />
               ) : (
                 <>
               

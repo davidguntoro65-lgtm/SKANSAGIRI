@@ -285,6 +285,12 @@ enum ImportStatus {
   FAILED
 }
 
+enum PilketosElectionStatus {
+  DRAFT
+  OPEN
+  CLOSED
+}
+
 model CoreUser {
   id                        String         @id @default(uuid())
   email                     String         @unique
@@ -300,6 +306,7 @@ model CoreUser {
   roles                     CoreUserRole[]
   teacher                   CoreTeacher?
   student                   CoreStudent?
+  pilketosVotes             PilketosVote[]
   auditLogs                 CoreAuditLog[]
   sessions                  Session[]
 }
@@ -449,6 +456,7 @@ model CoreStudent {
   userId      String?             @unique
   user        CoreUser?           @relation(fields: [userId], references: [id], onDelete: SetNull)
   enrollments StudentEnrollment[]
+  pilketosVotes PilketosVote[]
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
 }
@@ -483,6 +491,53 @@ model TeachingAssignment {
 
   @@unique([teacherId, subjectId, classId, academicYearId])
   @@index([academicYearId, status])
+}
+
+model PilketosElection {
+  id           String                @id @default(uuid())
+  title        String
+  academicYear String
+  description  String                @default("")
+  status       PilketosElectionStatus @default(DRAFT)
+  startsAt     DateTime?
+  endsAt       DateTime?
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  candidates   PilketosCandidate[]
+  votes        PilketosVote[]
+
+  @@index([status, academicYear])
+}
+
+model PilketosCandidate {
+  id           String          @id @default(uuid())
+  electionId   String
+  candidateNo  Int
+  name         String
+  photoData    String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  election     PilketosElection @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  votes        PilketosVote[]
+
+  @@unique([electionId, candidateNo])
+  @@index([electionId, createdAt])
+}
+
+model PilketosVote {
+  id          String            @id @default(uuid())
+  electionId  String
+  candidateId String
+  studentId   String
+  userId      String?
+  votedAt     DateTime          @default(now())
+  election    PilketosElection  @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  candidate   PilketosCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  student     CoreStudent       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  user        CoreUser?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([electionId, studentId])
+  @@index([candidateId])
 }
 
 model TeacherSelectionRequest {

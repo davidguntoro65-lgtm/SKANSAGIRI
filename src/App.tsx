@@ -38,16 +38,18 @@ import KelasVirtual from "./pages/KelasVirtual";
 import KelasKompetensi from "./pages/KelasKompetensi";
 import GuruPortal from "./pages/GuruPortal";
 import SiswaPortal from "./pages/SiswaPortal";
+import PilketosPage from "./pages/PilketosPage";
 import { DataStore } from "./dataStore";
 import { navigate, getAppPath } from "./utils/navigation";
 
-type AppPath = "/" | "/adm-panel" | "/guru" | "/siswa" | "/tentang/kepala-sekolah" | "/tentang/manajemen-sekolah" | "/tentang/visi-misi" | "/tracer-studi" | "/admin/tracer-studi" | "/berita" | "/hubungi-kami" | "/modul-integrasi" | "/kelas-virtual" | "/kelas-virtual/kelas-x" | "/kelas-virtual/kelas-xi" | "/kelas-virtual/kelas-xii" | "/suara-skansagiri" | "/admin/suara-skansagiri" | "/aduan-publik" | "/admin/aduan-publik" | "/osis" | "/osis/adm-panel";
+type AppPath = "/" | "/adm-panel" | "/guru" | "/siswa" | "/pilketos" | "/tentang/kepala-sekolah" | "/tentang/manajemen-sekolah" | "/tentang/visi-misi" | "/tracer-studi" | "/admin/tracer-studi" | "/berita" | "/hubungi-kami" | "/modul-integrasi" | "/kelas-virtual" | "/kelas-virtual/kelas-x" | "/kelas-virtual/kelas-xi" | "/kelas-virtual/kelas-xii" | "/suara-skansagiri" | "/admin/suara-skansagiri" | "/aduan-publik" | "/admin/aduan-publik" | "/osis" | "/osis/adm-panel";
 
 function getPath(): AppPath {
   const p = getAppPath();
   if (p === "/adm-panel") return "/adm-panel";
   if (p === "/guru" || p === "/guru/dashboard" || p === "/guru/modul") return "/guru";
   if (p === "/siswa") return "/siswa";
+  if (p === "/pilketos") return "/pilketos";
   // Legacy academic-admin URLs are handled by the single admin shell.
   if (p === "/admin/akademik") return "/adm-panel";
   if (p === "/tentang/kepala-sekolah") return "/tentang/kepala-sekolah";
@@ -176,6 +178,10 @@ export default function App() {
 
   if (currentPath === "/siswa") {
     return <SiswaPortal />;
+  }
+
+  if (currentPath === "/pilketos") {
+    return <PilketosPage />;
   }
 
   const containerClass = `relative min-h-screen ${theme === "dark" ? "bg-slate-950 text-slate-100" : "bg-white text-slate-900"} font-sans antialiased overflow-x-hidden selection:bg-amber-500 selection:text-slate-950 transition-colors duration-500`;

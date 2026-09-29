@@ -319,6 +319,65 @@ async function getLmsActor(req: Request): Promise<LmsActor | null> {
   };
 }
 
+async function getPilketosSession(req: Request) {
+  const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
+  if (!token) return null;
+  const session = await db.session.findUnique({
+    where: { token },
+    include: {
+      coreUser: {
+        include: {
+          roles: { include: { role: true } },
+          student: true,
+        },
+      },
+    },
+  });
+  if (!session?.coreUser || session.expiresAt < new Date() || session.coreUser.status !== "ACTIVE") return null;
+  return session;
+}
+
+async function hasPilketosAdminAccess(req: Request) {
+  const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
+  if (!token) return false;
+  const session = await db.session.findUnique({
+    where: { token },
+    include: { coreUser: { include: { roles: { include: { role: true } } } } },
+  });
+  if (!session || session.expiresAt < new Date()) return false;
+  if (!session.coreUser) return true;
+  return session.coreUser.status === "ACTIVE" && session.coreUser.roles.some(({ role }) => role.name === "ADMIN" || role.name === "OPERATOR");
+}
+
+function imageDataError(value: unknown) {
+  const image = clean(value);
+  if (!image) return null;
+  if (!/^data:image\/(png|jpe?g|webp);base64,/i.test(image)) return "Foto kandidat harus berupa PNG, JPG, atau WebP.";
+  if (image.length > 800 * 1024) return "Foto kandidat terlalu besar. Maksimal 800 KB setelah dikompres.";
+  return null;
+}
+
+function publicPilketosElection(election: any, hasVoted = false) {
+  if (!election) return null;
+  return {
+    id: election.id,
+    title: election.title,
+    academicYear: election.academicYear,
+    description: election.description,
+    status: election.status,
+    startsAt: election.startsAt,
+    endsAt: election.endsAt,
+    hasVoted,
+    candidates: (election.candidates || []).map((candidate: any) => ({
+      id: candidate.id,
+      candidateNo: candidate.candidateNo,
+      name: candidate.name,
+      photoData: candidate.photoData,
+      voteCount: candidate._count?.votes,
+    })),
+  };
+}
+
 function canManageAllLms(roles: string[]) {
   return roles.includes("ADMIN") || roles.includes("OPERATOR");
 }
@@ -328,6 +387,129 @@ function moduleScope(actor: LmsActor) {
 }
 
 export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddleware) {
+  app.get("/api/v1/pilketos/active", async (req, res) => {
+    const election = await db.pilketosElection.findFirst({
+      where: { status: "OPEN" },
+      include: { candidates: { orderBy: { candidateNo: "asc" } } },
+      orderBy: { updatedAt: "desc" },
+    });
+    let hasVoted = false;
+    const session = await getPilketosSession(req);
+    if (election && session?.coreUser?.student) {
+      const vote = await db.pilketosVote.findUnique({ where: { electionId_studentId: { electionId: election.id, studentId: session.coreUser.student.id } } });
+      hasVoted = Boolean(vote);
+    }
+    return ok(res, { election: publicPilketosElection(election, hasVoted) });
+  });
+
+  app.post("/api/v1/pilketos/vote", async (req, res) => {
+    const session = await getPilketosSession(req);
+    const student = session?.coreUser?.student;
+    if (!session || !student || !session.coreUser.roles.some(({ role }) => role.name === "SISWA")) {
+      return fail(res, 401, "STUDENT_AUTH_REQUIRED", "Silakan login sebagai siswa terlebih dahulu.");
+    }
+    const electionId = clean(req.body.electionId);
+    const candidateId = clean(req.body.candidateId);
+    if (!electionId || !candidateId) return fail(res, 400, "REQUIRED_FIELD", "Pemilihan dan kandidat wajib dipilih.");
+    const election = await db.pilketosElection.findUnique({ where: { id: electionId } });
+    if (!election || election.status !== "OPEN") return fail(res, 409, "ELECTION_NOT_OPEN", "Pemilihan belum dibuka atau sudah ditutup.");
+    const candidate = await db.pilketosCandidate.findFirst({ where: { id: candidateId, electionId } });
+    if (!candidate) return fail(res, 404, "CANDIDATE_NOT_FOUND", "Kandidat tidak ditemukan dalam pemilihan ini.");
+    try {
+      const vote = await db.pilketosVote.create({ data: { electionId, candidateId, studentId: student.id, userId: session.coreUser.id } });
+      await db.coreAuditLog.create({ data: { action: "PILKETOS_VOTE_CAST", entity: "PilketosElection", entityId: electionId, actor: session.coreUser.id, userId: session.coreUser.id, metadata: { candidateNo: candidate.candidateNo } } });
+      return ok(res, { voteId: vote.id, message: "Pilihan Anda berhasil disimpan." });
+    } catch (error: any) {
+      if (error?.code === "P2002") return fail(res, 409, "ALREADY_VOTED", "Anda sudah menggunakan hak pilih pada pemilihan ini.");
+      throw error;
+    }
+  });
+
+  app.get("/api/v1/pilketos/admin", requireAuth, async (req, res) => {
+    if (!(await hasPilketosAdminAccess(req))) return fail(res, 403, "FORBIDDEN", "Akses pengelolaan Pilketos tidak diizinkan.");
+    const election = await db.pilketosElection.findFirst({
+      include: {
+        candidates: { orderBy: { candidateNo: "asc" }, include: { _count: { select: { votes: true } } } },
+        _count: { select: { votes: true } },
+      },
+      orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
+    });
+    return ok(res, { election: publicPilketosElection(election) });
+  });
+
+  app.post("/api/v1/pilketos/admin/election", requireAuth, async (req, res) => {
+    if (!(await hasPilketosAdminAccess(req))) return fail(res, 403, "FORBIDDEN", "Akses pengelolaan Pilketos tidak diizinkan.");
+    const electionId = clean(req.body.id);
+    const title = clean(req.body.title);
+    const academicYear = clean(req.body.academicYear);
+    const description = clean(req.body.description);
+    const status = clean(req.body.status).toUpperCase();
+    if (!title || !academicYear) return fail(res, 400, "REQUIRED_FIELD", "Judul dan tahun ajaran wajib diisi.");
+    if (!["DRAFT", "OPEN", "CLOSED"].includes(status)) return fail(res, 400, "INVALID_STATUS", "Status pemilihan tidak valid.");
+    const candidateCount = electionId ? await db.pilketosCandidate.count({ where: { electionId } }) : 0;
+    if (status === "OPEN" && candidateCount < 2) return fail(res, 409, "CANDIDATES_REQUIRED", "Minimal dua kandidat diperlukan sebelum pemilihan dibuka.");
+    const data = { title, academicYear, description, status: status as "DRAFT" | "OPEN" | "CLOSED", startsAt: req.body.startsAt ? parseDate(req.body.startsAt) : null, endsAt: req.body.endsAt ? parseDate(req.body.endsAt) : null };
+    const election = await db.$transaction(async (tx) => {
+      if (data.status === "OPEN") await tx.pilketosElection.updateMany({ where: { status: "OPEN", ...(electionId ? { id: { not: electionId } } : {}) }, data: { status: "CLOSED" } });
+      return electionId
+        ? tx.pilketosElection.update({ where: { id: electionId }, data, include: { candidates: { orderBy: { candidateNo: "asc" }, include: { _count: { select: { votes: true } } } } } })
+        : tx.pilketosElection.create({ data, include: { candidates: true } });
+    });
+    return ok(res, { election: publicPilketosElection(election) });
+  });
+
+  app.post("/api/v1/pilketos/admin/election/:electionId/candidates", requireAuth, async (req, res) => {
+    if (!(await hasPilketosAdminAccess(req))) return fail(res, 403, "FORBIDDEN", "Akses pengelolaan Pilketos tidak diizinkan.");
+    const election = await db.pilketosElection.findUnique({ where: { id: req.params.electionId } });
+    if (!election) return fail(res, 404, "ELECTION_NOT_FOUND", "Pemilihan tidak ditemukan.");
+    if (election.status !== "DRAFT") return fail(res, 409, "ELECTION_LOCKED", "Kandidat hanya dapat diubah saat status masih draft.");
+    const name = clean(req.body.name);
+    const photoData = clean(req.body.photoData) || null;
+    const candidateNo = Number(req.body.candidateNo);
+    if (!name) return fail(res, 400, "REQUIRED_FIELD", "Nama kandidat wajib diisi.");
+    if (!Number.isInteger(candidateNo) || candidateNo < 1 || candidateNo > 99) return fail(res, 400, "INVALID_NUMBER", "Nomor kandidat harus berupa angka 1 sampai 99.");
+    const photoError = imageDataError(photoData);
+    if (photoError) return fail(res, 413, "INVALID_IMAGE", photoError);
+    try {
+      const candidate = await db.pilketosCandidate.create({ data: { electionId: election.id, candidateNo, name, photoData } });
+      return res.status(201).json({ success: true, data: candidate });
+    } catch (error: any) {
+      if (error?.code === "P2002") return fail(res, 409, "DUPLICATE_NUMBER", "Nomor kandidat sudah digunakan.");
+      throw error;
+    }
+  });
+
+  app.patch("/api/v1/pilketos/admin/candidates/:candidateId", requireAuth, async (req, res) => {
+    if (!(await hasPilketosAdminAccess(req))) return fail(res, 403, "FORBIDDEN", "Akses pengelolaan Pilketos tidak diizinkan.");
+    const current = await db.pilketosCandidate.findUnique({ where: { id: req.params.candidateId }, include: { election: true } });
+    if (!current) return fail(res, 404, "CANDIDATE_NOT_FOUND", "Kandidat tidak ditemukan.");
+    if (current.election.status !== "DRAFT") return fail(res, 409, "ELECTION_LOCKED", "Kandidat hanya dapat diubah saat status masih draft.");
+    const name = req.body.name === undefined ? current.name : clean(req.body.name);
+    const photoData = req.body.photoData === undefined ? current.photoData : (clean(req.body.photoData) || null);
+    const candidateNo = req.body.candidateNo === undefined ? current.candidateNo : Number(req.body.candidateNo);
+    if (!name) return fail(res, 400, "REQUIRED_FIELD", "Nama kandidat wajib diisi.");
+    if (!Number.isInteger(candidateNo) || candidateNo < 1 || candidateNo > 99) return fail(res, 400, "INVALID_NUMBER", "Nomor kandidat harus berupa angka 1 sampai 99.");
+    const photoError = imageDataError(photoData);
+    if (photoError) return fail(res, 413, "INVALID_IMAGE", photoError);
+    try {
+      const candidate = await db.pilketosCandidate.update({ where: { id: current.id }, data: { name, photoData, candidateNo } });
+      return ok(res, candidate);
+    } catch (error: any) {
+      if (error?.code === "P2002") return fail(res, 409, "DUPLICATE_NUMBER", "Nomor kandidat sudah digunakan.");
+      throw error;
+    }
+  });
+
+  app.delete("/api/v1/pilketos/admin/candidates/:candidateId", requireAuth, async (req, res) => {
+    if (!(await hasPilketosAdminAccess(req))) return fail(res, 403, "FORBIDDEN", "Akses pengelolaan Pilketos tidak diizinkan.");
+    const current = await db.pilketosCandidate.findUnique({ where: { id: req.params.candidateId }, include: { election: true, _count: { select: { votes: true } } } });
+    if (!current) return fail(res, 404, "CANDIDATE_NOT_FOUND", "Kandidat tidak ditemukan.");
+    if (current.election.status !== "DRAFT") return fail(res, 409, "ELECTION_LOCKED", "Kandidat hanya dapat diubah saat status masih draft.");
+    if (current._count.votes) return fail(res, 409, "CANDIDATE_HAS_VOTES", "Kandidat yang sudah menerima suara tidak dapat dihapus.");
+    await db.pilketosCandidate.delete({ where: { id: current.id } });
+    return ok(res, { deleted: true });
+  });
+
   // Wave 2 / Sprint 5: curriculum module foundation. Upload and ingestion are
   // intentionally separate follow-up stages so a module can be managed safely
   // before introducing long-running file jobs.
