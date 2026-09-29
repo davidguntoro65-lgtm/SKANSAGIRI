@@ -36,22 +36,36 @@ function headers() {
 
 async function compressImage(file: File) {
   if (!file.type.startsWith("image/")) throw new Error("File harus berupa gambar.");
+  const originalData = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Foto tidak dapat dibaca."));
+    reader.readAsDataURL(file);
+  });
+  if (originalData.length <= 760 * 1024) return originalData;
+
   const source = await new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error("Foto tidak dapat dibaca."));
     image.src = URL.createObjectURL(file);
   });
-  const max = 900;
+  const max = 1400;
   const scale = Math.min(1, max / Math.max(source.naturalWidth, source.naturalHeight));
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(source.naturalWidth * scale));
   canvas.height = Math.max(1, Math.round(source.naturalHeight * scale));
   const context = canvas.getContext("2d");
   if (!context) throw new Error("Browser tidak mendukung pemrosesan foto.");
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
   context.drawImage(source, 0, 0, canvas.width, canvas.height);
   URL.revokeObjectURL(source.src);
-  return canvas.toDataURL("image/jpeg", 0.82);
+  for (const quality of [0.92, 0.86, 0.8, 0.74, 0.68]) {
+    const result = canvas.toDataURL("image/jpeg", quality);
+    if (result.length <= 760 * 1024 || quality === 0.68) return result;
+  }
+  return canvas.toDataURL("image/jpeg", 0.68);
 }
 
 export default function AdminPilketos({ theme = "dark" }: Props) {
@@ -215,11 +229,11 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <label className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-bold transition hover:border-amber-400 ${input}`}><ImagePlus className="h-4 w-4 text-amber-500" />{candidate.photoData ? "Ganti foto" : "Upload foto"}<input type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadPhoto} className="sr-only" /></label>
-              {candidate.photoData && <img src={candidate.photoData} alt="Preview kandidat" className="h-12 w-12 rounded-xl object-cover" />}
+              {candidate.photoData && <img src={candidate.photoData} alt="Preview kandidat" className="h-16 w-16 rounded-xl border border-current/10 bg-white object-contain p-1" />}
               <button disabled={saving} className="ml-auto inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-slate-950"><Plus className="h-4 w-4" />{saving ? "Menyimpan..." : "Tambah pilihan"}</button>
             </div>
           </form>
-          <div className="mt-5 space-y-3">{election?.candidates.map((item) => <div key={item.id} className="flex items-center gap-3 rounded-2xl border border-current/10 p-3"><div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-amber-400/15 text-lg font-black text-amber-600">{item.photoData ? <img src={item.photoData} alt="" className="h-full w-full object-cover" /> : item.candidateNo}</div><div className="min-w-0 flex-1"><p className="text-[10px] font-black uppercase tracking-widest text-amber-500">Kelas {item.grade} · Nomor {item.candidateNo}</p><p className="truncate font-black">{item.name}</p>{election.status !== "DRAFT" && <p className={`text-xs ${muted}`}>{item.voteCount || 0} suara tercatat</p>}</div>{election.status === "DRAFT" ? <button onClick={() => void removeCandidate(item.id)} className="rounded-lg p-2 text-rose-500 transition hover:bg-rose-500/10" title="Hapus kandidat"><Trash2 className="h-4 w-4" /></button> : <CheckCircle2 className="h-5 w-5 text-emerald-500" />}</div>)}{!election?.candidates.length && <div className={`rounded-2xl border border-dashed p-8 text-center text-sm ${muted}`}>Belum ada kandidat. Tambahkan 4 kandidat kelas X dan 4 kandidat kelas XI untuk membuka pemilihan.</div>}</div>
+          <div className="mt-5 space-y-3">{election?.candidates.map((item) => <div key={item.id} className="flex items-center gap-3 rounded-2xl border border-current/10 p-3"><div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-amber-400/15 text-lg font-black text-amber-600">{item.photoData ? <img src={item.photoData} alt="" className="h-full w-full object-contain p-1" /> : item.candidateNo}</div><div className="min-w-0 flex-1"><p className="text-[10px] font-black uppercase tracking-widest text-amber-500">Kelas {item.grade} · Nomor {item.candidateNo}</p><p className="truncate font-black">{item.name}</p>{election.status !== "DRAFT" && <p className={`text-xs ${muted}`}>{item.voteCount || 0} suara tercatat</p>}</div>{election.status === "DRAFT" ? <button onClick={() => void removeCandidate(item.id)} className="rounded-lg p-2 text-rose-500 transition hover:bg-rose-500/10" title="Hapus kandidat"><Trash2 className="h-4 w-4" /></button> : <CheckCircle2 className="h-5 w-5 text-emerald-500" />}</div>)}{!election?.candidates.length && <div className={`rounded-2xl border border-dashed p-8 text-center text-sm ${muted}`}>Belum ada kandidat. Tambahkan 4 kandidat kelas X dan 4 kandidat kelas XI untuk membuka pemilihan.</div>}</div>
         </div>
         </div>
       </div>}
