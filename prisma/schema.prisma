@@ -291,6 +291,11 @@ enum PilketosElectionStatus {
   CLOSED
 }
 
+enum PilketosCandidateGrade {
+  X
+  XI
+}
+
 model CoreUser {
   id                        String         @id @default(uuid())
   email                     String         @unique
@@ -512,6 +517,7 @@ model PilketosElection {
 model PilketosCandidate {
   id           String          @id @default(uuid())
   electionId   String
+  grade        PilketosCandidateGrade @default(X)
   candidateNo  Int
   name         String
   photoData    String?
@@ -520,14 +526,15 @@ model PilketosCandidate {
   election     PilketosElection @relation(fields: [electionId], references: [id], onDelete: Cascade)
   votes        PilketosVote[]
 
-  @@unique([electionId, candidateNo])
-  @@index([electionId, createdAt])
+  @@unique([electionId, grade, candidateNo])
+  @@index([electionId, grade, createdAt])
 }
 
 model PilketosVote {
   id          String            @id @default(uuid())
   electionId  String
   candidateId String
+  grade       PilketosCandidateGrade @default(X)
   studentId   String
   userId      String?
   votedAt     DateTime          @default(now())
@@ -536,8 +543,9 @@ model PilketosVote {
   student     CoreStudent       @relation(fields: [studentId], references: [id], onDelete: Cascade)
   user        CoreUser?         @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  @@unique([electionId, studentId])
+  @@unique([electionId, studentId, grade])
   @@index([candidateId])
+  @@index([electionId, studentId])
 }
 
 model TeacherSelectionRequest {

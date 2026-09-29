@@ -357,7 +357,9 @@ function imageDataError(value: unknown) {
   return null;
 }
 
-function publicPilketosElection(election: any, hasVoted = false) {
+type PilketosGrade = "X" | "XI";
+
+function publicPilketosElection(election: any, votedGrades: string[] = [], votedCandidateIds: string[] = [], stats?: any) {
   if (!election) return null;
   return {
     id: election.id,
@@ -367,14 +369,41 @@ function publicPilketosElection(election: any, hasVoted = false) {
     status: election.status,
     startsAt: election.startsAt,
     endsAt: election.endsAt,
-    hasVoted,
+    hasVoted: votedGrades.includes("X") && votedGrades.includes("XI"),
+    votedGrades,
+    votedCandidateIds,
+    stats,
     candidates: (election.candidates || []).map((candidate: any) => ({
       id: candidate.id,
+      grade: candidate.grade,
       candidateNo: candidate.candidateNo,
       name: candidate.name,
       photoData: candidate.photoData,
       voteCount: candidate._count?.votes,
     })),
+  };
+}
+
+async function getPilketosStats(electionId: string) {
+  const [totalVoters, votedStudents, voteGroups] = await Promise.all([
+    db.coreStudent.count({ where: { status: "ACTIVE" } }),
+    db.pilketosVote.findMany({
+      where: { electionId },
+      select: { studentId: true },
+      distinct: ["studentId"],
+    }),
+    db.pilketosVote.groupBy({
+      by: ["studentId"],
+      where: { electionId },
+      _count: { _all: true },
+    }),
+  ]);
+  const totalCompleted = voteGroups.filter((group) => group._count._all >= 2).length;
+  return {
+    totalVoters,
+    totalVoted: votedStudents.length,
+    totalCompleted,
+    totalPending: Math.max(0, votedStudents.length - totalCompleted),
   };
 }
 
@@ -394,20 +423,27 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
     // voting opens.
     const election = await db.pilketosElection.findFirst({
       where: { status: "OPEN" },
-      include: { candidates: { orderBy: { candidateNo: "asc" } } },
+      include: { candidates: { orderBy: [{ grade: "asc" }, { candidateNo: "asc" }] } },
       orderBy: { updatedAt: "desc" },
     }) || await db.pilketosElection.findFirst({
       where: { status: "DRAFT" },
-      include: { candidates: { orderBy: { candidateNo: "asc" } } },
+      include: { candidates: { orderBy: [{ grade: "asc" }, { candidateNo: "asc" }] } },
       orderBy: { updatedAt: "desc" },
     });
-    let hasVoted = false;
+    let votedGrades: string[] = [];
+    let votedCandidateIds: string[] = [];
     const session = await getPilketosSession(req);
     if (election && session?.coreUser?.student) {
-      const vote = await db.pilketosVote.findUnique({ where: { electionId_studentId: { electionId: election.id, studentId: session.coreUser.student.id } } });
-      hasVoted = Boolean(vote);
+      const votes = await db.pilketosVote.findMany({
+        where: { electionId: election.id, studentId: session.coreUser.student.id },
+        select: { grade: true, candidateId: true },
+      });
+      votedGrades = votes.map((vote) => vote.grade);
+      votedCandidateIds = votes.map((vote) => vote.candidateId);
     }
-    return ok(res, { election: publicPilketosElection(election, hasVoted) });
+    return ok(res, {
+      election: publicPilketosElection(election, votedGrades, votedCandidateIds),
+    });
   });
 
   app.post("/api/v1/pilketos/vote", async (req, res) => {
@@ -417,18 +453,87 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
       return fail(res, 401, "STUDENT_AUTH_REQUIRED", "Silakan login sebagai siswa terlebih dahulu.");
     }
     const electionId = clean(req.body.electionId);
-    const candidateId = clean(req.body.candidateId);
-    if (!electionId || !candidateId) return fail(res, 400, "REQUIRED_FIELD", "Pemilihan dan kandidat wajib dipilih.");
+    const candidateIds = Array.isArray(req.body.candidateIds)
+      ? req.body.candidateIds.map((value: unknown) => clean(value)).filter(Boolean)
+      : [clean(req.body.candidateId)].filter(Boolean);
+    if (!electionId || candidateIds.length !== 2) {
+      return fail(res, 400, "TWO_CANDIDATES_REQUIRED", "Pilih satu kandidat kelas X dan satu kandidat kelas XI.");
+    }
     const election = await db.pilketosElection.findUnique({ where: { id: electionId } });
     if (!election || election.status !== "OPEN") return fail(res, 409, "ELECTION_NOT_OPEN", "Pemilihan belum dibuka atau sudah ditutup.");
-    const candidate = await db.pilketosCandidate.findFirst({ where: { id: candidateId, electionId } });
-    if (!candidate) return fail(res, 404, "CANDIDATE_NOT_FOUND", "Kandidat tidak ditemukan dalam pemilihan ini.");
+    const candidates = await db.pilketosCandidate.findMany({
+      where: { id: { in: candidateIds }, electionId },
+    });
+    const grades = new Set(candidates.map((candidate) => candidate.grade));
+    if (
+      candidates.length !== 2 ||
+      grades.size !== 2 ||
+      !grades.has("X") ||
+      !grades.has("XI")
+    ) {
+      return fail(res, 400, "ONE_PER_GRADE_REQUIRED", "Pilih tepat satu kandidat kelas X dan satu kandidat kelas XI.");
+    }
     try {
-      const vote = await db.pilketosVote.create({ data: { electionId, candidateId, studentId: student.id, userId: session.coreUser.id } });
-      await db.coreAuditLog.create({ data: { action: "PILKETOS_VOTE_CAST", entity: "PilketosElection", entityId: electionId, actor: session.coreUser.id, userId: session.coreUser.id, metadata: { candidateNo: candidate.candidateNo } } });
-      return ok(res, { voteId: vote.id, message: "Pilihan Anda berhasil disimpan." });
+      const result = await db.$transaction(async (tx) => {
+        const existingVotes = await tx.pilketosVote.findMany({
+          where: { electionId, studentId: student.id },
+          select: { grade: true, candidateId: true },
+        });
+        const existingByGrade = new Map(existingVotes.map((vote) => [vote.grade, vote]));
+        for (const candidate of candidates) {
+          const existing = existingByGrade.get(candidate.grade);
+          if (existing && existing.candidateId !== candidate.id) {
+            throw Object.assign(new Error("Pilihan untuk salah satu kelas sudah tercatat."), { code: "GRADE_ALREADY_VOTED" });
+          }
+        }
+
+        const pendingCandidates = candidates.filter((candidate) => !existingByGrade.has(candidate.grade));
+        if (!pendingCandidates.length) {
+          throw Object.assign(new Error("Anda sudah menyelesaikan pemilihan ini."), { code: "ALREADY_VOTED" });
+        }
+
+        const created = await Promise.all(pendingCandidates.map((candidate) =>
+          tx.pilketosVote.create({
+            data: {
+              electionId,
+              candidateId: candidate.id,
+              grade: candidate.grade,
+              studentId: student.id,
+              userId: session.coreUser.id,
+            },
+          }),
+        ));
+        await tx.coreAuditLog.create({
+          data: {
+            action: "PILKETOS_VOTE_CAST",
+            entity: "PilketosElection",
+            entityId: electionId,
+            actor: session.coreUser.id,
+            userId: session.coreUser.id,
+            metadata: {
+              candidateNos: candidates.map((candidate) => candidate.candidateNo),
+              grades: candidates.map((candidate) => candidate.grade),
+            },
+          },
+        });
+        return { voteIds: created.map((vote) => vote.id) };
+      });
+      const votedGrades = await db.pilketosVote.findMany({
+        where: { electionId, studentId: student.id },
+        select: { grade: true },
+      });
+      return ok(res, {
+        ...result,
+        completed: new Set(votedGrades.map((vote) => vote.grade)).size === 2,
+        message: "Pilihan kelas X dan kelas XI berhasil disimpan.",
+      });
     } catch (error: any) {
-      if (error?.code === "P2002") return fail(res, 409, "ALREADY_VOTED", "Anda sudah menggunakan hak pilih pada pemilihan ini.");
+      if (error?.code === "P2002" || error?.code === "ALREADY_VOTED") {
+        return fail(res, 409, "ALREADY_VOTED", "Anda sudah menggunakan hak pilih pada pemilihan ini.");
+      }
+      if (error?.code === "GRADE_ALREADY_VOTED") {
+        return fail(res, 409, "GRADE_ALREADY_VOTED", error.message);
+      }
       throw error;
     }
   });
@@ -437,12 +542,13 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
     if (!(await hasPilketosAdminAccess(req))) return fail(res, 403, "FORBIDDEN", "Akses pengelolaan Pilketos tidak diizinkan.");
     const election = await db.pilketosElection.findFirst({
       include: {
-        candidates: { orderBy: { candidateNo: "asc" }, include: { _count: { select: { votes: true } } } },
+        candidates: { orderBy: [{ grade: "asc" }, { candidateNo: "asc" }], include: { _count: { select: { votes: true } } } },
         _count: { select: { votes: true } },
       },
       orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
     });
-    return ok(res, { election: publicPilketosElection(election) });
+    const stats = election ? await getPilketosStats(election.id) : null;
+    return ok(res, { election: publicPilketosElection(election), stats });
   });
 
   app.post("/api/v1/pilketos/admin/election", requireAuth, async (req, res) => {
@@ -454,16 +560,24 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
     const status = clean(req.body.status).toUpperCase();
     if (!title || !academicYear) return fail(res, 400, "REQUIRED_FIELD", "Judul dan tahun ajaran wajib diisi.");
     if (!["DRAFT", "OPEN", "CLOSED"].includes(status)) return fail(res, 400, "INVALID_STATUS", "Status pemilihan tidak valid.");
-    const candidateCount = electionId ? await db.pilketosCandidate.count({ where: { electionId } }) : 0;
-    if (status === "OPEN" && candidateCount < 2) return fail(res, 409, "CANDIDATES_REQUIRED", "Minimal dua kandidat diperlukan sebelum pemilihan dibuka.");
+    const candidates = electionId
+      ? await db.pilketosCandidate.findMany({ where: { electionId }, select: { grade: true } })
+      : [];
+    const gradeCounts = {
+      X: candidates.filter((candidate) => candidate.grade === "X").length,
+      XI: candidates.filter((candidate) => candidate.grade === "XI").length,
+    };
+    if (status === "OPEN" && (candidates.length !== 8 || gradeCounts.X !== 4 || gradeCounts.XI !== 4)) {
+      return fail(res, 409, "CANDIDATES_REQUIRED", "Pemilihan hanya dapat dibuka jika tersedia tepat 4 kandidat kelas X dan 4 kandidat kelas XI.");
+    }
     const data = { title, academicYear, description, status: status as "DRAFT" | "OPEN" | "CLOSED", startsAt: req.body.startsAt ? parseDate(req.body.startsAt) : null, endsAt: req.body.endsAt ? parseDate(req.body.endsAt) : null };
     const election = await db.$transaction(async (tx) => {
       if (data.status === "OPEN") await tx.pilketosElection.updateMany({ where: { status: "OPEN", ...(electionId ? { id: { not: electionId } } : {}) }, data: { status: "CLOSED" } });
       return electionId
-        ? tx.pilketosElection.update({ where: { id: electionId }, data, include: { candidates: { orderBy: { candidateNo: "asc" }, include: { _count: { select: { votes: true } } } } } })
+        ? tx.pilketosElection.update({ where: { id: electionId }, data, include: { candidates: { orderBy: [{ grade: "asc" }, { candidateNo: "asc" }], include: { _count: { select: { votes: true } } } } } })
         : tx.pilketosElection.create({ data, include: { candidates: true } });
     });
-    return ok(res, { election: publicPilketosElection(election) });
+    return ok(res, { election: publicPilketosElection(election), stats: await getPilketosStats(election.id) });
   });
 
   app.post("/api/v1/pilketos/admin/election/:electionId/candidates", requireAuth, async (req, res) => {
@@ -472,14 +586,18 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
     if (!election) return fail(res, 404, "ELECTION_NOT_FOUND", "Pemilihan tidak ditemukan.");
     if (election.status !== "DRAFT") return fail(res, 409, "ELECTION_LOCKED", "Kandidat hanya dapat diubah saat status masih draft.");
     const name = clean(req.body.name);
+    const grade = clean(req.body.grade).toUpperCase() as PilketosGrade;
     const photoData = clean(req.body.photoData) || null;
     const candidateNo = Number(req.body.candidateNo);
     if (!name) return fail(res, 400, "REQUIRED_FIELD", "Nama kandidat wajib diisi.");
+    if (!["X", "XI"].includes(grade)) return fail(res, 400, "INVALID_GRADE", "Kelas kandidat harus X atau XI.");
     if (!Number.isInteger(candidateNo) || candidateNo < 1 || candidateNo > 99) return fail(res, 400, "INVALID_NUMBER", "Nomor kandidat harus berupa angka 1 sampai 99.");
+    const gradeCount = await db.pilketosCandidate.count({ where: { electionId: election.id, grade } });
+    if (gradeCount >= 4) return fail(res, 409, "GRADE_LIMIT_REACHED", `Maksimal 4 kandidat untuk kelas ${grade}.`);
     const photoError = imageDataError(photoData);
     if (photoError) return fail(res, 413, "INVALID_IMAGE", photoError);
     try {
-      const candidate = await db.pilketosCandidate.create({ data: { electionId: election.id, candidateNo, name, photoData } });
+      const candidate = await db.pilketosCandidate.create({ data: { electionId: election.id, grade, candidateNo, name, photoData } });
       return res.status(201).json({ success: true, data: candidate });
     } catch (error: any) {
       if (error?.code === "P2002") return fail(res, 409, "DUPLICATE_NUMBER", "Nomor kandidat sudah digunakan.");
@@ -493,14 +611,20 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
     if (!current) return fail(res, 404, "CANDIDATE_NOT_FOUND", "Kandidat tidak ditemukan.");
     if (current.election.status !== "DRAFT") return fail(res, 409, "ELECTION_LOCKED", "Kandidat hanya dapat diubah saat status masih draft.");
     const name = req.body.name === undefined ? current.name : clean(req.body.name);
+    const grade = (req.body.grade === undefined ? current.grade : clean(req.body.grade).toUpperCase()) as PilketosGrade;
     const photoData = req.body.photoData === undefined ? current.photoData : (clean(req.body.photoData) || null);
     const candidateNo = req.body.candidateNo === undefined ? current.candidateNo : Number(req.body.candidateNo);
     if (!name) return fail(res, 400, "REQUIRED_FIELD", "Nama kandidat wajib diisi.");
+    if (!["X", "XI"].includes(grade)) return fail(res, 400, "INVALID_GRADE", "Kelas kandidat harus X atau XI.");
     if (!Number.isInteger(candidateNo) || candidateNo < 1 || candidateNo > 99) return fail(res, 400, "INVALID_NUMBER", "Nomor kandidat harus berupa angka 1 sampai 99.");
+    if (grade !== current.grade) {
+      const gradeCount = await db.pilketosCandidate.count({ where: { electionId: current.electionId, grade, id: { not: current.id } } });
+      if (gradeCount >= 4) return fail(res, 409, "GRADE_LIMIT_REACHED", `Maksimal 4 kandidat untuk kelas ${grade}.`);
+    }
     const photoError = imageDataError(photoData);
     if (photoError) return fail(res, 413, "INVALID_IMAGE", photoError);
     try {
-      const candidate = await db.pilketosCandidate.update({ where: { id: current.id }, data: { name, photoData, candidateNo } });
+      const candidate = await db.pilketosCandidate.update({ where: { id: current.id }, data: { name, grade, photoData, candidateNo } });
       return ok(res, candidate);
     } catch (error: any) {
       if (error?.code === "P2002") return fail(res, 409, "DUPLICATE_NUMBER", "Nomor kandidat sudah digunakan.");
