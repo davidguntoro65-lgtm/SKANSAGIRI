@@ -10,4 +10,4 @@ Production deploys must apply only pending Prisma migrations, reject destructive
 The live cPanel app stores its persistent content, accounts, sessions, and academic data in PostgreSQL rather than the repository. The deployment needs schema updates for new code, but a deployment must not turn an application update into a data reset.
 
 **How to apply:**
-Keep database migrations before the Node restart, load `DATABASE_URL` from the app environment or protected `.env` without logging it, and abort before restart if the Prisma CLI or safety check fails.
+Keep database migrations before the Node restart, load `DATABASE_URL` from the app environment or protected `.env` without logging it, and abort before restart if the Prisma CLI or safety check fails. When Prisma runs from an isolated npx cache, use a temporary plain config with absolute app paths; the app-local `prisma.config.ts` may not resolve `prisma/config` from that cache. Also inspect command output for config/Prisma errors because a CLI can log a failure while returning success.

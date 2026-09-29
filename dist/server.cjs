@@ -76331,7 +76331,14 @@ async function addSession(token, coreUserId) {
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
   await db.session.deleteMany({ where: { expiresAt: { lt: /* @__PURE__ */ new Date() } } }).catch(() => {
   });
-  await db.session.create({ data: { token, expiresAt, coreUserId } });
+  const data = coreUserId ? { token, expiresAt, coreUserId } : { token, expiresAt };
+  try {
+    await db.session.create({ data });
+  } catch (err) {
+    if (coreUserId) throw err;
+    serverLog("WARN", `Session ORM insert failed; retrying legacy-compatible insert: ${err instanceof Error ? err.message : String(err)}`);
+    await db.$executeRaw`INSERT INTO "Session" ("token", "expiresAt") VALUES (${token}, ${expiresAt})`;
+  }
 }
 async function hasSession(token) {
   if (!token) return false;

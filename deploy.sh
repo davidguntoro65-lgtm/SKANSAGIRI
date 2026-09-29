@@ -358,9 +358,43 @@ if [ "${1:-}" = "--post-reset" ]; then
     prepare_prisma_cli || return 1
 
     log_info "Menerapkan migration PostgreSQL yang belum pernah dijalankan ($PRISMA_RUNNER_LABEL)..."
-    "${PRISMA_RUNNER[@]}" migrate deploy \
-      --schema "$APP_DIR/prisma/schema.prisma" 2>&1 |
+    # When Prisma is supplied through an isolated npx cache, a config file
+    # inside APP_DIR cannot resolve `prisma/config` from its own node_modules.
+    # Use a plain temporary config instead; it is still Prisma 7-compatible
+    # and keeps the app's cPanel-managed node_modules untouched.
+    local config_file
+    config_file="$(mktemp "${TMPDIR:-/tmp}/smkn-prisma-config.XXXXXX.ts")" || {
+      log_err "Tidak bisa membuat config Prisma sementara — deploy dibatalkan."
+      return 1
+    }
+    cat > "$config_file" <<'PRISMA_CONFIG'
+const appDir = process.env.PRISMA_APP_DIR;
+export default {
+  schema: `${appDir}/prisma/schema.prisma`,
+  migrations: { path: `${appDir}/prisma/migrations` },
+  datasource: { url: process.env.DATABASE_URL },
+};
+PRISMA_CONFIG
+
+    local migration_output migration_status
+    if migration_output="$(
+      PRISMA_APP_DIR="$APP_DIR" \
+      "${PRISMA_RUNNER[@]}" migrate deploy --config "$config_file" 2>&1
+    )"; then
+      migration_status=0
+    else
+      migration_status=$?
+    fi
+    rm -f "$config_file"
+
+    printf '%s\n' "$migration_output" |
       sed 's/^/  [prisma] /' | tee -a "$LOG_FILE"
+    if [ "$migration_status" -ne 0 ] ||
+       printf '%s\n' "$migration_output" |
+         grep -qE 'Failed to load config|(^|[[:space:]])Error:|P[0-9]{4}:'; then
+      log_err "Prisma migration mengembalikan error — deploy dibatalkan sebelum restart."
+      return 1
+    fi
     log_ok "Migration selesai; isi database tidak di-reset."
   }
 

@@ -46,7 +46,22 @@ async function addSession(token: string, coreUserId?: string) {
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
   // Purge expired sessions while we're here
   await db.session.deleteMany({ where: { expiresAt: { lt: new Date() } } }).catch(() => {});
-  await db.session.create({ data: { token, expiresAt, coreUserId } });
+  // Do not pass an explicit `undefined` for the optional relation field.
+  // Prisma clients generated against different versions handle that value
+  // differently, and the cPanel runtime can retain an older generated client.
+  const data = coreUserId
+    ? { token, expiresAt, coreUserId }
+    : { token, expiresAt };
+  try {
+    await db.session.create({ data });
+  } catch (err) {
+    // Admin sessions do not need the Core Identity relation. Keep the admin
+    // panel usable when production is one migration behind and its generated
+    // client/schema disagrees about the optional relation column.
+    if (coreUserId) throw err;
+    serverLog("WARN", `Session ORM insert failed; retrying legacy-compatible insert: ${err instanceof Error ? err.message : String(err)}`);
+    await db.$executeRaw`INSERT INTO "Session" ("token", "expiresAt") VALUES (${token}, ${expiresAt})`;
+  }
 }
 
 async function hasSession(token: string): Promise<boolean> {
