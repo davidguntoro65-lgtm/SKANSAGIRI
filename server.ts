@@ -242,7 +242,15 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
   const writeMethods = ["POST", "DELETE", "PUT", "PATCH"];
   if (!writeMethods.includes(req.method)) return next();
-  const publicExact = ["/api/auth/login", "/api/tracer", "/api/contact", "/api/suara", "/api/aduan"];
+  const publicExact = [
+    "/api/auth/login",
+    "/api/tracer",
+    "/api/contact",
+    "/api/suara",
+    "/api/aduan",
+    "/api/v1/auth/login",
+    "/api/v1/auth/activate",
+  ];
   if (publicExact.includes(req.path)) return next();
   const publicPatterns = [
     /^\/api\/suara\/[^/]+\/komentar$/,
@@ -389,7 +397,7 @@ app.post("/api/v1/auth/change-password", async (req, res) => {
   const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
   const session = token ? await db.session.findUnique({ where: { token } }) : null;
   const newPassword = String(req.body.newPassword || "");
-  if (!session?.coreUserId) return res.status(401).json({ success: false, error: { code: "UNAUTHENTICATED", message: "Session tidak valid." } });
+  if (!session?.coreUserId || session.expiresAt < new Date()) return res.status(401).json({ success: false, error: { code: "UNAUTHENTICATED", message: "Session tidak valid." } });
   if (newPassword.length < 8) return res.status(400).json({ success: false, error: { code: "INVALID_PASSWORD", message: "Password baru minimal 8 karakter." } });
   const user = await db.coreUser.findUnique({ where: { id: session.coreUserId } });
   if (!user || !verifyPassword(String(req.body.currentPassword || ""), user.passwordHash)) return res.status(401).json({ success: false, error: { code: "INVALID_PASSWORD", message: "Password saat ini salah." } });

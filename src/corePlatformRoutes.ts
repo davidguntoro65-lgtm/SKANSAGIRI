@@ -136,6 +136,9 @@ async function referenceMaps() {
 async function validateRows(type: ImportType, rows: Record<string, unknown>[]): Promise<PreviewRow[]> {
   const refs = await referenceMaps();
   const seen = new Set<string>();
+  const seenStudentNisn = new Set<string>();
+  const seenStudentNis = new Set<string>();
+  const seenStudentEmails = new Set<string>();
   const result: PreviewRow[] = [];
   const keyFor = (values: Record<string, unknown>) => {
     switch (type) {
@@ -158,8 +161,20 @@ async function validateRows(type: ImportType, rows: Record<string, unknown>[]): 
     seen.add(key);
     if (type === "guru" && clean(values.email) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean(values.email))) errors.push("Format email tidak valid.");
     if (type === "siswa" && clean(values.email) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean(values.email))) errors.push("Format email tidak valid.");
-    if (type === "siswa" && clean(values.password).length < 8) errors.push("Password awal wajib diisi minimal 8 karakter.");
-    if (type === "siswa" && refs.studentsByNis.has(clean(values.nis)) && refs.studentsByNis.get(clean(values.nis))?.nisn !== clean(values.nisn)) errors.push(`NIS "${clean(values.nis)}" sudah digunakan siswa lain.`);
+    if (type === "siswa") {
+      const nisn = clean(values.nisn);
+      const nis = clean(values.nis);
+      const email = clean(values.email).toLowerCase();
+      if (seenStudentNisn.has(nisn)) errors.push(`NISN "${nisn}" duplikat di dalam file.`);
+      if (seenStudentNis.has(nis)) errors.push(`NIS "${nis}" duplikat di dalam file.`);
+      if (email && seenStudentEmails.has(email)) errors.push(`Email "${email}" duplikat di dalam file.`);
+      seenStudentNisn.add(nisn);
+      seenStudentNis.add(nis);
+      if (email) seenStudentEmails.add(email);
+      if (clean(values.password).length < 8) errors.push("Password awal wajib diisi minimal 8 karakter.");
+      const existingByNis = refs.studentsByNis.get(nis) as { nisn: string } | undefined;
+      if (existingByNis && existingByNis.nisn !== nisn) errors.push(`NIS "${nis}" sudah digunakan siswa lain.`);
+    }
     if (type === "siswa" && clean(values.tanggalLahir) && !parseDate(values.tanggalLahir)) errors.push("Format tanggalLahir tidak valid.");
     if (type === "kelas" && clean(values.kodeTahunAjaran) && !refs.years.has(clean(values.kodeTahunAjaran))) errors.push(`Kode tahun ajaran "${clean(values.kodeTahunAjaran)}" tidak ditemukan.`);
     if (type === "kelas" && clean(values.kodeJurusan) && !refs.departments.has(clean(values.kodeJurusan))) errors.push(`Kode jurusan "${clean(values.kodeJurusan)}" tidak ditemukan.`);

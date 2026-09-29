@@ -129,7 +129,9 @@ Core Platform juga menyediakan identity session server-side:
 - `POST /api/v1/auth/activate`
 - `POST /api/v1/auth/change-password`
 
-Semua endpoint Core Platform memerlukan session admin existing. Import menerima file XLS/XLSX melalui payload base64 maksimum 10 MB, menyimpan checksum dan audit log, dan tidak menulis data sebelum tahap commit.
+Portal siswa tersedia di `/siswa`. Import template `siswa` memakai kolom wajib `nisn`, `nis`, `namaLengkap`, `kodeKelas`, `kodeTahunAjaran`, dan `password`; `noTelp` serta kolom profil lain bersifat opsional. Saat commit, password awal hanya disimpan sebagai hash, akun diberi role `SISWA`, dan enrollment awal dibuat bila kelas serta tahun ajaran valid. Siswa dapat login memakai NIS, NISN, atau email melalui `POST /api/v1/auth/login`. Pada login pertama akan muncul tawaran opsional untuk mengganti password; perubahan password dilakukan melalui session siswa dan tidak pernah mengirim password ke payload profil.
+
+Semua endpoint akademik dan import admin memerlukan session admin existing. Endpoint login/aktivasi siswa bersifat publik, sedangkan perubahan password dan logout memerlukan session Core Identity. Import menerima file XLS/XLSX melalui payload base64 maksimum 10 MB, menyimpan checksum dan audit log, memvalidasi duplikat NIS/NISN/email sebelum commit, dan tidak menulis data akademik sebelum tahap commit.
 
 Dashboard `/admin/akademik` saat ini mencakup CRUD manual tahun ajaran/jurusan/mapel/kelas, pencarian master, preview dan commit import, history/error report, review pengajuan dengan catatan, serta audit activity feed. Migration identity tambahan perlu diterapkan dengan `npx prisma migrate deploy`.
 
