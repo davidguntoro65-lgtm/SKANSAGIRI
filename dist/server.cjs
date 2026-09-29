@@ -76534,12 +76534,19 @@ app.post("/api/auth/login", async (req, res) => {
   const { allowed, secondsLeft } = checkRateLimit(ip);
   if (!allowed) return res.status(429).json({ error: `Terlalu banyak percobaan login. Coba lagi dalam ${secondsLeft} detik.` });
   const { username, password } = req.body;
-  const creds = await getAdminCredentials();
-  if (username === creds.username && password === creds.password) {
-    clearAttempts(ip);
-    const token = import_crypto2.default.randomBytes(48).toString("hex");
-    await addSession(token);
-    return res.json({ token });
+  try {
+    const creds = await getAdminCredentials();
+    if (username === creds.username && password === creds.password) {
+      clearAttempts(ip);
+      const token = import_crypto2.default.randomBytes(48).toString("hex");
+      await addSession(token);
+      return res.json({ token });
+    }
+  } catch (err) {
+    serverLog("ERROR", `Admin login backend failure: ${err?.stack || err?.message || String(err)}`);
+    return res.status(503).json({
+      error: "Backend login tidak dapat memproses session. Periksa koneksi database dan migrasi Prisma di production."
+    });
   }
   recordFailedAttempt(ip);
   return res.status(401).json({ error: "Kombinasi User Name atau Sandi salah. Periksa kembali!" });

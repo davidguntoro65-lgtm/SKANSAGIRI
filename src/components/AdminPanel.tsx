@@ -689,7 +689,11 @@ export default function AdminPanel({
       });
       const ct = res.headers.get("content-type") || "";
       if (!ct.includes("application/json")) {
-        setLoginError("Server belum siap atau sedang dalam pemeliharaan. Silakan coba beberapa saat lagi.");
+        setLoginError(
+          res.status === 503
+            ? "Backend production sedang tidak tersedia. Pastikan proses Node.js/Passenger aktif."
+            : "Respons backend tidak valid. Pastikan URL API production mengarah ke /id/api."
+        );
         setLoginLoading(false);
         return;
       }
@@ -699,7 +703,12 @@ export default function AdminPanel({
         setIsLoggedIn(true);
         setFeedback({ message: "Berhasil masuk sebagai Superadmin!", type: "success" });
       } else {
-        setLoginError(data.error || "Kombinasi User Name atau Sandi salah. Periksa kembali!");
+        setLoginError(
+          data.error ||
+          (res.status === 503
+            ? "Backend production tidak dapat membuat session. Periksa koneksi database dan migrasi Prisma."
+            : "Kombinasi User Name atau Sandi salah. Periksa kembali!")
+        );
       }
     } catch {
       setLoginError("Gagal menghubungi server. Periksa koneksi internet Anda.");
