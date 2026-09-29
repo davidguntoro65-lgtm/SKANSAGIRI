@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, useScroll, useSpring, AnimatePresence } from "motion/react";
-import { Menu, X, Landmark, GraduationCap, ArrowUpRight, Sun, Moon, ChevronDown, Award, Newspaper, Camera, User, Users, Target, Brain } from "lucide-react";
+import { Menu, X, Landmark, GraduationCap, ArrowUpRight, Sun, Moon, ChevronDown, Award, Newspaper, Camera, User, Users, Target, Vote } from "lucide-react";
 import { useBranding } from "../hooks/useBranding";
 
 interface NavbarProps {
@@ -320,12 +320,12 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
 
           {/* CTA Actions */}
           <div className="hidden lg:flex items-center gap-4" id="nav-actions-desktop">
-            {/* OSDAI Intelligent Class Button */}
+            {/* E-VOTE Pilketos 2026 Button */}
             <a
-              href="https://osdai.smkn1wonogiri.sch.id"
+              href="https://smkn1wonogiri.sch.id/id/pilketos"
               target="_blank"
               rel="noopener noreferrer"
-              id="btn-osdai-desktop"
+              id="btn-evote-desktop"
               className="osdai-btn relative overflow-hidden group flex items-center gap-2 px-4 py-2.5 rounded-full font-sans text-xs uppercase tracking-widest font-bold text-white transition-all duration-300 hover:scale-105 active:scale-95"
               style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #0c1445 70%, #0f172a 100%)", border: "1px solid rgba(99,102,241,0.5)" }}
             >
@@ -337,16 +337,16 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
               <span className="osdai-scan-line pointer-events-none absolute top-0 left-0 h-full w-1/3"
                 style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent)" }} />
 
-              {/* Brain icon with pulse ring */}
+              {/* Vote icon with pulse ring */}
               <span className="relative flex items-center justify-center shrink-0">
                 <span className="absolute w-5 h-5 rounded-full bg-cyan-400/20 animate-ping" />
-                <Brain className="w-3.5 h-3.5 text-cyan-300 relative z-10" />
+                <Vote className="w-3.5 h-3.5 text-cyan-300 relative z-10" />
               </span>
 
               {/* Label */}
               <span className="osdai-label flex flex-col leading-none">
-                <span className="text-[10px] font-black tracking-[0.2em] text-white">OSDAI</span>
-                <span className="text-[7px] font-light tracking-[0.15em] text-cyan-300/80 normal-case">Intelligent class</span>
+                <span className="text-[10px] font-black tracking-[0.2em] text-white">E-VOTE</span>
+                <span className="text-[7px] font-light tracking-[0.15em] text-cyan-300/80 normal-case">Pilketos 2026</span>
               </span>
 
               {/* Animated dots indicator */}
@@ -573,13 +573,13 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
             )}
           </button>
 
-          {/* OSDAI Mobile Button */}
+          {/* E-VOTE Pilketos 2026 Mobile Button */}
           <a
-            href="https://osdai.smkn1wonogiri.sch.id"
+            href="https://smkn1wonogiri.sch.id/id/pilketos"
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => setIsOpen(false)}
-            id="btn-osdai-mobile"
+            id="btn-evote-mobile"
             className="osdai-btn relative overflow-hidden mt-3 w-full flex items-center justify-center gap-3 py-3.5 rounded-full font-sans font-extrabold uppercase tracking-widest text-xs text-white"
             style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #0c1445 70%, #0f172a 100%)", border: "1px solid rgba(99,102,241,0.5)" }}
           >
@@ -587,11 +587,11 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
               style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent)" }} />
             <span className="relative flex items-center justify-center shrink-0">
               <span className="absolute w-5 h-5 rounded-full bg-cyan-400/20 animate-ping" />
-              <Brain className="w-4 h-4 text-cyan-300 relative z-10" />
+              <Vote className="w-4 h-4 text-cyan-300 relative z-10" />
             </span>
             <span className="osdai-label flex flex-col leading-none items-start">
-              <span className="text-[11px] font-black tracking-[0.2em] text-white">OSDAI</span>
-              <span className="text-[8px] font-light tracking-[0.12em] text-cyan-300/80 normal-case">Intelligent class</span>
+              <span className="text-[11px] font-black tracking-[0.2em] text-white">E-VOTE</span>
+              <span className="text-[8px] font-light tracking-[0.12em] text-cyan-300/80 normal-case">Pilketos 2026</span>
             </span>
             <span className="flex items-center gap-[3px]">
               <span className="osdai-dot-1 w-1.5 h-1.5 rounded-full bg-cyan-400" />
