@@ -39,6 +39,32 @@ APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_FILE="$APP_DIR/deploy.log"
 MAX_LOG_LINES=2000
 
+# cPanel Node.js App Manager menyimpan runtime dan dependency di luar
+# public_html, biasanya:
+#   /home/USER/nodevenv/<jalur-app>/<versi>/lib/node_modules
+# Nilai VIRTUAL_ENV tersedia bila deploy dijalankan setelah `source .../activate`.
+# Dua override ini disediakan untuk hosting yang memakai layout berbeda.
+CPANEL_NODEENV_DIR="${CPANEL_NODEENV_DIR:-${VIRTUAL_ENV:-}}"
+CPANEL_NODE_MODULES_DIR="${CPANEL_NODE_MODULES_DIR:-}"
+if [ -z "$CPANEL_NODEENV_DIR" ]; then
+  HOST_HOME="$(cd "$APP_DIR/../.." && pwd -P)"
+  APP_RELATIVE_PATH="${APP_DIR#"$HOST_HOME"/}"
+  NODEENV_APP_DIR="$HOST_HOME/nodevenv/$APP_RELATIVE_PATH"
+  if [ -d "$NODEENV_APP_DIR" ]; then
+    CPANEL_NODEENV_DIR="$(
+      find "$NODEENV_APP_DIR" -mindepth 1 -maxdepth 1 -type d -print 2>/dev/null |
+        sort -V | tail -n 1
+    )"
+  fi
+fi
+if [ -z "$CPANEL_NODE_MODULES_DIR" ] && [ -n "$CPANEL_NODEENV_DIR" ]; then
+  if [ -d "$CPANEL_NODEENV_DIR/lib/node_modules" ]; then
+    CPANEL_NODE_MODULES_DIR="$CPANEL_NODEENV_DIR/lib/node_modules"
+  fi
+fi
+CPANEL_NODE_BIN="${CPANEL_NODE_BIN:-}"
+CPANEL_NPX_BIN="${CPANEL_NPX_BIN:-}"
+
 # Folder/file yang wajib dilindungi dari git reset --hard (lapisan kedua)
 # Catatan: data/ juga ada di .gitignore (lapisan pertama — git tidak menyentuhnya)
 PROTECTED_FILES=("logs" ".env" "app.js" ".htaccess")
@@ -206,8 +232,69 @@ if [ "${1:-}" = "--post-reset" ]; then
 
   # ── Database migration ──────────────────────────────────────────────────────
   # dist/server.cjs self-contained untuk runtime aplikasi, tetapi prisma migrate
-  # deploy membutuhkan Prisma CLI. Dependency production hanya dipasang bila
-  # CLI belum tersedia; tidak ada seed, db push, reset, atau deleteMany.
+  # deploy membutuhkan Prisma CLI. Jangan jalankan npm ci di APP_DIR: pada cPanel
+  # node_modules dapat berupa symlink/layout yang dikelola Node.js App Manager,
+  # dan npm ci akan menghapusnya lalu sering gagal dengan "Exit handler never
+  # called". Cari binary pada nodevenv cPanel terlebih dahulu, lalu binary lokal,
+  # dan terakhir gunakan npx cache terisolasi.
+  PRISMA_RUNNER=()
+  PRISMA_RUNNER_LABEL=""
+
+  prepare_prisma_cli() {
+    local node_bin="${CPANEL_NODE_BIN:-$(command -v node 2>/dev/null || true)}"
+    local npx_bin="${CPANEL_NPX_BIN:-$(command -v npx 2>/dev/null || true)}"
+    local search_dir
+
+    for search_dir in "$CPANEL_NODE_MODULES_DIR" "$APP_DIR/node_modules"; do
+      [ -n "$search_dir" ] || continue
+      if [ -x "$search_dir/.bin/prisma" ]; then
+        PRISMA_RUNNER=("$search_dir/.bin/prisma")
+        if [ "$search_dir" = "$CPANEL_NODE_MODULES_DIR" ]; then
+          PRISMA_RUNNER_LABEL="cPanel nodevenv ($search_dir)"
+        else
+          PRISMA_RUNNER_LABEL="local"
+        fi
+        return 0
+      fi
+      # Fallback untuk instalasi global yang tidak membuat .bin symlink.
+      if [ -n "$node_bin" ] && [ -f "$search_dir/prisma/build/index.js" ]; then
+        PRISMA_RUNNER=("$node_bin" "$search_dir/prisma/build/index.js")
+        PRISMA_RUNNER_LABEL="cPanel nodevenv package ($search_dir)"
+        return 0
+      fi
+    done
+
+    [ -n "$npx_bin" ] || {
+      log_err "'npx' tidak ada di PATH; Prisma CLI tidak bisa dijalankan."
+      return 1
+    }
+    [ -n "$node_bin" ] || {
+      log_err "'node' tidak ada di PATH; versi Prisma tidak bisa dibaca."
+      return 1
+    }
+
+    local prisma_version
+    prisma_version="$(
+      APP_DIR_FOR_NODE="$APP_DIR" "$node_bin" -e '
+        const path = require("path");
+        const p = require(path.join(process.env.APP_DIR_FOR_NODE, "package.json"));
+        const version = (p.dependencies && p.dependencies.prisma) ||
+          (p.devDependencies && p.devDependencies.prisma);
+        if (!version) process.exit(1);
+        process.stdout.write(version);
+      ' 2>/dev/null
+    )" || {
+      log_err "Versi Prisma tidak ditemukan di package.json — deploy dibatalkan."
+      return 1
+    }
+
+    # --package memasang Prisma ke cache npx, bukan ke APP_DIR/node_modules.
+    # Ini sengaja menghindari npm ci yang merusak symlink node_modules cPanel.
+    PRISMA_RUNNER=("$npx_bin" --yes --package "prisma@$prisma_version" prisma)
+    PRISMA_RUNNER_LABEL="npx cache ($prisma_version)"
+    log_info "Prisma CLI lokal tidak tersedia; memakai $PRISMA_RUNNER_LABEL tanpa mengubah node_modules."
+  }
+
   load_database_url() {
     if [ -n "${DATABASE_URL:-}" ]; then
       export DATABASE_URL
@@ -268,29 +355,22 @@ if [ "${1:-}" = "--post-reset" ]; then
 
     assert_migrations_non_destructive || return 1
 
-    if [ ! -x "$APP_DIR/node_modules/.bin/prisma" ]; then
-      command -v npm >/dev/null 2>&1 || {
-        log_err "'npm' tidak ada di PATH; Prisma CLI tidak bisa dipasang."
-        return 1
-      }
-      log_info "Prisma CLI belum tersedia; memasang dependency production tanpa script install..."
-      npm ci --omit=dev --ignore-scripts --no-audit --no-fund --prefer-offline 2>&1 |
-        sed 's/^/  [npm] /' | tee -a "$LOG_FILE"
-    fi
+    prepare_prisma_cli || return 1
 
-    [ -x "$APP_DIR/node_modules/.bin/prisma" ] || {
-      log_err "Prisma CLI tidak tersedia setelah instalasi — deploy dibatalkan."
-      return 1
-    }
-
-    log_info "Menerapkan migration PostgreSQL yang belum pernah dijalankan..."
-    "$APP_DIR/node_modules/.bin/prisma" migrate deploy \
+    log_info "Menerapkan migration PostgreSQL yang belum pernah dijalankan ($PRISMA_RUNNER_LABEL)..."
+    "${PRISMA_RUNNER[@]}" migrate deploy \
       --schema "$APP_DIR/prisma/schema.prisma" 2>&1 |
       sed 's/^/  [prisma] /' | tee -a "$LOG_FILE"
     log_ok "Migration selesai; isi database tidak di-reset."
   }
 
   log_info "[3.5/6] Menyiapkan database production..."
+  if [ -n "$CPANEL_NODEENV_DIR" ]; then
+    log_info "cPanel Node environment: $CPANEL_NODEENV_DIR"
+  fi
+  if [ -n "$CPANEL_NODE_MODULES_DIR" ]; then
+    log_info "cPanel dependency path: $CPANEL_NODE_MODULES_DIR"
+  fi
   if ! apply_database_migrations; then
     log_err "Migration gagal. Proses yang sedang berjalan tidak dihentikan; backup konfigurasi dipertahankan di: $PROTECT_DIR"
     exit 1
