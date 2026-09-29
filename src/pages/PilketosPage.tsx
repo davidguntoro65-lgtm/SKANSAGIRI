@@ -129,7 +129,7 @@ export default function PilketosPage() {
   }
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#08111e] text-white">
+    <main className="pilketos-page min-h-screen overflow-hidden bg-[#08111e] text-white">
       <div className="pointer-events-none fixed inset-0" style={{ background: "radial-gradient(circle at 8% 6%, rgba(245,158,11,.2), transparent 27%), radial-gradient(circle at 92% 88%, rgba(14,165,233,.17), transparent 34%)" }} />
       <div className="relative mx-auto max-w-7xl px-5 py-6 sm:px-8 lg:px-12">
         <header className="flex items-center justify-between border-b border-white/10 pb-6">

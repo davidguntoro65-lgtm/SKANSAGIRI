@@ -138,6 +138,21 @@
   color: #475569 !important;
 }
 
+/* Pilketos is a deliberately dark campaign surface, independent of the
+   site's light/dark preference. Keep the global light-mode text conversions
+   from reducing contrast on this page. */
+.light .pilketos-page,
+.light .pilketos-page .text-white {
+  color: #ffffff !important;
+}
+
+.light .pilketos-page h1,
+.light .pilketos-page h2,
+.light .pilketos-page h3,
+.light .pilketos-page h4 {
+  color: #ffffff !important;
+}
+
 .light .text-slate-500 {
   color: #64748b !important;
 }
@@ -437,3 +452,14 @@
 .osdai-dot-1 { animation: osdai-dot 1.4s ease-in-out infinite 0s; }
 .osdai-dot-2 { animation: osdai-dot 1.4s ease-in-out infinite 0.2s; }
 .osdai-dot-3 { animation: osdai-dot 1.4s ease-in-out infinite 0.4s; }
+
+/* Keep the campaign page readable even when the application preference is
+   light mode. This is intentionally last so it wins over legacy theme rules. */
+html.light main.pilketos-page,
+html.light main.pilketos-page h1,
+html.light main.pilketos-page h2,
+html.light main.pilketos-page h3,
+html.light main.pilketos-page h4,
+html.light main.pilketos-page .text-white {
+  color: #ffffff !important;
+}

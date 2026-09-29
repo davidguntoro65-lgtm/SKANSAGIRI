@@ -1263,6 +1263,7 @@ export default function AdminPanel({
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="Masukkan user name"
+                    autoComplete="username"
                     className={`w-full text-sm py-3 pl-11 pr-4 rounded-xl border outline-none font-sans font-medium transition-all duration-200 ${
                       isDarkTheme 
                         ? "bg-slate-950 border-white/5 text-white focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20" 
@@ -1286,6 +1287,7 @@ export default function AdminPanel({
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Masukkan kata sandi"
+                    autoComplete="current-password"
                     className={`w-full text-sm py-3 pl-11 pr-4 rounded-xl border outline-none font-sans font-medium transition-all duration-200 ${
                       isDarkTheme 
                         ? "bg-slate-950 border-white/5 text-white focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20" 

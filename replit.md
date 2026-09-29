@@ -84,7 +84,8 @@ npx tsx scripts/seed-from-json.ts  # one-time: import existing data/ JSON files 
 
 - `/` — Public homepage
 - `/berita` — News & articles page
-- `/adm-panel` — Satu-satunya shell admin: login, content management, dan Core Platform akademik
+- `/adm-panel` atau `/adm/panel` — Satu-satunya shell admin: login, content management, Core Platform akademik, dan pengelolaan Pilketos
+- `/pilketos` — Landing page Pemilihan Ketua OSIS 2026/2027; siswa login dengan NIS/NISN dan password untuk memilih
 - `/guru` — Portal guru untuk mengelola modul kurikulum berdasarkan assignment
 - `/api/v1/akademik/*` — Backend API internal untuk master data, import XLS, audit, dan approval assignment guru
 - `/api/v1/lms/guru/*` — Context assignment, dashboard, dan lifecycle modul kurikulum
@@ -128,6 +129,9 @@ Core Platform juga menyediakan identity session server-side:
 - `GET /api/v1/me`
 - `POST /api/v1/auth/activate`
 - `POST /api/v1/auth/change-password`
+- `GET /api/v1/pilketos/active` — data pemilihan aktif untuk landing page
+- `POST /api/v1/pilketos/vote` — menyimpan satu suara per siswa dan pemilihan
+- `GET/POST /api/v1/pilketos/admin/*` — pengelolaan pemilihan dan kandidat oleh admin/operator
 
 Portal siswa tersedia di `/siswa`. Import template `siswa` memakai kolom wajib `nisn`, `nis`, `namaLengkap`, `kodeKelas`, `kodeTahunAjaran`, dan `password`; `noTelp` serta kolom profil lain bersifat opsional. Saat commit, password awal hanya disimpan sebagai hash, akun diberi role `SISWA`, dan enrollment awal dibuat bila kelas serta tahun ajaran valid. Siswa dapat login memakai NIS, NISN, atau email melalui `POST /api/v1/auth/login`. Pada login pertama akan muncul tawaran opsional untuk mengganti password; perubahan password dilakukan melalui session siswa dan tidak pernah mengirim password ke payload profil.
 

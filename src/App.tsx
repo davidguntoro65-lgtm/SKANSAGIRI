@@ -42,11 +42,12 @@ import PilketosPage from "./pages/PilketosPage";
 import { DataStore } from "./dataStore";
 import { navigate, getAppPath } from "./utils/navigation";
 
-type AppPath = "/" | "/adm-panel" | "/guru" | "/siswa" | "/pilketos" | "/tentang/kepala-sekolah" | "/tentang/manajemen-sekolah" | "/tentang/visi-misi" | "/tracer-studi" | "/admin/tracer-studi" | "/berita" | "/hubungi-kami" | "/modul-integrasi" | "/kelas-virtual" | "/kelas-virtual/kelas-x" | "/kelas-virtual/kelas-xi" | "/kelas-virtual/kelas-xii" | "/suara-skansagiri" | "/admin/suara-skansagiri" | "/aduan-publik" | "/admin/aduan-publik" | "/osis" | "/osis/adm-panel";
+type AppPath = "/" | "/adm-panel" | "/adm/panel" | "/guru" | "/siswa" | "/pilketos" | "/tentang/kepala-sekolah" | "/tentang/manajemen-sekolah" | "/tentang/visi-misi" | "/tracer-studi" | "/admin/tracer-studi" | "/berita" | "/hubungi-kami" | "/modul-integrasi" | "/kelas-virtual" | "/kelas-virtual/kelas-x" | "/kelas-virtual/kelas-xi" | "/kelas-virtual/kelas-xii" | "/suara-skansagiri" | "/admin/suara-skansagiri" | "/aduan-publik" | "/admin/aduan-publik" | "/osis" | "/osis/adm-panel";
 
 function getPath(): AppPath {
   const p = getAppPath();
   if (p === "/adm-panel") return "/adm-panel";
+  if (p === "/adm/panel") return "/adm/panel";
   if (p === "/guru" || p === "/guru/dashboard" || p === "/guru/modul") return "/guru";
   if (p === "/siswa") return "/siswa";
   if (p === "/pilketos") return "/pilketos";
@@ -163,7 +164,7 @@ export default function App() {
     setTheme((prev) => (prev === "dark" ? "light" : "dark"));
   };
 
-  if (currentPath === "/adm-panel") {
+  if (currentPath === "/adm-panel" || currentPath === "/adm/panel") {
     return (
       <AdminPanel
         theme={theme}
