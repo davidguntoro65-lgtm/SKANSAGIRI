@@ -75594,6 +75594,10 @@ function registerCorePlatformRoutes(app2, requireAuth2) {
       where: { status: "OPEN" },
       include: { candidates: { orderBy: { candidateNo: "asc" } } },
       orderBy: { updatedAt: "desc" }
+    }) || await db.pilketosElection.findFirst({
+      where: { status: "DRAFT" },
+      include: { candidates: { orderBy: { candidateNo: "asc" } } },
+      orderBy: { updatedAt: "desc" }
     });
     let hasVoted = false;
     const session = await getPilketosSession(req);

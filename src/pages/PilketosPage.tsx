@@ -17,6 +17,7 @@ import {
   Vote,
   XCircle,
 } from "lucide-react";
+import { GlobalPageBg } from "../components/BackgroundSystem";
 import { useBranding } from "../hooks/useBranding";
 
 type Candidate = {
@@ -218,7 +219,7 @@ export default function PilketosPage() {
               <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Masuk untuk memberikan suara.</h1>
               <p className="mt-3 text-sm leading-relaxed text-slate-500">Gunakan NIS atau NISN dan password akun siswa. Halaman ini khusus untuk autentikasi pemilih.</p>
             </div>
-            {election ? (
+            {election?.status === "OPEN" ? (
               <form onSubmit={login} className="mt-8">
                 <label className="block text-xs font-black uppercase tracking-wider text-slate-600">
                   NIS / NISN
@@ -241,7 +242,7 @@ export default function PilketosPage() {
                 </button>
               </form>
             ) : (
-              <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-relaxed text-amber-800"><Clock3 className="mb-2 h-5 w-5 text-amber-600" />Pemilihan belum dibuka oleh panitia. Silakan kembali ke halaman utama.</div>
+              <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-relaxed text-amber-800"><Clock3 className="mb-2 h-5 w-5 text-amber-600" />Login pemilih akan dibuka setelah panitia mengaktifkan pemilihan. Kandidat yang sudah disiapkan dapat dilihat di halaman utama.</div>
             )}
           </section>
           <p className="mt-6 text-center text-xs font-medium text-slate-400">Satu siswa, satu suara · Sistem pemilihan resmi SMKN 1 Wonogiri</p>
@@ -289,9 +290,10 @@ export default function PilketosPage() {
   }
 
   return (
-    <main className="pilketos-page min-h-screen overflow-hidden bg-[#f7f5ef] text-slate-900">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(245,158,11,.13),transparent_30%),radial-gradient(circle_at_95%_70%,rgba(251,146,60,.1),transparent_30%)]" />
-      <div className="relative mx-auto max-w-7xl px-5 py-5 sm:px-8 lg:px-12">
+    <main className="pilketos-page relative min-h-screen overflow-hidden bg-slate-50 text-slate-900">
+      <GlobalPageBg theme="light" />
+      <div className="pointer-events-none fixed inset-0 z-[1] bg-[radial-gradient(circle_at_10%_0%,rgba(245,158,11,.12),transparent_28%),radial-gradient(circle_at_95%_70%,rgba(59,130,246,.08),transparent_32%)]" />
+      <div className="relative z-10 mx-auto max-w-7xl px-5 py-5 sm:px-8 lg:px-12">
         <header className="flex items-center justify-between border-b border-slate-200/80 pb-5">
           <div className="flex items-center gap-3">
             {logo ? <img src={logo} alt="Logo SMKN 1 Wonogiri" className="h-11 w-11 rounded-2xl object-contain" /> : <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-400 text-slate-950 shadow-lg shadow-amber-400/25"><Vote className="h-5 w-5" /></div>}
@@ -302,8 +304,8 @@ export default function PilketosPage() {
 
         <section className="grid items-center gap-12 py-14 sm:py-20 lg:grid-cols-[1.08fr_.92fr] lg:py-24">
           <div className="pilketos-fade-up">
-            <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-[10px] font-black uppercase tracking-[.2em] text-amber-700"><Sparkles className="h-3.5 w-3.5" /> Pemilihan Ketua OSIS 2026/2027</p>
-            <h1 className="max-w-3xl text-5xl font-black leading-[.98] tracking-[-.05em] text-slate-950 sm:text-7xl">Satu suara untuk <span className="text-amber-500">masa depan</span> sekolah.</h1>
+            <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-amber-300/80 bg-amber-50/80 px-4 py-2 text-[10px] font-black uppercase tracking-[.2em] text-amber-700 shadow-sm"><Sparkles className="h-3.5 w-3.5" /> Pemilihan Ketua OSIS 2026/2027</p>
+            <h1 className="max-w-3xl font-serif text-5xl font-bold leading-[.98] tracking-[-.04em] text-slate-950 sm:text-7xl">Satu suara untuk <span className="text-amber-500">masa depan</span> sekolah.</h1>
             <p className="mt-7 max-w-xl text-base leading-relaxed text-slate-500 sm:text-lg">Kenali kandidat terbaik pilihan panitia. Suaramu menjadi bagian penting dari perjalanan kepemimpinan OSIS SMKN 1 Wonogiri.</p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <button onClick={openLogin} className="inline-flex items-center gap-2 rounded-xl bg-amber-400 px-5 py-3.5 text-sm font-black text-slate-950 shadow-lg shadow-amber-400/20 transition hover:-translate-y-0.5 hover:bg-amber-500">Mulai memilih <ArrowRight className="h-4 w-4" /></button>
@@ -311,7 +313,7 @@ export default function PilketosPage() {
             </div>
             <div className="mt-9 flex flex-wrap gap-4 text-xs font-bold text-slate-500"><span className="inline-flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-emerald-500" /> Aman dan tercatat</span><span className="inline-flex items-center gap-2"><Check className="h-4 w-4 text-amber-500" /> Satu siswa, satu suara</span></div>
           </div>
-          <div className="pilketos-fade-up-delayed relative min-h-[330px] overflow-hidden rounded-[2.5rem] border border-white bg-white/70 p-6 shadow-[0_24px_80px_rgba(88,66,25,.12)] backdrop-blur-xl sm:p-8">
+          <div className="pilketos-fade-up-delayed relative min-h-[330px] overflow-hidden rounded-[2.5rem] border border-white/90 bg-white/70 p-6 shadow-[0_24px_80px_rgba(15,23,42,.12)] backdrop-blur-xl sm:p-8">
             <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-amber-200/70 blur-2xl" />
             <div className="absolute -bottom-20 -left-16 h-48 w-48 rounded-full bg-orange-100 blur-2xl" />
             <div className="relative flex h-full flex-col justify-between">
@@ -324,7 +326,7 @@ export default function PilketosPage() {
 
         <section id="kandidat" className="scroll-mt-8 border-t border-slate-200/80 py-14 sm:py-20">
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-xs font-black uppercase tracking-[.2em] text-amber-600">Kenali pilihannya</p><h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Kandidat Ketua OSIS</h2></div><p className="max-w-sm text-sm leading-relaxed text-slate-500">Pilihan kandidat resmi yang telah disiapkan oleh panitia E-Pilketos.</p></div>
-          {loading ? <div className="mt-8 rounded-3xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">Memuat kandidat...</div> : election?.candidates.length ? <CandidateGrid candidates={election.candidates} /> : <div className="mt-8 rounded-3xl border border-dashed border-slate-300 bg-white/60 p-10 text-center"><Clock3 className="mx-auto h-8 w-8 text-amber-500" /><h3 className="mt-4 font-black text-slate-900">Kandidat sedang disiapkan</h3><p className="mt-2 text-sm text-slate-500">Panitia akan menampilkan nama dan foto kandidat di halaman ini setelah pemilihan dibuka.</p></div>}
+          {loading ? <div className="mt-8 rounded-3xl border border-slate-200 bg-white/80 p-10 text-center text-sm text-slate-500 shadow-sm">Memuat kandidat...</div> : election?.candidates.length ? <CandidateGrid candidates={election.candidates} /> : <div className="mt-8 rounded-3xl border border-dashed border-slate-300 bg-white/60 p-10 text-center"><Clock3 className="mx-auto h-8 w-8 text-amber-500" /><h3 className="mt-4 font-black text-slate-900">Kandidat sedang disiapkan</h3><p className="mt-2 text-sm text-slate-500">Panitia akan menampilkan nama dan foto kandidat di halaman ini setelah data tersedia.</p></div>}
         </section>
 
         <footer className="flex flex-col gap-3 border-t border-slate-200/80 py-7 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between"><span>© 2026 SMKN 1 Wonogiri · E-Pilketos</span><span className="font-medium">Suara siswa, masa depan sekolah.</span></footer>
@@ -336,10 +338,10 @@ export default function PilketosPage() {
 
 function CandidateGrid({ candidates, selectedCandidate, onSelect }: { candidates: Candidate[]; selectedCandidate?: string; onSelect?: (id: string) => void }) {
   return (
-    <div className="mt-8 grid gap-5 sm:grid-cols-2">
+    <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
       {candidates.map((candidate, index) => {
         const selected = selectedCandidate === candidate.id;
-        const card = <div className={`group relative overflow-hidden rounded-[1.75rem] border bg-white shadow-[0_15px_45px_rgba(88,66,25,.08)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_60px_rgba(88,66,25,.14)] ${selected ? "border-amber-400 ring-4 ring-amber-400/15" : "border-slate-200/90"}`}>
+        const card = <div style={{ animationDelay: `${Math.min(index * 90, 450)}ms` }} className={`pilketos-card-reveal group relative overflow-hidden rounded-[1.75rem] border bg-white/90 shadow-[0_15px_45px_rgba(15,23,42,.08)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_60px_rgba(15,23,42,.14)] ${selected ? "border-amber-400 ring-4 ring-amber-400/15" : "border-slate-200/90"}`}>
           <div className="relative aspect-[1.55/1] overflow-hidden bg-slate-100">{candidate.photoData ? <img src={candidate.photoData} alt={`Foto ${candidate.name}`} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" /> : <div className="flex h-full items-center justify-center bg-gradient-to-br from-amber-100 to-orange-50 text-6xl font-black text-amber-300">{candidate.candidateNo}</div>}<div className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-xl bg-slate-950 text-sm font-black text-white shadow-lg">0{candidate.candidateNo}</div>{selected && <div className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-amber-400 text-slate-950 shadow-lg"><Check className="h-5 w-5" /></div>}</div>
           <div className="p-5"><p className="text-[10px] font-black uppercase tracking-[.2em] text-amber-600">Calon nomor {candidate.candidateNo}</p><h3 className="mt-2 text-xl font-black tracking-tight text-slate-950">{candidate.name}</h3>{onSelect && <p className="mt-2 text-xs text-slate-500">{selected ? "Kandidat ini dipilih." : "Klik kartu untuk memilih kandidat ini."}</p>}</div>
         </div>;

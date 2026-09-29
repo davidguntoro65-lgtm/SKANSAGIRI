@@ -447,13 +447,19 @@
   0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
   50% { transform: translate3d(12px, -10px, 0) scale(1.06); }
 }
+@keyframes pilketos-card-reveal {
+  from { opacity: 0; transform: translateY(16px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 .pilketos-fade-up { animation: pilketos-fade-up 700ms cubic-bezier(.22, 1, .36, 1) both; }
 .pilketos-fade-up-delayed { animation: pilketos-fade-up 800ms 120ms cubic-bezier(.22, 1, .36, 1) both; }
+.pilketos-card-reveal { animation: pilketos-card-reveal 650ms cubic-bezier(.22, 1, .36, 1) both; }
 .pilketos-orb { animation: pilketos-orb 8s ease-in-out infinite; }
 .pilketos-orb-delayed { animation: pilketos-orb 10s 1s ease-in-out infinite reverse; }
 @media (prefers-reduced-motion: reduce) {
   .pilketos-fade-up,
   .pilketos-fade-up-delayed,
+  .pilketos-card-reveal,
   .pilketos-orb,
   .pilketos-orb-delayed { animation: none; }
 }

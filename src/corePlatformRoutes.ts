@@ -388,8 +388,16 @@ function moduleScope(actor: LmsActor) {
 
 export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddleware) {
   app.get("/api/v1/pilketos/active", async (req, res) => {
+    // The public landing page also needs to preview candidates while the
+    // committee is still preparing a draft. Prefer the live election, then
+    // fall back to the newest draft so names and photos are visible before
+    // voting opens.
     const election = await db.pilketosElection.findFirst({
       where: { status: "OPEN" },
+      include: { candidates: { orderBy: { candidateNo: "asc" } } },
+      orderBy: { updatedAt: "desc" },
+    }) || await db.pilketosElection.findFirst({
+      where: { status: "DRAFT" },
       include: { candidates: { orderBy: { candidateNo: "asc" } } },
       orderBy: { updatedAt: "desc" },
     });
