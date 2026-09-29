@@ -138,21 +138,6 @@
   color: #475569 !important;
 }
 
-/* Pilketos is a deliberately dark campaign surface, independent of the
-   site's light/dark preference. Keep the global light-mode text conversions
-   from reducing contrast on this page. */
-.light .pilketos-page,
-.light .pilketos-page .text-white {
-  color: #ffffff !important;
-}
-
-.light .pilketos-page h1,
-.light .pilketos-page h2,
-.light .pilketos-page h3,
-.light .pilketos-page h4 {
-  color: #ffffff !important;
-}
-
 .light .text-slate-500 {
   color: #64748b !important;
 }
@@ -453,13 +438,22 @@
 .osdai-dot-2 { animation: osdai-dot 1.4s ease-in-out infinite 0.2s; }
 .osdai-dot-3 { animation: osdai-dot 1.4s ease-in-out infinite 0.4s; }
 
-/* Keep the campaign page readable even when the application preference is
-   light mode. This is intentionally last so it wins over legacy theme rules. */
-html.light main.pilketos-page,
-html.light main.pilketos-page h1,
-html.light main.pilketos-page h2,
-html.light main.pilketos-page h3,
-html.light main.pilketos-page h4,
-html.light main.pilketos-page .text-white {
-  color: #ffffff !important;
+/* E-Pilketos landing motion */
+@keyframes pilketos-fade-up {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pilketos-orb {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(12px, -10px, 0) scale(1.06); }
+}
+.pilketos-fade-up { animation: pilketos-fade-up 700ms cubic-bezier(.22, 1, .36, 1) both; }
+.pilketos-fade-up-delayed { animation: pilketos-fade-up 800ms 120ms cubic-bezier(.22, 1, .36, 1) both; }
+.pilketos-orb { animation: pilketos-orb 8s ease-in-out infinite; }
+.pilketos-orb-delayed { animation: pilketos-orb 10s 1s ease-in-out infinite reverse; }
+@media (prefers-reduced-motion: reduce) {
+  .pilketos-fade-up,
+  .pilketos-fade-up-delayed,
+  .pilketos-orb,
+  .pilketos-orb-delayed { animation: none; }
 }
