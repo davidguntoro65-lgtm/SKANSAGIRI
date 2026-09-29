@@ -6,3 +6,4 @@
 - [Prisma 7 migration & DB architecture](prisma-migration.md) — Migrated from JSON files to PostgreSQL with Prisma 7; all storage now in DB; binaryTargets set for cPanel.
 - [Imported project dependency setup](imported-project-dependencies.md) — Imported repositories may have a lockfile but no node_modules; install declared packages before diagnosing workflow failures.
 - [Prisma 7 TypeScript import quirk](prisma7-typescript-import.md) — With this generated client and bundler resolution, import PrismaClient from @prisma/client/index when the package root type is not exposed.
+- [SPA trailing-slash routing](spa-trailing-slash-routing.md) — Normalize pathname trailing slashes before matching client-side routes, including deployed subpaths.

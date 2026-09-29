@@ -13,6 +13,11 @@ function detectBase(): string {
 
 export const BASE_PATH = detectBase();
 
+function normalizePath(path: string): string {
+  if (path.length <= 1) return "/";
+  return path.replace(/\/+$/, "");
+}
+
 export function navigate(path: string) {
   const full = path === "/" ? BASE_PATH || "/" : BASE_PATH + path;
   window.history.pushState({}, "", full);
@@ -20,9 +25,10 @@ export function navigate(path: string) {
 }
 
 export function getAppPath(): string {
-  const raw = window.location.pathname;
-  if (!BASE_PATH) return raw;
-  if (raw === BASE_PATH) return "/";
-  if (raw.startsWith(BASE_PATH + "/")) return raw.slice(BASE_PATH.length);
+  const raw = normalizePath(window.location.pathname);
+  const base = normalizePath(BASE_PATH || "/");
+  if (base === "/") return raw;
+  if (raw === base) return "/";
+  if (raw.startsWith(base + "/")) return normalizePath(raw.slice(base.length));
   return raw;
 }
