@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from "react";
-import { Brain } from "lucide-react";
+import { Vote } from "lucide-react";
 import Navbar from "./components/Navbar";
 import { GlobalPageBg } from "./components/BackgroundSystem";
 import Hero from "./components/Hero";
@@ -369,12 +369,12 @@ export default function App() {
       {/* What's New — pops up for returning visitors when there are unread articles */}
       <WhatsNewNotification />
 
-      {/* Floating OSDAI Shortcut */}
+      {/* Floating E-VOTE Pilketos 2026 Shortcut */}
       <a
-        href="https://osdai.smkn1wonogiri.sch.id"
+        href="https://smkn1wonogiri.sch.id/id/pilketos"
         target="_blank"
         rel="noopener noreferrer"
-        id="btn-osdai-float"
+        id="btn-evote-float"
         className="osdai-btn fixed bottom-6 right-6 z-50 group flex items-center gap-2.5 pl-3 pr-4 py-3 rounded-2xl font-sans text-white transition-all duration-300 hover:scale-105 active:scale-95 hover:rounded-3xl"
         style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e1b4b 45%, #0c1445 75%, #0f172a 100%)", border: "1px solid rgba(99,102,241,0.55)" }}
       >
@@ -384,17 +384,17 @@ export default function App() {
           style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent)" }}
         />
 
-        {/* Brain icon with ping */}
+        {/* Vote icon with ping */}
         <span className="relative flex items-center justify-center shrink-0 w-8 h-8 rounded-xl"
           style={{ background: "rgba(99,102,241,0.15)" }}>
           <span className="absolute w-5 h-5 rounded-full bg-cyan-400/25 animate-ping" />
-          <Brain className="w-4 h-4 text-cyan-300 relative z-10" />
+          <Vote className="w-4 h-4 text-cyan-300 relative z-10" />
         </span>
 
         {/* Label */}
         <span className="osdai-label flex flex-col leading-none">
-          <span className="text-[11px] font-black tracking-[0.18em] text-white">OSDAI</span>
-          <span className="text-[8px] font-light tracking-[0.1em] text-cyan-300/80 normal-case">Intelligent class</span>
+          <span className="text-[11px] font-black tracking-[0.18em] text-white">E-VOTE</span>
+          <span className="text-[8px] font-light tracking-[0.1em] text-cyan-300/80 normal-case">Pilketos 2026</span>
         </span>
 
         {/* Dots */}
@@ -407,7 +407,7 @@ export default function App() {
         {/* Tooltip on hover */}
         <span className="absolute bottom-full right-0 mb-2 px-3 py-1.5 rounded-xl text-[9px] font-mono tracking-widest uppercase text-white/80 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none whitespace-nowrap"
           style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(99,102,241,0.3)" }}>
-          Buka OSDAI ↗
+          Buka E-VOTE Pilketos ↗
         </span>
       </a>
     </div>
