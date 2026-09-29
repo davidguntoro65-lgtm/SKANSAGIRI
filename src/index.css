@@ -463,3 +463,56 @@
   .pilketos-orb,
   .pilketos-orb-delayed { animation: none; }
 }
+
+/* Admin OSIS clean theme
+ * The OSIS admin surface is intentionally light and neutral. Keep this scoped
+ * so the public OSIS page and the main admin shell retain their own themes.
+ */
+.admin-osis-clean [class*="bg-slate-950"],
+.admin-osis-clean .bg-slate-900,
+.admin-osis-clean .bg-slate-800 {
+  background-color: #ffffff !important;
+}
+
+.admin-osis-clean .bg-slate-700 {
+  background-color: #e2e8f0 !important;
+}
+
+.admin-osis-clean .border-slate-800,
+.admin-osis-clean .border-slate-700 {
+  border-color: #e2e8f0 !important;
+}
+
+.admin-osis-clean .text-white {
+  color: #0f172a !important;
+}
+
+.admin-osis-clean .text-slate-300 {
+  color: #475569 !important;
+}
+
+.admin-osis-clean .text-slate-400,
+.admin-osis-clean .text-slate-500,
+.admin-osis-clean .text-slate-600 {
+  color: #64748b !important;
+}
+
+.admin-osis-clean .bg-blue-600,
+.admin-osis-clean .bg-blue-500,
+.admin-osis-clean .bg-red-600,
+.admin-osis-clean .bg-emerald-600,
+.admin-osis-clean [class*="bg-gradient-to-br"] {
+  color: #ffffff !important;
+}
+
+.admin-osis-clean .bg-blue-600 .text-white,
+.admin-osis-clean .bg-blue-500 .text-white,
+.admin-osis-clean .bg-red-600 .text-white,
+.admin-osis-clean .bg-emerald-600 .text-white,
+.admin-osis-clean [class*="bg-gradient-to-br"] .text-white {
+  color: #ffffff !important;
+}
+
+.admin-osis-clean .bg-slate-800 {
+  box-shadow: inset 0 0 0 1px #e2e8f0;
+}

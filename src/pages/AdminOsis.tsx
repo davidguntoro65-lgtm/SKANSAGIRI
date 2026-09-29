@@ -116,7 +116,7 @@ export default function AdminOsis() {
   const handleUnauth = () => { setIsAuthed(false); localStorage.removeItem("smkn1_adm_token"); };
 
   if (!isAuthed) return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+    <div className="admin-osis-clean min-h-screen bg-slate-950 flex items-center justify-center p-4">
       <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center mx-auto mb-3">
@@ -151,7 +151,7 @@ export default function AdminOsis() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-950 flex">
+    <div className="admin-osis-clean min-h-screen bg-slate-950 flex">
       {/* Toast */}
       <AnimatePresence>
         {toast && (
