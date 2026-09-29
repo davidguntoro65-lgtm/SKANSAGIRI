@@ -367,6 +367,17 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
               <ArrowUpRight className="w-4 h-4 text-slate-950 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
             </a>
 
+            <a
+              href="/siswa"
+              onClick={(e) => { e.preventDefault(); navigate("/siswa"); }}
+              className={`flex items-center gap-2 rounded-full border px-4 py-2.5 text-xs font-bold uppercase tracking-widest transition-all ${
+                isDark ? "border-white/10 text-slate-200 hover:border-amber-400 hover:text-amber-300" : "border-slate-200 text-slate-700 hover:border-amber-500 hover:text-amber-700"
+              }`}
+              id="btn-siswa-desktop"
+            >
+              <GraduationCap className="h-4 w-4" /> Portal siswa
+            </a>
+
             <button
               onClick={toggleTheme}
               className={`flex items-center justify-center w-10 h-10 rounded-full border transition-all shadow-md cursor-pointer hover:scale-105 active:scale-95 z-50 ${
@@ -493,6 +504,15 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
               </a>
             );
           })}
+
+          <a
+            href="/siswa"
+            onClick={(e) => { e.preventDefault(); navigate("/siswa"); setIsOpen(false); }}
+            className="flex items-center gap-2 rounded-full border border-amber-500/40 px-5 py-3 text-base font-serif tracking-widest text-amber-300 transition-all hover:bg-amber-500/10"
+            id="btn-siswa-mobile"
+          >
+            <GraduationCap className="h-4 w-4" /> Portal Siswa
+          </a>
 
           {/* Mobile AKTIFITAS Accordion */}
           <div className="w-full">

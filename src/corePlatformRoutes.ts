@@ -29,7 +29,7 @@ const TEMPLATE_DEFINITIONS: Record<ImportType, { label: string; headers: string[
   guru: { label: "Guru", headers: ["nip", "namaLengkap", "email", "noHp", "status"] },
   siswa: {
     label: "Siswa",
-    headers: ["nisn", "namaLengkap", "email", "noHp", "jenisKelamin", "tempatLahir", "tanggalLahir", "kodeKelas", "kodeTahunAjaran", "status"],
+    headers: ["nisn", "nis", "namaLengkap", "email", "noTelp", "jenisKelamin", "tempatLahir", "tanggalLahir", "kodeKelas", "kodeTahunAjaran", "password", "status"],
   },
   "assignment-guru": { label: "Assignment Guru", headers: ["nip", "kodeMapel", "kodeKelas", "kodeTahunAjaran", "status"] },
   "enrollment-siswa": { label: "Enrollment Siswa", headers: ["nisn", "kodeKelas", "kodeTahunAjaran", "status"] },
@@ -41,7 +41,7 @@ const REQUIRED_HEADERS: Record<ImportType, string[]> = {
   mapel: ["code", "name"],
   kelas: ["code", "name", "tingkat", "kodeTahunAjaran"],
   guru: ["nip", "namaLengkap"],
-  siswa: ["nisn", "namaLengkap", "kodeKelas", "kodeTahunAjaran"],
+  siswa: ["nisn", "nis", "namaLengkap", "kodeKelas", "kodeTahunAjaran", "password"],
   "assignment-guru": ["nip", "kodeMapel", "kodeKelas", "kodeTahunAjaran"],
   "enrollment-siswa": ["nisn", "kodeKelas", "kodeTahunAjaran"],
 };
@@ -58,6 +58,22 @@ function fail(res: Response, status: number, code: string, message: string, fiel
 
 function clean(value: unknown) {
   return String(value ?? "").trim();
+}
+
+function hashPassword(password: string, salt = crypto.randomBytes(16).toString("hex")) {
+  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
+  return `${salt}:${hash}`;
+}
+
+function studentAccountEmail(nis: string) {
+  return `siswa.${nis.toLowerCase().replace(/[^a-z0-9._-]/g, "-")}@akun.smkn1wonogiri.local`;
+}
+
+function maskPreviewRows(rows: PreviewRow[]) {
+  return rows.map((row) => ({
+    ...row,
+    values: Object.fromEntries(Object.entries(row.values).map(([key, value]) => [key, key === "password" && clean(value) ? "••••••••" : value])),
+  }));
 }
 
 function asBoolean(value: unknown) {
@@ -87,7 +103,11 @@ function parseWorkbook(fileBase64: string, type: ImportType) {
   if (missing.length) throw new Error(`Header wajib tidak lengkap: ${missing.join(", ")}.`);
   const rows = matrix.slice(1).map((row) => {
     const values: Record<string, unknown> = {};
-    definition.headers.forEach((header, index) => { values[header] = (row as unknown[])[headerRow.indexOf(header)] ?? ""; });
+    definition.headers.forEach((header) => {
+      const aliases = header === "noTelp" ? ["noTelp", "noHp"] : [header];
+      const sourceHeader = aliases.find((candidate) => headerRow.includes(candidate));
+      values[header] = sourceHeader ? (row as unknown[])[headerRow.indexOf(sourceHeader)] ?? "" : "";
+    });
     return values;
   }).filter((row) => Object.values(row).some((value) => clean(value)));
   return { checksum, rows };
@@ -100,7 +120,7 @@ async function referenceMaps() {
     db.subject.findMany({ select: { id: true, code: true } }),
     db.academicClass.findMany({ select: { id: true, code: true, academicYearId: true } }),
     db.coreTeacher.findMany({ select: { id: true, nip: true } }),
-    db.coreStudent.findMany({ select: { id: true, nisn: true } }),
+    db.coreStudent.findMany({ select: { id: true, nisn: true, nis: true } }),
   ]);
   return {
     years: new Map(years.map((item) => [item.code, item])),
@@ -109,6 +129,7 @@ async function referenceMaps() {
     classes: new Map(classes.map((item) => [item.code, item])),
     teachers: new Map(teachers.map((item) => [item.nip, item])),
     students: new Map(students.map((item) => [item.nisn, item])),
+    studentsByNis: new Map(students.filter((item) => item.nis).map((item) => [item.nis!, item])),
   };
 }
 
@@ -123,7 +144,7 @@ async function validateRows(type: ImportType, rows: Record<string, unknown>[]): 
       case "mapel": return clean(values.code);
       case "kelas": return clean(values.code);
       case "guru": return clean(values.nip);
-      case "siswa": return clean(values.nisn);
+      case "siswa": return [values.nisn, values.nis].map(clean).join("|");
       case "assignment-guru": return [values.nip, values.kodeMapel, values.kodeKelas, values.kodeTahunAjaran].map(clean).join("|");
       case "enrollment-siswa": return [values.nisn, values.kodeKelas, values.kodeTahunAjaran].map(clean).join("|");
     }
@@ -137,6 +158,8 @@ async function validateRows(type: ImportType, rows: Record<string, unknown>[]): 
     seen.add(key);
     if (type === "guru" && clean(values.email) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean(values.email))) errors.push("Format email tidak valid.");
     if (type === "siswa" && clean(values.email) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean(values.email))) errors.push("Format email tidak valid.");
+    if (type === "siswa" && clean(values.password).length < 8) errors.push("Password awal wajib diisi minimal 8 karakter.");
+    if (type === "siswa" && refs.studentsByNis.has(clean(values.nis)) && refs.studentsByNis.get(clean(values.nis))?.nisn !== clean(values.nisn)) errors.push(`NIS "${clean(values.nis)}" sudah digunakan siswa lain.`);
     if (type === "siswa" && clean(values.tanggalLahir) && !parseDate(values.tanggalLahir)) errors.push("Format tanggalLahir tidak valid.");
     if (type === "kelas" && clean(values.kodeTahunAjaran) && !refs.years.has(clean(values.kodeTahunAjaran))) errors.push(`Kode tahun ajaran "${clean(values.kodeTahunAjaran)}" tidak ditemukan.`);
     if (type === "kelas" && clean(values.kodeJurusan) && !refs.departments.has(clean(values.kodeJurusan))) errors.push(`Kode jurusan "${clean(values.kodeJurusan)}" tidak ditemukan.`);
@@ -207,7 +230,26 @@ async function commitRows(type: ImportType, rows: PreviewRow[], actor: string) {
           await tx.coreUserRole.upsert({ where: { userId_roleId: { userId: user.id, roleId: role.id } }, update: {}, create: { userId: user.id, roleId: role.id } });
         }
       } else if (type === "siswa") {
-        const student = await tx.coreStudent.upsert({ where: { nisn: clean(values.nisn) }, update: { fullName: clean(values.namaLengkap), email: clean(values.email) || null, phone: clean(values.noHp) || null, gender: clean(values.jenisKelamin) || null, birthPlace: clean(values.tempatLahir) || null, birthDate: parseDate(values.tanggalLahir), status }, create: { nisn: clean(values.nisn), fullName: clean(values.namaLengkap), email: clean(values.email) || null, phone: clean(values.noHp) || null, gender: clean(values.jenisKelamin) || null, birthPlace: clean(values.tempatLahir) || null, birthDate: parseDate(values.tanggalLahir), status } });
+        const nisn = clean(values.nisn);
+        const nis = clean(values.nis);
+        const email = clean(values.email).toLowerCase() || null;
+        const phone = clean(values.noTelp || values.noHp) || null;
+        const initialPassword = clean(values.password);
+        const student = await tx.coreStudent.upsert({
+          where: { nisn },
+          update: { nis, fullName: clean(values.namaLengkap), email, phone, gender: clean(values.jenisKelamin) || null, birthPlace: clean(values.tempatLahir) || null, birthDate: parseDate(values.tanggalLahir), status },
+          create: { nisn, nis, fullName: clean(values.namaLengkap), email, phone, gender: clean(values.jenisKelamin) || null, birthPlace: clean(values.tempatLahir) || null, birthDate: parseDate(values.tanggalLahir), status },
+        });
+        const existingUser = student.userId ? await tx.coreUser.findUnique({ where: { id: student.userId } }) : null;
+        const accountEmail = email || existingUser?.email || studentAccountEmail(nis);
+        const emailOwner = await tx.coreUser.findUnique({ where: { email: accountEmail } });
+        if (emailOwner && emailOwner.id !== existingUser?.id) throw new Error(`Email akun siswa "${accountEmail}" sudah digunakan akun lain.`);
+        const coreUser = existingUser
+          ? await tx.coreUser.update({ where: { id: existingUser.id }, data: { ...(email ? { email } : {}), fullName: clean(values.namaLengkap), status: status === "ACTIVE" ? "ACTIVE" : "DISABLED", passwordHash: hashPassword(initialPassword), passwordChangeRecommended: true } })
+          : await tx.coreUser.create({ data: { email: accountEmail, fullName: clean(values.namaLengkap), status: status === "ACTIVE" ? "ACTIVE" : "DISABLED", passwordHash: hashPassword(initialPassword), passwordChangeRecommended: true } });
+        await tx.coreStudent.update({ where: { id: student.id }, data: { userId: coreUser.id } });
+        const role = await tx.coreRole.upsert({ where: { name: "SISWA" }, update: {}, create: { name: "SISWA" } });
+        await tx.coreUserRole.upsert({ where: { userId_roleId: { userId: coreUser.id, roleId: role.id } }, update: {}, create: { userId: coreUser.id, roleId: role.id } });
         const year = await tx.academicYear.findUnique({ where: { code: clean(values.kodeTahunAjaran) } });
         const classroom = await tx.academicClass.findUnique({ where: { code: clean(values.kodeKelas) } });
         if (year && classroom) await tx.studentEnrollment.upsert({ where: { studentId_academicYearId: { studentId: student.id, academicYearId: year.id } }, update: { classId: classroom.id, status }, create: { studentId: student.id, classId: classroom.id, academicYearId: year.id, status } });
@@ -431,7 +473,7 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
       db.subject.findMany({ where: contains ? { OR: [{ code: contains }, { name: contains }] } : undefined, include: { department: true }, orderBy: { code: "asc" } }),
       db.academicClass.findMany({ where: contains ? { OR: [{ code: contains }, { name: contains }] } : undefined, include: { academicYear: true, department: true }, orderBy: { code: "asc" } }),
       db.coreTeacher.findMany({ where: contains ? { OR: [{ nip: contains }, { fullName: contains }] } : undefined, orderBy: { nip: "asc" }, skip: (page - 1) * pageSize, take: pageSize }),
-      db.coreStudent.findMany({ where: contains ? { OR: [{ nisn: contains }, { fullName: contains }] } : undefined, orderBy: { nisn: "asc" }, skip: (page - 1) * pageSize, take: pageSize }),
+      db.coreStudent.findMany({ where: contains ? { OR: [{ nisn: contains }, { nis: contains }, { fullName: contains }] } : undefined, orderBy: { nisn: "asc" }, skip: (page - 1) * pageSize, take: pageSize }),
     ]);
     return ok(res, { academicYears, departments, subjects, classes, teachers, students, page, pageSize, search });
   });
@@ -758,8 +800,8 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
       const parsed = parseWorkbook(fileBase64, type);
       const rows = await validateRows(type, parsed.rows);
       const errorRows = rows.filter((row) => row.status === "ERROR" || row.status === "DUPLICATE").length;
-      const job = await db.coreImportJob.create({ data: { templateType: type, fileName: clean(fileName), fileChecksum: parsed.checksum, status: "PREVIEWED", totalRows: rows.length, successRows: rows.length - errorRows, errorRows, errors: rows.filter((row) => row.errors.length).slice(0, 200) as any, uploadedBy: "ADMIN_SESSION" } });
-      return ok(res, { jobId: job.id, templateType: type, fileName: job.fileName, rows: rows.slice(0, 200), totalRows: rows.length, validRows: job.successRows, errorRows });
+      const job = await db.coreImportJob.create({ data: { templateType: type, fileName: clean(fileName), fileChecksum: parsed.checksum, status: "PREVIEWED", totalRows: rows.length, successRows: rows.length - errorRows, errorRows, errors: maskPreviewRows(rows.filter((row) => row.errors.length).slice(0, 200)) as any, uploadedBy: "ADMIN_SESSION" } });
+      return ok(res, { jobId: job.id, templateType: type, fileName: job.fileName, rows: maskPreviewRows(rows.slice(0, 200)), totalRows: rows.length, validRows: job.successRows, errorRows });
     } catch (error) {
       return fail(res, 400, "PREVIEW_FAILED", error instanceof Error ? error.message : "File gagal diproses.");
     }
@@ -777,7 +819,7 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
       if (parsed.checksum !== job.fileChecksum) return fail(res, 409, "CHECKSUM_MISMATCH", "File berbeda dari file saat preview.");
       const rows = await validateRows(type, parsed.rows);
       const invalid = rows.filter((row) => row.status === "ERROR" || row.status === "DUPLICATE");
-      if (invalid.length) return fail(res, 422, "VALIDATION_FAILED", "Perbaiki semua error sebelum commit.", { errors: invalid.slice(0, 200) });
+      if (invalid.length) return fail(res, 422, "VALIDATION_FAILED", "Perbaiki semua error sebelum commit.", { errors: maskPreviewRows(invalid.slice(0, 200)) });
       const successRows = await commitRows(type, rows, "ADMIN_SESSION");
       const updated = await db.coreImportJob.update({ where: { id: job.id }, data: { status: "COMMITTED", successRows, errorRows: 0, committedAt: new Date() } });
       return ok(res, { jobId: updated.id, status: updated.status, successRows });

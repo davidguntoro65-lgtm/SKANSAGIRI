@@ -320,35 +320,58 @@ function hashToken(token: string) {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
+function publicCoreUser(user: any) {
+  return {
+    id: user.id,
+    email: user.email,
+    fullName: user.fullName,
+    status: user.status,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+    roles: user.roles?.map(({ role }: any) => role.name) || [],
+    teacher: user.teacher || null,
+    student: user.student || null,
+  };
+}
+
 app.post("/api/v1/auth/login", async (req, res) => {
   const ip = (req.headers["x-forwarded-for"] as string || req.socket.remoteAddress || "unknown").split(",")[0].trim();
   const { allowed, secondsLeft } = checkRateLimit(ip);
   if (!allowed) return res.status(429).json({ success: false, error: { code: "RATE_LIMITED", message: `Terlalu banyak percobaan login. Coba lagi dalam ${secondsLeft} detik.` } });
-  const email = String(req.body.email || "").trim().toLowerCase();
+  const identifier = String(req.body.identifier || req.body.email || "").trim();
+  const email = identifier.toLowerCase();
   const password = String(req.body.password || "");
-  const user = email ? await db.coreUser.findUnique({ where: { email }, include: { roles: { include: { role: true } }, teacher: true, student: true } }) : null;
+  const userInclude = { roles: { include: { role: true } }, teacher: true, student: true } as const;
+  let user = email ? await db.coreUser.findUnique({ where: { email }, include: userInclude }) : null;
+  if (!user && identifier) user = await db.coreUser.findFirst({ where: { student: { is: { nis: identifier } } }, include: userInclude });
+  if (!user && identifier) user = await db.coreUser.findFirst({ where: { student: { is: { nisn: identifier } } }, include: userInclude });
   if (!user || user.status !== "ACTIVE" || !verifyPassword(password, user.passwordHash)) {
     recordFailedAttempt(ip);
-    return res.status(401).json({ success: false, error: { code: "INVALID_CREDENTIALS", message: "Email atau password tidak valid." } });
+    return res.status(401).json({ success: false, error: { code: "INVALID_CREDENTIALS", message: "Email, NIS/NISN, atau password tidak valid." } });
   }
   clearAttempts(ip);
   const token = crypto.randomBytes(48).toString("hex");
   await addSession(token, user.id);
-  return res.json({ success: true, data: { token, user: { id: user.id, email: user.email, fullName: user.fullName, roles: user.roles.map(({ role }) => role.name), teacher: user.teacher, student: user.student } } });
+  const passwordChangeOffer = Boolean(user.student && user.passwordChangeRecommended);
+  if (passwordChangeOffer) {
+    await db.coreUser.update({ where: { id: user.id }, data: { passwordChangeRecommended: false } });
+    await db.coreAuditLog.create({ data: { action: "PASSWORD_CHANGE_OFFERED", entity: "CoreUser", entityId: user.id, actor: user.id, userId: user.id, metadata: { role: "SISWA" } as any } });
+  }
+  return res.json({ success: true, data: { token, user: publicCoreUser(user), passwordChangeOffer } });
 });
 
 app.get("/api/v1/auth/session", async (req, res) => {
   const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
   const session = token ? await db.session.findUnique({ where: { token }, include: { coreUser: { include: { roles: { include: { role: true } }, teacher: true, student: true } } } }) : null;
   if (!session || session.expiresAt < new Date() || !session.coreUser) return res.status(401).json({ success: false, error: { code: "UNAUTHENTICATED", message: "Session tidak valid." } });
-  return res.json({ success: true, data: { user: { ...session.coreUser, roles: session.coreUser.roles.map(({ role }) => role.name) } } });
+  return res.json({ success: true, data: { user: publicCoreUser(session.coreUser) } });
 });
 
 app.get("/api/v1/me", async (req, res) => {
   const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
   const session = token ? await db.session.findUnique({ where: { token }, include: { coreUser: { include: { roles: { include: { role: true } }, teacher: true, student: true } } } }) : null;
   if (!session?.coreUser || session.expiresAt < new Date()) return res.status(401).json({ success: false, error: { code: "UNAUTHENTICATED", message: "Session tidak valid." } });
-  return res.json({ success: true, data: { ...session.coreUser, roles: session.coreUser.roles.map(({ role }) => role.name) } });
+  return res.json({ success: true, data: publicCoreUser(session.coreUser) });
 });
 
 app.post("/api/v1/auth/activate", async (req, res) => {
@@ -370,9 +393,15 @@ app.post("/api/v1/auth/change-password", async (req, res) => {
   if (newPassword.length < 8) return res.status(400).json({ success: false, error: { code: "INVALID_PASSWORD", message: "Password baru minimal 8 karakter." } });
   const user = await db.coreUser.findUnique({ where: { id: session.coreUserId } });
   if (!user || !verifyPassword(String(req.body.currentPassword || ""), user.passwordHash)) return res.status(401).json({ success: false, error: { code: "INVALID_PASSWORD", message: "Password saat ini salah." } });
-  await db.coreUser.update({ where: { id: user.id }, data: { passwordHash: hashPassword(newPassword) } });
+  await db.coreUser.update({ where: { id: user.id }, data: { passwordHash: hashPassword(newPassword), passwordChangeRecommended: false } });
   await db.coreAuditLog.create({ data: { action: "USER_STATUS_CHANGE", entity: "CoreUser", entityId: user.id, actor: user.id, metadata: { action: "PASSWORD_CHANGED" } as any, userId: user.id } });
   return res.json({ success: true, data: { message: "Password berhasil diubah." } });
+});
+
+app.post("/api/v1/auth/logout", async (req, res) => {
+  const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
+  if (token) await removeSession(token);
+  return res.json({ success: true, data: { message: "Logout berhasil." } });
 });
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
