@@ -85,7 +85,9 @@ npx tsx scripts/seed-from-json.ts  # one-time: import existing data/ JSON files 
 - `/` — Public homepage
 - `/berita` — News & articles page
 - `/adm-panel` — Satu-satunya shell admin: login, content management, dan Core Platform akademik
+- `/guru` — Portal guru untuk mengelola modul kurikulum berdasarkan assignment
 - `/api/v1/akademik/*` — Backend API internal untuk master data, import XLS, audit, dan approval assignment guru
+- `/api/v1/lms/guru/*` — Context assignment, dashboard, dan lifecycle modul kurikulum
 - `/admin/akademik` — URL lama yang diarahkan ke `/adm-panel` untuk kompatibilitas
 
 ## Core Platform (Wave 1)
@@ -130,6 +132,18 @@ Core Platform juga menyediakan identity session server-side:
 Semua endpoint Core Platform memerlukan session admin existing. Import menerima file XLS/XLSX melalui payload base64 maksimum 10 MB, menyimpan checksum dan audit log, dan tidak menulis data sebelum tahap commit.
 
 Dashboard `/admin/akademik` saat ini mencakup CRUD manual tahun ajaran/jurusan/mapel/kelas, pencarian master, preview dan commit import, history/error report, review pengajuan dengan catatan, serta audit activity feed. Migration identity tambahan perlu diterapkan dengan `npx prisma migrate deploy`.
+
+## Roadmap position
+
+Wave 1 (Core Platform) sudah memiliki identity/session server-side, master akademik, import XLS preview-first, assignment/enrollment, approval, dan audit log. Wave 2 Sprint 5 sekarang tersedia sebagai vertical slice:
+
+- Model `CurriculumModule` dan `CurriculumModuleAsset` di Prisma.
+- Portal guru dengan login Core Identity dan halaman `/guru`.
+- Guru dapat membuat, mengedit, mengirim review, menerbitkan, dan mengarsipkan modul.
+- Scope modul divalidasi server-side terhadap teaching assignment; draft tidak otomatis dianggap tersedia untuk siswa.
+- Perubahan lifecycle modul dicatat sebagai audit event.
+
+Upload PDF/DOCX, storage adapter, ingestion job, parser preview, dan AI/RAG belum diaktifkan pada slice ini. Itu adalah pekerjaan Sprint 6–8 dan harus ditambahkan setelah fondasi modul ini dipakai serta diuji.
 
 ## Build for production
 

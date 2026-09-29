@@ -29,11 +29,11 @@ model AdminCredential {
 
 // ── Session store (replaces sessions.json) ────────────────────────────────────
 model Session {
-  token     String   @id
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+  token      String    @id
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
   coreUserId String?
-  coreUser  CoreUser? @relation(fields: [coreUserId], references: [id], onDelete: Cascade)
+  coreUser   CoreUser? @relation(fields: [coreUserId], references: [id], onDelete: Cascade)
 }
 
 // ── Tracer study submissions ───────────────────────────────────────────────────
@@ -264,6 +264,13 @@ enum AssignmentSource {
   TEACHER_REQUEST
 }
 
+enum CurriculumModuleStatus {
+  DRAFT
+  REVIEW
+  PUBLISHED
+  ARCHIVED
+}
+
 enum TeacherRequestStatus {
   DRAFT
   SUBMITTED
@@ -279,21 +286,21 @@ enum ImportStatus {
 }
 
 model CoreUser {
-  id                    String         @id @default(uuid())
-  email                 String         @unique
-  fullName              String
-  status                CoreUserStatus @default(INVITED)
-  passwordHash          String?
-  activationTokenHash   String?
-  activationExpiresAt   DateTime?
-  activatedAt           DateTime?
-  createdAt             DateTime       @default(now())
-  updatedAt             DateTime       @updatedAt
-  roles                 CoreUserRole[]
-  teacher               CoreTeacher?
-  student               CoreStudent?
-  auditLogs             CoreAuditLog[]
-  sessions              Session[]
+  id                  String         @id @default(uuid())
+  email               String         @unique
+  fullName            String
+  status              CoreUserStatus @default(INVITED)
+  passwordHash        String?
+  activationTokenHash String?
+  activationExpiresAt DateTime?
+  activatedAt         DateTime?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  roles               CoreUserRole[]
+  teacher             CoreTeacher?
+  student             CoreStudent?
+  auditLogs           CoreAuditLog[]
+  sessions            Session[]
 }
 
 model CoreRole {
@@ -314,17 +321,18 @@ model CoreUserRole {
 }
 
 model AcademicYear {
-  id          String                    @id @default(uuid())
-  code        String                    @unique
-  name        String
-  isActive    Boolean                   @default(false)
-  status      CoreRecordStatus          @default(ACTIVE)
-  createdAt   DateTime                  @default(now())
-  updatedAt   DateTime                  @updatedAt
-  classes     AcademicClass[]
-  assignments TeachingAssignment[]
-  requests    TeacherSelectionRequest[]
-  enrollments StudentEnrollment[]
+  id                String                    @id @default(uuid())
+  code              String                    @unique
+  name              String
+  isActive          Boolean                   @default(false)
+  status            CoreRecordStatus          @default(ACTIVE)
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  classes           AcademicClass[]
+  assignments       TeachingAssignment[]
+  requests          TeacherSelectionRequest[]
+  enrollments       StudentEnrollment[]
+  curriculumModules CurriculumModule[]
 }
 
 model Department {
@@ -339,17 +347,18 @@ model Department {
 }
 
 model Subject {
-  id            String                 @id @default(uuid())
-  code          String                 @unique
-  name          String
-  departmentId  String?
-  status        CoreRecordStatus       @default(ACTIVE)
-  createdAt     DateTime               @default(now())
-  updatedAt     DateTime               @updatedAt
-  department    Department?            @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  assignments   TeachingAssignment[]
-  teacherSkills TeacherSubject[]
-  requestItems  TeacherSelectionItem[]
+  id                String                 @id @default(uuid())
+  code              String                 @unique
+  name              String
+  departmentId      String?
+  status            CoreRecordStatus       @default(ACTIVE)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  department        Department?            @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  assignments       TeachingAssignment[]
+  teacherSkills     TeacherSubject[]
+  requestItems      TeacherSelectionItem[]
+  curriculumModules CurriculumModule[]
 }
 
 model AcademicClass {
@@ -386,8 +395,43 @@ model CoreTeacher {
   assignments       TeachingAssignment[]
   selectionRequests TeacherSelectionRequest[]
   homeroomClasses   AcademicClass[]           @relation("HomeroomClasses")
+  curriculumModules CurriculumModule[]        @relation("CurriculumModuleOwner")
   createdAt         DateTime                  @default(now())
   updatedAt         DateTime                  @updatedAt
+}
+
+model CurriculumModule {
+  id             String                  @id @default(uuid())
+  title          String
+  description    String                  @default("")
+  phase          String
+  element        String
+  subjectId      String
+  academicYearId String
+  ownerTeacherId String
+  status         CurriculumModuleStatus  @default(DRAFT)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  subject        Subject                 @relation(fields: [subjectId], references: [id])
+  academicYear   AcademicYear            @relation(fields: [academicYearId], references: [id])
+  ownerTeacher   CoreTeacher             @relation("CurriculumModuleOwner", fields: [ownerTeacherId], references: [id])
+  assets         CurriculumModuleAsset[]
+
+  @@index([ownerTeacherId, status])
+  @@index([academicYearId, status])
+  @@index([subjectId, status])
+}
+
+model CurriculumModuleAsset {
+  id          String           @id @default(uuid())
+  moduleId    String
+  fileName    String
+  mimeType    String
+  storagePath String?
+  createdAt   DateTime         @default(now())
+  module      CurriculumModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@index([moduleId])
 }
 
 model CoreStudent {

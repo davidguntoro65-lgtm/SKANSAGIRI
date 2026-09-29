@@ -237,7 +237,178 @@ async function commitRows(type: ImportType, rows: PreviewRow[], actor: string) {
   });
 }
 
+type LmsActor = {
+  userId: string;
+  roles: string[];
+  teacher: { id: string; nip: string; fullName: string } | null;
+};
+
+async function getLmsActor(req: Request): Promise<LmsActor | null> {
+  const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
+  if (!token) return null;
+  const session = await db.session.findUnique({
+    where: { token },
+    include: { coreUser: { include: { roles: { include: { role: true } }, teacher: true } } },
+  });
+  if (!session?.coreUser || session.expiresAt < new Date() || session.coreUser.status !== "ACTIVE") return null;
+  return {
+    userId: session.coreUser.id,
+    roles: session.coreUser.roles.map(({ role }) => role.name),
+    teacher: session.coreUser.teacher ? {
+      id: session.coreUser.teacher.id,
+      nip: session.coreUser.teacher.nip,
+      fullName: session.coreUser.teacher.fullName,
+    } : null,
+  };
+}
+
+function canManageAllLms(roles: string[]) {
+  return roles.includes("ADMIN") || roles.includes("OPERATOR");
+}
+
+function moduleScope(actor: LmsActor) {
+  return canManageAllLms(actor.roles) ? {} : { ownerTeacherId: actor.teacher?.id || "__missing_teacher__" };
+}
+
 export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddleware) {
+  // Wave 2 / Sprint 5: curriculum module foundation. Upload and ingestion are
+  // intentionally separate follow-up stages so a module can be managed safely
+  // before introducing long-running file jobs.
+  app.get("/api/v1/lms/guru/context", requireAuth, async (req, res) => {
+    const actor = await getLmsActor(req);
+    if (!actor) return fail(res, 401, "UNAUTHENTICATED", "Session guru tidak valid.");
+    if (!actor.teacher && !canManageAllLms(actor.roles)) return fail(res, 403, "TEACHER_PROFILE_REQUIRED", "Akun belum terhubung ke profil guru.");
+    const assignments = actor.teacher
+      ? await db.teachingAssignment.findMany({
+          where: { teacherId: actor.teacher.id, status: "ACTIVE" },
+          include: { subject: true, academicClass: true, academicYear: true },
+          orderBy: [{ academicYear: { code: "desc" } }, { subject: { name: "asc" } }],
+        })
+      : [];
+    const years = await db.academicYear.findMany({ where: { status: "ACTIVE" }, orderBy: { code: "desc" } });
+    return ok(res, { teacher: actor.teacher, assignments, years, roles: actor.roles });
+  });
+
+  app.get("/api/v1/lms/guru/dashboard", requireAuth, async (req, res) => {
+    const actor = await getLmsActor(req);
+    if (!actor) return fail(res, 401, "UNAUTHENTICATED", "Session guru tidak valid.");
+    if (!actor.teacher && !canManageAllLms(actor.roles)) return fail(res, 403, "TEACHER_PROFILE_REQUIRED", "Akun belum terhubung ke profil guru.");
+    const scope = moduleScope(actor);
+    const [total, drafts, reviews, published, archived, recent] = await Promise.all([
+      db.curriculumModule.count({ where: scope }),
+      db.curriculumModule.count({ where: { ...scope, status: "DRAFT" } }),
+      db.curriculumModule.count({ where: { ...scope, status: "REVIEW" } }),
+      db.curriculumModule.count({ where: { ...scope, status: "PUBLISHED" } }),
+      db.curriculumModule.count({ where: { ...scope, status: "ARCHIVED" } }),
+      db.curriculumModule.findMany({
+        where: scope,
+        include: { subject: true, academicYear: true },
+        orderBy: { updatedAt: "desc" },
+        take: 5,
+      }),
+    ]);
+    return ok(res, { totals: { total, drafts, reviews, published, archived }, recent });
+  });
+
+  app.get("/api/v1/lms/guru/modul", requireAuth, async (req, res) => {
+    const actor = await getLmsActor(req);
+    if (!actor) return fail(res, 401, "UNAUTHENTICATED", "Session guru tidak valid.");
+    if (!actor.teacher && !canManageAllLms(actor.roles)) return fail(res, 403, "TEACHER_PROFILE_REQUIRED", "Akun belum terhubung ke profil guru.");
+    const search = clean(req.query.search);
+    const status = clean(req.query.status).toUpperCase();
+    const scope = moduleScope(actor);
+    const where = {
+      ...scope,
+      ...(status && ["DRAFT", "REVIEW", "PUBLISHED", "ARCHIVED"].includes(status) ? { status: status as "DRAFT" | "REVIEW" | "PUBLISHED" | "ARCHIVED" } : {}),
+      ...(search ? { OR: [{ title: { contains: search, mode: "insensitive" as const } }, { phase: { contains: search, mode: "insensitive" as const } }, { element: { contains: search, mode: "insensitive" as const } }] } : {}),
+    };
+    const items = await db.curriculumModule.findMany({
+      where,
+      include: { subject: true, academicYear: true, ownerTeacher: { select: { fullName: true, nip: true } }, _count: { select: { assets: true } } },
+      orderBy: { updatedAt: "desc" },
+    });
+    return ok(res, { items });
+  });
+
+  app.post("/api/v1/lms/guru/modul", requireAuth, async (req, res) => {
+    const actor = await getLmsActor(req);
+    if (!actor) return fail(res, 401, "UNAUTHENTICATED", "Session guru tidak valid.");
+    if (!actor.teacher) return fail(res, 403, "TEACHER_PROFILE_REQUIRED", "Akun belum terhubung ke profil guru.");
+    const title = clean(req.body.title);
+    const phase = clean(req.body.phase);
+    const element = clean(req.body.element);
+    const description = clean(req.body.description);
+    const subjectId = clean(req.body.subjectId);
+    const academicYearId = clean(req.body.academicYearId);
+    if (!title || !phase || !element || !subjectId || !academicYearId) return fail(res, 400, "REQUIRED_FIELD", "Judul, fase, elemen, mapel, dan tahun ajaran wajib diisi.");
+    const assignment = await db.teachingAssignment.findFirst({ where: { teacherId: actor.teacher.id, subjectId, academicYearId, status: "ACTIVE" } });
+    if (!assignment) return fail(res, 403, "ASSIGNMENT_REQUIRED", "Modul hanya dapat dibuat untuk mapel dan tahun ajaran yang menjadi assignment Anda.");
+    const [subject, academicYear] = await Promise.all([
+      db.subject.findUnique({ where: { id: subjectId } }),
+      db.academicYear.findUnique({ where: { id: academicYearId } }),
+    ]);
+    if (!subject || !academicYear) return fail(res, 422, "REFERENCE_NOT_FOUND", "Mapel atau tahun ajaran tidak ditemukan.");
+    const item = await db.$transaction(async (tx) => {
+      const created = await tx.curriculumModule.create({
+        data: { title, phase, element, description, subjectId, academicYearId, ownerTeacherId: actor.teacher!.id, status: "DRAFT" },
+        include: { subject: true, academicYear: true },
+      });
+      await tx.coreAuditLog.create({ data: { action: "CURRICULUM_MODULE_CREATE", entity: "CurriculumModule", entityId: created.id, actor: actor.userId, userId: actor.userId, metadata: { title, subjectId, academicYearId } } });
+      return created;
+    });
+    return res.status(201).json({ success: true, data: item });
+  });
+
+  app.patch("/api/v1/lms/guru/modul/:moduleId", requireAuth, async (req, res) => {
+    const actor = await getLmsActor(req);
+    if (!actor?.teacher) return fail(res, actor ? 403 : 401, actor ? "TEACHER_PROFILE_REQUIRED" : "UNAUTHENTICATED", actor ? "Akun belum terhubung ke profil guru." : "Session guru tidak valid.");
+    const current = await db.curriculumModule.findFirst({ where: { id: req.params.moduleId, ownerTeacherId: actor.teacher.id } });
+    if (!current) return fail(res, 404, "MODULE_NOT_FOUND", "Modul tidak ditemukan.");
+    if (current.status === "ARCHIVED" || current.status === "PUBLISHED") return fail(res, 409, "MODULE_LOCKED", "Modul terbit atau arsip tidak dapat diedit langsung.");
+    const data: Record<string, string> = {};
+    for (const key of ["title", "description", "phase", "element"]) if (req.body[key] !== undefined) data[key] = clean(req.body[key]);
+    if (data.title === "" || data.phase === "" || data.element === "") return fail(res, 400, "REQUIRED_FIELD", "Judul, fase, dan elemen tidak boleh kosong.");
+    if (req.body.status !== undefined && ["DRAFT", "REVIEW"].includes(clean(req.body.status).toUpperCase())) data.status = clean(req.body.status).toUpperCase();
+    const item = await db.$transaction(async (tx) => {
+      const updated = await tx.curriculumModule.update({ where: { id: current.id }, data: data as any, include: { subject: true, academicYear: true } });
+      await tx.coreAuditLog.create({ data: { action: "CURRICULUM_MODULE_UPDATE", entity: "CurriculumModule", entityId: updated.id, actor: actor.userId, userId: actor.userId, metadata: { status: updated.status } } });
+      return updated;
+    });
+    return ok(res, item);
+  });
+
+  app.post("/api/v1/lms/guru/modul/:moduleId/submit-review", requireAuth, async (req, res) => {
+    const actor = await getLmsActor(req);
+    if (!actor?.teacher) return fail(res, actor ? 403 : 401, actor ? "TEACHER_PROFILE_REQUIRED" : "UNAUTHENTICATED", actor ? "Akun belum terhubung ke profil guru." : "Session guru tidak valid.");
+    const current = await db.curriculumModule.findFirst({ where: { id: req.params.moduleId, ownerTeacherId: actor.teacher.id } });
+    if (!current) return fail(res, 404, "MODULE_NOT_FOUND", "Modul tidak ditemukan.");
+    if (current.status !== "DRAFT") return fail(res, 409, "INVALID_TRANSITION", "Hanya modul draft yang dapat dikirim untuk review.");
+    const item = await db.curriculumModule.update({ where: { id: current.id }, data: { status: "REVIEW" }, include: { subject: true, academicYear: true } });
+    await audit("CURRICULUM_MODULE_REVIEW", "CurriculumModule", item.id, { actor: actor.userId });
+    return ok(res, item);
+  });
+
+  app.post("/api/v1/lms/guru/modul/:moduleId/publish", requireAuth, async (req, res) => {
+    const actor = await getLmsActor(req);
+    if (!actor?.teacher && !actor?.roles.some((role) => role === "ADMIN" || role === "OPERATOR")) return fail(res, actor ? 403 : 401, actor ? "FORBIDDEN" : "UNAUTHENTICATED", actor ? "Akses publikasi tidak diizinkan." : "Session guru tidak valid.");
+    const current = await db.curriculumModule.findFirst({ where: { id: req.params.moduleId, ...moduleScope(actor!) } });
+    if (!current) return fail(res, 404, "MODULE_NOT_FOUND", "Modul tidak ditemukan.");
+    if (!["REVIEW", "DRAFT"].includes(current.status)) return fail(res, 409, "INVALID_TRANSITION", "Modul harus berstatus draft atau review untuk diterbitkan.");
+    const item = await db.curriculumModule.update({ where: { id: current.id }, data: { status: "PUBLISHED" }, include: { subject: true, academicYear: true } });
+    await audit("CURRICULUM_MODULE_PUBLISH", "CurriculumModule", item.id, { actor: actor!.userId });
+    return ok(res, item);
+  });
+
+  app.post("/api/v1/lms/guru/modul/:moduleId/archive", requireAuth, async (req, res) => {
+    const actor = await getLmsActor(req);
+    if (!actor) return fail(res, 401, "UNAUTHENTICATED", "Session guru tidak valid.");
+    const current = await db.curriculumModule.findFirst({ where: { id: req.params.moduleId, ...moduleScope(actor) } });
+    if (!current) return fail(res, 404, "MODULE_NOT_FOUND", "Modul tidak ditemukan.");
+    const item = await db.curriculumModule.update({ where: { id: current.id }, data: { status: "ARCHIVED" }, include: { subject: true, academicYear: true } });
+    await audit("CURRICULUM_MODULE_ARCHIVE", "CurriculumModule", item.id, { actor: actor.userId });
+    return ok(res, item);
+  });
+
   app.get("/api/v1/akademik/overview", requireAuth, async (_req, res) => {
     const [academicYear, teachers, students, subjects, classes, pendingRequests, lastImport] = await Promise.all([
       db.academicYear.findFirst({ where: { isActive: true, status: "ACTIVE" }, orderBy: { code: "desc" } }),
