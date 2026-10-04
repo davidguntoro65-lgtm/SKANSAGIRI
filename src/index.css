@@ -451,17 +451,24 @@
   from { opacity: 0; transform: translateY(16px) scale(.985); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
+@keyframes evoting-label-color {
+  0%, 100% { color: #fb923c; text-shadow: 0 0 8px rgba(251, 146, 60, .18); }
+  50% { color: #4ade80; text-shadow: 0 0 10px rgba(74, 222, 128, .2); }
+}
 .pilketos-fade-up { animation: pilketos-fade-up 700ms cubic-bezier(.22, 1, .36, 1) both; }
 .pilketos-fade-up-delayed { animation: pilketos-fade-up 800ms 120ms cubic-bezier(.22, 1, .36, 1) both; }
 .pilketos-card-reveal { animation: pilketos-card-reveal 650ms cubic-bezier(.22, 1, .36, 1) both; }
 .pilketos-orb { animation: pilketos-orb 8s ease-in-out infinite; }
 .pilketos-orb-delayed { animation: pilketos-orb 10s 1s ease-in-out infinite reverse; }
+.evoting-label-blink { animation: evoting-label-color 3s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
   .pilketos-fade-up,
   .pilketos-fade-up-delayed,
   .pilketos-card-reveal,
   .pilketos-orb,
-  .pilketos-orb-delayed { animation: none; }
+  .pilketos-orb-delayed,
+  .evoting-label-blink { animation: none; }
+  .evoting-label-blink { color: #fb923c; text-shadow: none; }
 }
 
 /* Admin OSIS clean theme

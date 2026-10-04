@@ -439,7 +439,7 @@ export default function PilketosPage() {
             {logo ? <img src={logo} alt="Logo SMKN 1 Wonogiri" className="h-11 w-11 rounded-2xl object-contain" /> : <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-400 text-slate-950 shadow-lg shadow-amber-400/25"><Vote className="h-5 w-5" /></div>}
             <div><p className="text-[10px] font-black uppercase tracking-[.22em] text-amber-600">SMKN 1 Wonogiri</p><p className="mt-1 text-sm font-black tracking-tight text-slate-900">Center of Excellence</p></div>
           </div>
-          <button onClick={openLogin} className="group inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-[10px] font-black uppercase tracking-[.12em] text-white shadow-lg shadow-slate-950/15 transition hover:-translate-y-0.5 hover:bg-amber-500 hover:text-slate-950 sm:px-5 sm:text-xs"><Vote className="h-4 w-4" /> <span>LAKUKAN EVOTING</span><ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" /></button>
+          <button onClick={openLogin} className="group inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-[10px] font-black uppercase tracking-[.12em] text-white shadow-lg shadow-slate-950/15 transition hover:-translate-y-0.5 hover:bg-amber-500 hover:text-slate-950 sm:px-5 sm:text-xs"><Vote className="h-4 w-4" /> <span className="evoting-label-blink">LAKUKAN EVOTING</span><ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" /></button>
         </header>
 
         <section className="grid items-center gap-12 py-14 sm:py-20 lg:grid-cols-[1.08fr_.92fr] lg:py-24">
