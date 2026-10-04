@@ -296,6 +296,15 @@ enum PilketosCandidateGrade {
   XI
 }
 
+enum PilketosVotePosition {
+  KETUA_UMUM
+  KETUA_1
+  KETUA_3
+  KETUA_4
+  LEGACY_X
+  LEGACY_XI
+}
+
 model CoreUser {
   id                        String         @id @default(uuid())
   email                     String         @unique
@@ -535,6 +544,7 @@ model PilketosVote {
   electionId  String
   candidateId String
   grade       PilketosCandidateGrade @default(X)
+  position    PilketosVotePosition
   studentId   String
   userId      String?
   votedAt     DateTime          @default(now())
@@ -543,7 +553,7 @@ model PilketosVote {
   student     CoreStudent       @relation(fields: [studentId], references: [id], onDelete: Cascade)
   user        CoreUser?         @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  @@unique([electionId, studentId, grade])
+  @@unique([electionId, studentId, position])
   @@index([candidateId])
   @@index([electionId, studentId])
 }

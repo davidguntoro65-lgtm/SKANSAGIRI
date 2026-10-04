@@ -9,6 +9,7 @@ type Candidate = {
   name: string;
   photoData: string | null;
   voteCount?: number;
+  voteCounts?: Partial<Record<Position, number>>;
 };
 
 type Election = {
@@ -25,9 +26,18 @@ type ParticipationStats = {
   totalVoted: number;
   totalCompleted: number;
   totalPending: number;
+  legacyVoterCount?: number;
 };
 
 type Props = { theme?: "light" | "dark" };
+type Position = "KETUA_UMUM" | "KETUA_1" | "KETUA_3" | "KETUA_4";
+
+const POSITIONS: Array<{ id: Position; label: string; grade: "X" | "XI" }> = [
+  { id: "KETUA_UMUM", label: "Ketua Umum", grade: "XI" },
+  { id: "KETUA_1", label: "Ketua 1", grade: "XI" },
+  { id: "KETUA_3", label: "Ketua 3", grade: "X" },
+  { id: "KETUA_4", label: "Ketua 4", grade: "X" },
+];
 
 const TOKEN_KEY = "smkn1_adm_token";
 
@@ -194,9 +204,9 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
         <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[
             ["Total pemilih", stats?.totalVoters ?? 0, "Akun siswa aktif"],
-            ["Sudah memilih", stats?.totalCompleted ?? 0, "Dua pilihan terekam"],
-            ["Sudah mulai", stats?.totalVoted ?? 0, "Minimal satu pilihan"],
-            ["Belum selesai", stats?.totalPending ?? 0, "Perlu menyelesaikan dua kelas"],
+            ["Surat suara lengkap", stats?.totalCompleted ?? 0, "Empat pilihan atau suara lama lengkap"],
+            ["Ada catatan suara", stats?.totalVoted ?? 0, "Termasuk pemilih format sebelumnya"],
+            ["Belum lengkap", stats?.totalPending ?? 0, "Catatan suara lama belum lengkap"],
           ].map(([label, value, hint]) => (
             <div key={label as string} className={`rounded-2xl border p-4 ${card}`}>
               <p className={`text-[10px] font-black uppercase tracking-widest ${muted}`}>{label}</p>
@@ -209,6 +219,27 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
           <div className={`rounded-2xl border p-4 ${card}`}><div className="flex items-center justify-between"><span className="text-xs font-black uppercase tracking-widest text-amber-500">Kelas X</span><span className={`text-sm font-black ${gradeCounts.X === 4 ? "text-emerald-500" : "text-rose-500"}`}>{gradeCounts.X}/4 kandidat</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-current/10"><div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${Math.min(gradeCounts.X / 4, 1) * 100}%` }} /></div></div>
           <div className={`rounded-2xl border p-4 ${card}`}><div className="flex items-center justify-between"><span className="text-xs font-black uppercase tracking-widest text-amber-500">Kelas XI</span><span className={`text-sm font-black ${gradeCounts.XI === 4 ? "text-emerald-500" : "text-rose-500"}`}>{gradeCounts.XI}/4 kandidat</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-current/10"><div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${Math.min(gradeCounts.XI / 4, 1) * 100}%` }} /></div></div>
         </div>
+        {!!stats?.legacyVoterCount && <div role="status" className={`mb-5 rounded-2xl border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-sm ${muted}`}>{stats.legacyVoterCount} pemilih memiliki catatan dari format pemilihan sebelumnya. Data lama tetap disimpan, tetapi tidak digabungkan ke skor empat jabatan.</div>}
+        {election && election.status !== "DRAFT" && <section className={`mb-6 rounded-3xl border p-5 sm:p-6 ${card}`}>
+          <div><h3 className="font-black">Rekap skor per jabatan</h3><p className={`mt-1 text-xs ${muted}`}>Setiap kandidat memiliki skor terpisah untuk jabatan yang dipilih.</p></div>
+          <div className="mt-5 grid gap-4 xl:grid-cols-2">
+            {POSITIONS.map((position) => {
+              const candidates = election.candidates.filter((item) => item.grade === position.grade);
+              const total = candidates.reduce((sum, item) => sum + (item.voteCounts?.[position.id] || 0), 0);
+              return <div key={position.id} className="rounded-2xl border border-current/10 p-4">
+                <div className="flex items-center justify-between gap-3"><h4 className="font-black">{position.label}</h4><span className={`text-xs font-bold ${muted}`}>Kelas {position.grade} · {total} suara</span></div>
+                <div className="mt-3 divide-y divide-current/10">
+                  {candidates.map((item) => <div key={item.id} className="flex items-center gap-3 py-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-400/15 text-sm font-black text-amber-500">{item.candidateNo}</span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-bold">{item.name}</span>
+                    <span className="rounded-full bg-amber-400/15 px-3 py-1 text-sm font-black text-amber-600">{item.voteCounts?.[position.id] || 0}</span>
+                  </div>)}
+                  {!candidates.length && <p className={`py-4 text-sm ${muted}`}>Belum ada kandidat.</p>}
+                </div>
+              </div>;
+            })}
+          </div>
+        </section>}
         <div className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]">
         <form onSubmit={saveElection} className={`rounded-3xl border p-5 sm:p-6 ${card}`}>
           <div className="flex items-center gap-3"><Vote className="h-5 w-5 text-amber-500" /><div><h3 className="font-black">Pengaturan pemilihan</h3><p className={`text-xs ${muted}`}>Informasi yang tampil pada landing page.</p></div></div>
@@ -234,7 +265,7 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
               <button disabled={saving} className="ml-auto inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-slate-950"><Plus className="h-4 w-4" />{saving ? "Menyimpan..." : "Tambah pilihan"}</button>
             </div>
           </form>
-          <div className="mt-5 space-y-3">{election?.candidates.map((item) => <div key={item.id} className="flex items-center gap-3 rounded-2xl border border-current/10 p-3"><div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-amber-400/15 text-lg font-black text-amber-600">{item.photoData ? <img src={item.photoData} alt="" className="h-full w-full object-contain p-1" /> : item.candidateNo}</div><div className="min-w-0 flex-1"><p className="text-[10px] font-black uppercase tracking-widest text-amber-500">Kelas {item.grade} · Nomor {item.candidateNo}</p><p className="truncate font-black">{item.name}</p>{election.status !== "DRAFT" && <p className={`text-xs ${muted}`}>{item.voteCount || 0} suara tercatat</p>}</div>{election.status === "DRAFT" ? <button onClick={() => void removeCandidate(item.id)} className="rounded-lg p-2 text-rose-500 transition hover:bg-rose-500/10" title="Hapus kandidat"><Trash2 className="h-4 w-4" /></button> : <CheckCircle2 className="h-5 w-5 text-emerald-500" />}</div>)}{!election?.candidates.length && <div className={`rounded-2xl border border-dashed p-8 text-center text-sm ${muted}`}>Belum ada kandidat. Tambahkan 4 kandidat kelas X dan 4 kandidat kelas XI untuk membuka pemilihan.</div>}</div>
+          <div className="mt-5 space-y-3">{election?.candidates.map((item) => <div key={item.id} className="flex items-center gap-3 rounded-2xl border border-current/10 p-3"><div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-amber-400/15 text-lg font-black text-amber-600">{item.photoData ? <img src={item.photoData} alt="" className="h-full w-full object-contain p-1" /> : item.candidateNo}</div><div className="min-w-0 flex-1"><p className="text-[10px] font-black uppercase tracking-widest text-amber-500">Kelas {item.grade} · Nomor {item.candidateNo}</p><p className="truncate font-black">{item.name}</p></div>{election.status === "DRAFT" ? <button onClick={() => void removeCandidate(item.id)} className="rounded-lg p-2 text-rose-500 transition hover:bg-rose-500/10" title="Hapus kandidat"><Trash2 className="h-4 w-4" /></button> : <CheckCircle2 className="h-5 w-5 text-emerald-500" />}</div>)}{!election?.candidates.length && <div className={`rounded-2xl border border-dashed p-8 text-center text-sm ${muted}`}>Belum ada kandidat. Tambahkan 4 kandidat kelas X dan 4 kandidat kelas XI untuk membuka pemilihan.</div>}</div>
         </div>
         </div>
       </div>}

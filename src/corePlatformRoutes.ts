@@ -358,8 +358,17 @@ function imageDataError(value: unknown) {
 }
 
 type PilketosGrade = "X" | "XI";
+type PilketosPosition = "KETUA_UMUM" | "KETUA_1" | "KETUA_3" | "KETUA_4";
 
-function publicPilketosElection(election: any, votedGrades: string[] = [], votedCandidateIds: string[] = [], stats?: any) {
+const PILKETOS_POSITIONS: PilketosPosition[] = ["KETUA_UMUM", "KETUA_1", "KETUA_3", "KETUA_4"];
+const PILKETOS_POSITION_GRADE: Record<PilketosPosition, PilketosGrade> = {
+  KETUA_UMUM: "XI",
+  KETUA_1: "XI",
+  KETUA_3: "X",
+  KETUA_4: "X",
+};
+
+function publicPilketosElection(election: any, votedPositions: string[] = [], votedCandidateIds: string[] = [], stats?: any) {
   if (!election) return null;
   return {
     id: election.id,
@@ -369,8 +378,8 @@ function publicPilketosElection(election: any, votedGrades: string[] = [], voted
     status: election.status,
     startsAt: election.startsAt,
     endsAt: election.endsAt,
-    hasVoted: votedGrades.includes("X") && votedGrades.includes("XI"),
-    votedGrades,
+    hasVoted: votedCandidateIds.length > 0,
+    votedPositions,
     votedCandidateIds,
     stats,
     candidates: (election.candidates || []).map((candidate: any) => ({
@@ -380,30 +389,38 @@ function publicPilketosElection(election: any, votedGrades: string[] = [], voted
       name: candidate.name,
       photoData: candidate.photoData,
       voteCount: candidate._count?.votes,
+      voteCounts: candidate.voteCounts,
     })),
   };
 }
 
 async function getPilketosStats(electionId: string) {
-  const [totalVoters, votedStudents, voteGroups] = await Promise.all([
+  const [totalVoters, voteRows] = await Promise.all([
     db.coreStudent.count({ where: { status: "ACTIVE" } }),
     db.pilketosVote.findMany({
       where: { electionId },
-      select: { studentId: true },
-      distinct: ["studentId"],
-    }),
-    db.pilketosVote.groupBy({
-      by: ["studentId"],
-      where: { electionId },
-      _count: { _all: true },
+      select: { studentId: true, position: true },
     }),
   ]);
-  const totalCompleted = voteGroups.filter((group) => group._count._all >= 2).length;
+  const positionsByStudent = new Map<string, Set<string>>();
+  for (const vote of voteRows) {
+    const positions = positionsByStudent.get(vote.studentId) || new Set<string>();
+    positions.add(vote.position);
+    positionsByStudent.set(vote.studentId, positions);
+  }
+  const totalCompleted = [...positionsByStudent.values()].filter((positions) =>
+    PILKETOS_POSITIONS.every((position) => positions.has(position)) ||
+    (positions.has("LEGACY_X") && positions.has("LEGACY_XI")),
+  ).length;
+  const legacyVoterCount = [...positionsByStudent.values()].filter((positions) =>
+    positions.has("LEGACY_X") || positions.has("LEGACY_XI"),
+  ).length;
   return {
     totalVoters,
-    totalVoted: votedStudents.length,
+    totalVoted: positionsByStudent.size,
     totalCompleted,
-    totalPending: Math.max(0, votedStudents.length - totalCompleted),
+    totalPending: Math.max(0, positionsByStudent.size - totalCompleted),
+    legacyVoterCount,
   };
 }
 
@@ -430,19 +447,19 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
       include: { candidates: { orderBy: [{ grade: "asc" }, { candidateNo: "asc" }] } },
       orderBy: { updatedAt: "desc" },
     });
-    let votedGrades: string[] = [];
+    let votedPositions: string[] = [];
     let votedCandidateIds: string[] = [];
     const session = await getPilketosSession(req);
     if (election && session?.coreUser?.student) {
       const votes = await db.pilketosVote.findMany({
         where: { electionId: election.id, studentId: session.coreUser.student.id },
-        select: { grade: true, candidateId: true },
+        select: { position: true, candidateId: true },
       });
-      votedGrades = votes.map((vote) => vote.grade);
+      votedPositions = votes.map((vote) => vote.position);
       votedCandidateIds = votes.map((vote) => vote.candidateId);
     }
     return ok(res, {
-      election: publicPilketosElection(election, votedGrades, votedCandidateIds),
+      election: publicPilketosElection(election, votedPositions, votedCandidateIds),
     });
   });
 
@@ -453,56 +470,69 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
       return fail(res, 401, "STUDENT_AUTH_REQUIRED", "Silakan login sebagai siswa terlebih dahulu.");
     }
     const electionId = clean(req.body.electionId);
-    const candidateIds = Array.isArray(req.body.candidateIds)
-      ? req.body.candidateIds.map((value: unknown) => clean(value)).filter(Boolean)
-      : [clean(req.body.candidateId)].filter(Boolean);
-    if (!electionId || candidateIds.length !== 2) {
-      return fail(res, 400, "TWO_CANDIDATES_REQUIRED", "Pilih satu kandidat kelas X dan satu kandidat kelas XI.");
+    const submittedVotes = Array.isArray(req.body.votes)
+      ? req.body.votes.map((vote: any) => ({
+          position: clean(vote?.position).toUpperCase(),
+          candidateId: clean(vote?.candidateId),
+        }))
+      : [];
+    const submittedPositions = submittedVotes.map((vote: any) => vote.position);
+    const candidateIds = submittedVotes.map((vote: any) => vote.candidateId);
+    if (
+      !electionId ||
+      submittedVotes.length !== PILKETOS_POSITIONS.length ||
+      PILKETOS_POSITIONS.some((position) => submittedPositions.filter((value) => value === position).length !== 1) ||
+      submittedPositions.some((position) => !PILKETOS_POSITIONS.includes(position as PilketosPosition)) ||
+      candidateIds.some((id: string) => !id) ||
+      new Set(candidateIds).size !== PILKETOS_POSITIONS.length
+    ) {
+      return fail(res, 400, "FOUR_POSITIONS_REQUIRED", "Pilih satu kandidat untuk masing-masing dari empat jabatan.");
     }
     const election = await db.pilketosElection.findUnique({ where: { id: electionId } });
     if (!election || election.status !== "OPEN") return fail(res, 409, "ELECTION_NOT_OPEN", "Pemilihan belum dibuka atau sudah ditutup.");
     const candidates = await db.pilketosCandidate.findMany({
       where: { id: { in: candidateIds }, electionId },
     });
-    const grades = new Set(candidates.map((candidate) => candidate.grade));
+    const candidateById = new Map<string, (typeof candidates)[number]>();
+    for (const candidate of candidates) candidateById.set(candidate.id, candidate);
+    const candidateByPosition = new Map<PilketosPosition, (typeof candidates)[number] | undefined>();
+    for (const vote of submittedVotes) {
+      candidateByPosition.set(vote.position as PilketosPosition, candidateById.get(vote.candidateId));
+    }
+    for (const position of PILKETOS_POSITIONS) {
+      if (candidateByPosition.get(position)?.grade !== PILKETOS_POSITION_GRADE[position]) {
+        return fail(res, 400, "CANDIDATE_GRADE_MISMATCH", `Kandidat untuk ${position.replaceAll("_", " ")} harus berasal dari kelas ${PILKETOS_POSITION_GRADE[position]}.`);
+      }
+    }
     if (
-      candidates.length !== 2 ||
-      grades.size !== 2 ||
-      !grades.has("X") ||
-      !grades.has("XI")
+      candidateByPosition.get("KETUA_UMUM")?.id === candidateByPosition.get("KETUA_1")?.id ||
+      candidateByPosition.get("KETUA_3")?.id === candidateByPosition.get("KETUA_4")?.id
     ) {
-      return fail(res, 400, "ONE_PER_GRADE_REQUIRED", "Pilih tepat satu kandidat kelas X dan satu kandidat kelas XI.");
+      return fail(res, 400, "DUPLICATE_CANDIDATE", "Kandidat yang sama tidak boleh dipilih untuk dua jabatan pada tingkat kelas yang sama.");
     }
     try {
       const result = await db.$transaction(async (tx) => {
         const existingVotes = await tx.pilketosVote.findMany({
           where: { electionId, studentId: student.id },
-          select: { grade: true, candidateId: true },
-        }) as Array<{ grade: string; candidateId: string }>;
-        const existingByGrade = new Map(existingVotes.map((vote) => [vote.grade, vote]));
-        for (const candidate of candidates) {
-          const existing = existingByGrade.get(candidate.grade);
-          if (existing && existing.candidateId !== candidate.id) {
-            throw Object.assign(new Error("Pilihan untuk salah satu kelas sudah tercatat."), { code: "GRADE_ALREADY_VOTED" });
-          }
-        }
-
-        const pendingCandidates = candidates.filter((candidate) => !existingByGrade.has(candidate.grade));
-        if (!pendingCandidates.length) {
+          select: { position: true },
+        });
+        if (existingVotes.length) {
           throw Object.assign(new Error("Anda sudah menyelesaikan pemilihan ini."), { code: "ALREADY_VOTED" });
         }
 
-        const created = await Promise.all(pendingCandidates.map((candidate) =>
-          tx.pilketosVote.create({
-            data: {
+        await tx.pilketosVote.createMany({
+          data: submittedVotes.map((vote: any) => {
+            const candidate = candidateById.get(vote.candidateId)!;
+            return {
               electionId,
               candidateId: candidate.id,
               grade: candidate.grade,
+              position: vote.position,
               studentId: student.id,
               userId: session.coreUser.id,
-            },
+            };
           }),
-        ));
+        });
         await tx.coreAuditLog.create({
           data: {
             action: "PILKETOS_VOTE_CAST",
@@ -511,28 +541,20 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
             actor: session.coreUser.id,
             userId: session.coreUser.id,
             metadata: {
-              candidateNos: candidates.map((candidate) => candidate.candidateNo),
-              grades: candidates.map((candidate) => candidate.grade),
+              positions: submittedVotes.map((vote: any) => vote.position),
+              candidateNos: submittedVotes.map((vote: any) => candidateById.get(vote.candidateId)?.candidateNo),
             },
           },
         });
-        return { voteIds: created.map((vote) => vote.id) };
-      });
-      const votedGrades = await db.pilketosVote.findMany({
-        where: { electionId, studentId: student.id },
-        select: { grade: true },
+        return { completed: true, voteCount: submittedVotes.length };
       });
       return ok(res, {
         ...result,
-        completed: new Set(votedGrades.map((vote) => vote.grade)).size === 2,
-        message: "Pilihan kelas X dan kelas XI berhasil disimpan.",
+        message: "Pilihan untuk empat jabatan berhasil disimpan.",
       });
     } catch (error: any) {
       if (error?.code === "P2002" || error?.code === "ALREADY_VOTED") {
         return fail(res, 409, "ALREADY_VOTED", "Anda sudah menggunakan hak pilih pada pemilihan ini.");
-      }
-      if (error?.code === "GRADE_ALREADY_VOTED") {
-        return fail(res, 409, "GRADE_ALREADY_VOTED", error.message);
       }
       throw error;
     }
@@ -547,8 +569,40 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
       },
       orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
     });
-    const stats = election ? await getPilketosStats(election.id) : null;
-    return ok(res, { election: publicPilketosElection(election), stats });
+    const [stats, voteGroups] = election
+      ? await Promise.all([
+          getPilketosStats(election.id),
+          db.pilketosVote.groupBy({
+            by: ["candidateId", "position"],
+            where: { electionId: election.id, position: { in: PILKETOS_POSITIONS } },
+            _count: { _all: true },
+          }),
+        ])
+      : [null, []];
+    const voteCountsByCandidate = new Map<string, Record<PilketosPosition, number>>();
+    for (const group of voteGroups) {
+      const counts = voteCountsByCandidate.get(group.candidateId) || {
+        KETUA_UMUM: 0,
+        KETUA_1: 0,
+        KETUA_3: 0,
+        KETUA_4: 0,
+      };
+      counts[group.position as PilketosPosition] = group._count._all;
+      voteCountsByCandidate.set(group.candidateId, counts);
+    }
+    const electionWithVoteCounts = election && {
+      ...election,
+      candidates: election.candidates.map((candidate) => ({
+        ...candidate,
+        voteCounts: voteCountsByCandidate.get(candidate.id) || {
+          KETUA_UMUM: 0,
+          KETUA_1: 0,
+          KETUA_3: 0,
+          KETUA_4: 0,
+        },
+      })),
+    };
+    return ok(res, { election: publicPilketosElection(electionWithVoteCounts), stats });
   });
 
   app.post("/api/v1/pilketos/admin/election", requireAuth, async (req, res) => {
@@ -594,6 +648,8 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
     if (!Number.isInteger(candidateNo) || candidateNo < 1 || candidateNo > 99) return fail(res, 400, "INVALID_NUMBER", "Nomor kandidat harus berupa angka 1 sampai 99.");
     const gradeCount = await db.pilketosCandidate.count({ where: { electionId: election.id, grade } });
     if (gradeCount >= 4) return fail(res, 409, "GRADE_LIMIT_REACHED", `Maksimal 4 kandidat untuk kelas ${grade}.`);
+    const totalCandidates = await db.pilketosCandidate.count({ where: { electionId: election.id } });
+    if (totalCandidates >= 8) return fail(res, 409, "CANDIDATE_LIMIT_REACHED", "Pemilihan hanya boleh memiliki tepat 8 kandidat: 4 kelas X dan 4 kelas XI.");
     const photoError = imageDataError(photoData);
     if (photoError) return fail(res, 413, "INVALID_IMAGE", photoError);
     try {

@@ -36,7 +36,7 @@ type Election = {
   description: string;
   status: "DRAFT" | "OPEN" | "CLOSED";
   hasVoted: boolean;
-  votedGrades: string[];
+  votedPositions: string[];
   votedCandidateIds: string[];
   startsAt?: string | null;
   endsAt?: string | null;
@@ -51,6 +51,21 @@ type StudentUser = {
 
 type View = "landing" | "login" | "vote";
 type Grade = "X" | "XI";
+type Position = "KETUA_UMUM" | "KETUA_1" | "KETUA_3" | "KETUA_4";
+
+const POSITIONS: Array<{ id: Position; label: string; grade: Grade; pairedPosition: Position }> = [
+  { id: "KETUA_UMUM", label: "Ketua Umum", grade: "XI", pairedPosition: "KETUA_1" },
+  { id: "KETUA_1", label: "Ketua 1", grade: "XI", pairedPosition: "KETUA_UMUM" },
+  { id: "KETUA_3", label: "Ketua 3", grade: "X", pairedPosition: "KETUA_4" },
+  { id: "KETUA_4", label: "Ketua 4", grade: "X", pairedPosition: "KETUA_3" },
+];
+
+const EMPTY_SELECTIONS: Record<Position, string> = {
+  KETUA_UMUM: "",
+  KETUA_1: "",
+  KETUA_3: "",
+  KETUA_4: "",
+};
 
 const TOKEN_KEY = "smkn1_core_token";
 
@@ -79,16 +94,19 @@ export default function PilketosPage() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [selectedCandidates, setSelectedCandidates] = useState<Record<Grade, string>>({ X: "", XI: "" });
+  const [selectedCandidates, setSelectedCandidates] = useState<Record<Position, string>>(EMPTY_SELECTIONS);
   const [loginError, setLoginError] = useState("");
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [confirming, setConfirming] = useState(false);
 
   const logo = getLogo("light");
   const selected = useMemo(
-    () => (["X", "XI"] as Grade[])
-      .map((grade) => election?.candidates.find((item) => item.id === selectedCandidates[grade]))
-      .filter((candidate): candidate is Candidate => Boolean(candidate)),
+    () => POSITIONS
+      .map((position) => ({
+        position,
+        candidate: election?.candidates.find((item) => item.id === selectedCandidates[position.id]),
+      }))
+      .filter((choice): choice is { position: typeof POSITIONS[number]; candidate: Candidate } => Boolean(choice.candidate)),
     [election, selectedCandidates],
   );
 
@@ -98,12 +116,6 @@ export default function PilketosPage() {
     if (!response.ok) throw new Error(payload.error?.message || "Data pemilihan tidak dapat dimuat.");
     const next = payload.data?.election as Election | null;
     setElection(next);
-    if (next) {
-      setSelectedCandidates((current) => ({
-        X: next.votedCandidateIds?.find((id) => next.candidates.find((candidate) => candidate.id === id)?.grade === "X") || current.X,
-        XI: next.votedCandidateIds?.find((id) => next.candidates.find((candidate) => candidate.id === id)?.grade === "XI") || current.XI,
-      }));
-    }
     return next;
   }
 
@@ -180,19 +192,25 @@ export default function PilketosPage() {
   }
 
   async function castVote() {
-    if (!election || selected.length !== 2 || voteBusy) return;
+    if (!election || selected.length !== POSITIONS.length || voteBusy) return;
     setVoteBusy(true);
     try {
       const response = await apiFetch("/api/v1/pilketos/vote", {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ electionId: election.id, candidateIds: selected.map((candidate) => candidate.id) }),
+        body: JSON.stringify({
+          electionId: election.id,
+          votes: selected.map(({ position, candidate }) => ({
+            position: position.id,
+            candidateId: candidate.id,
+          })),
+        }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error?.message || "Pilihan belum tersimpan.");
-      setElection((current) => current ? { ...current, hasVoted: true, votedGrades: ["X", "XI"] } : current);
+      setElection((current) => current ? { ...current, hasVoted: true, votedPositions: POSITIONS.map((position) => position.id) } : current);
       setConfirming(false);
-      setFeedback({ type: "success", text: "Pilihan kelas X dan kelas XI berhasil disimpan. Terima kasih sudah menggunakan hak suara." });
+      setFeedback({ type: "success", text: "Pilihan untuk keempat jabatan berhasil disimpan. Terima kasih sudah menggunakan hak suara." });
     } catch (error) {
       setFeedback({ type: "error", text: error instanceof Error ? error.message : "Pilihan belum tersimpan." });
     } finally {
@@ -204,7 +222,7 @@ export default function PilketosPage() {
     await apiFetch("/api/v1/auth/logout", { method: "POST", headers: authHeaders() }).catch(() => {});
     localStorage.removeItem(TOKEN_KEY);
     setUser(null);
-    setSelectedCandidates({ X: "", XI: "" });
+    setSelectedCandidates(EMPTY_SELECTIONS);
     setFeedback(null);
     setView("landing");
   }
@@ -279,7 +297,7 @@ export default function PilketosPage() {
           <section className="pilketos-fade-up py-12 sm:py-16">
             <p className="text-xs font-black uppercase tracking-[.2em] text-amber-600">Halaman pemilihan</p>
             <h1 className="mt-3 max-w-3xl text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">Halo, {user?.fullName || "Pemilih"}.</h1>
-            <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-500">Pilih satu kandidat terbaik untuk memimpin OSIS SMKN 1 Wonogiri. Periksa kembali sebelum mengunci pilihan.</p>
+            <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-500">Pilih satu kandidat untuk masing-masing dari empat jabatan. Kandidat yang sama tidak dapat dipilih untuk dua jabatan pada tingkat kelas yang sama.</p>
           </section>
           {!election ? (
             <div className="rounded-3xl border border-amber-200 bg-amber-50 p-8 text-center text-amber-800">Pemilihan belum tersedia.</div>
@@ -291,23 +309,27 @@ export default function PilketosPage() {
             </div>
           ) : (
             <section>
-              <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h2 className="text-xl font-black text-slate-950">Pilih dua kandidat</h2><p className="mt-1 text-sm text-slate-500">Pilih satu kandidat kelas X dan satu kandidat kelas XI.</p></div><span className="rounded-full bg-amber-100 px-3 py-1.5 text-xs font-black text-amber-700">{selected.length}/2 pilihan</span></div>
-              {(["X", "XI"] as Grade[]).map((grade) => {
-                const candidates = election.candidates.filter((candidate) => candidate.grade === grade);
-                const locked = election.votedGrades.includes(grade);
+              <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h2 className="text-xl font-black text-slate-950">Pilih empat jabatan</h2><p className="mt-1 text-sm text-slate-500">Setiap jabatan mendapat satu pilihan. Suara dikirim sekaligus dan tidak dapat diubah.</p></div><span className="rounded-full bg-amber-100 px-3 py-1.5 text-xs font-black text-amber-700">{selected.length}/4 pilihan</span></div>
+              {POSITIONS.map((position) => {
+                const candidates = election.candidates.filter((candidate) => candidate.grade === position.grade);
                 return (
-                  <div key={grade} className="mb-8 rounded-[2rem] border border-slate-200/80 bg-white/45 p-4 shadow-[0_16px_45px_rgba(15,23,42,.05)] backdrop-blur-sm sm:p-6">
-                    <div className="flex items-center justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[.2em] text-amber-600">Tingkat pilihan</p><h3 className="mt-1 text-lg font-black text-slate-950">Kandidat kelas {grade}</h3></div>{locked && <span className="rounded-full bg-emerald-100 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700">Sudah tercatat</span>}</div>
-                    <CandidateGrid candidates={candidates} selectedCandidates={selectedCandidates} lockedGrades={locked ? [grade] : []} onSelect={(candidateGrade, id) => setSelectedCandidates((current) => ({ ...current, [candidateGrade]: id }))} />
+                  <div key={position.id} className="mb-8 rounded-[2rem] border border-slate-200/80 bg-white/45 p-4 shadow-[0_16px_45px_rgba(15,23,42,.05)] backdrop-blur-sm sm:p-6">
+                    <div className="flex items-center justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[.2em] text-amber-600">Pemilihan {POSITIONS.findIndex((item) => item.id === position.id) + 1} dari 4 · Kelas {position.grade}</p><h3 className="mt-1 text-lg font-black text-slate-950">{position.label}</h3></div>{selectedCandidates[position.id] && <span className="rounded-full bg-emerald-100 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700">Pilihan terisi</span>}</div>
+                    <CandidateGrid
+                      candidates={candidates}
+                      selectedCandidateId={selectedCandidates[position.id]}
+                      blockedCandidateId={selectedCandidates[position.pairedPosition]}
+                      onSelect={(id) => setSelectedCandidates((current) => ({ ...current, [position.id]: id }))}
+                    />
                   </div>
                 );
               })}
-              <button disabled={selected.length !== 2 || voteBusy} onClick={() => setConfirming(true)} className="mx-auto mt-2 flex w-full max-w-md items-center justify-center gap-2 rounded-xl bg-slate-950 py-4 text-sm font-black text-white shadow-xl shadow-slate-950/15 transition hover:-translate-y-0.5 hover:bg-amber-500 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"><Vote className="h-4 w-4" /> Konfirmasi dua pilihan</button>
+              <button disabled={selected.length !== POSITIONS.length || voteBusy} onClick={() => setConfirming(true)} className="mx-auto mt-2 flex w-full max-w-md items-center justify-center gap-2 rounded-xl bg-slate-950 py-4 text-sm font-black text-white shadow-xl shadow-slate-950/15 transition hover:-translate-y-0.5 hover:bg-amber-500 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"><Vote className="h-4 w-4" /> Konfirmasi empat pilihan</button>
             </section>
           )}
         </div>
         {feedback && <Toast feedback={feedback} />}
-         {confirming && selected.length === 2 && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-5 backdrop-blur-sm"><div className="w-full max-w-md rounded-[2rem] bg-white p-7 shadow-2xl"><div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-100 text-amber-700"><Vote className="h-5 w-5" /></div><div><p className="text-xs font-black uppercase tracking-widest text-amber-600">Konfirmasi akhir</p><h3 className="font-black text-slate-950">Simpan dua pilihan?</h3></div></div><p className="mt-5 text-sm leading-relaxed text-slate-600">Pilihan yang sudah disimpan tidak dapat diubah.</p><div className="mt-4 space-y-2">{selected.map((candidate) => <div key={candidate.id} className="flex items-center gap-3 rounded-xl bg-slate-50 p-3"><div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg bg-amber-100 text-sm font-black text-amber-700">{candidate.photoData ? <img src={candidate.photoData} alt="" className="h-full w-full object-contain p-0.5" /> : candidate.candidateNo}</div><div><p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Kelas {candidate.grade}</p><p className="text-sm font-black text-slate-950">{candidate.name}</p></div></div>)}</div><div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button onClick={() => setConfirming(false)} className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-500 hover:text-slate-900">Periksa lagi</button><button onClick={() => void castVote()} disabled={voteBusy} className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white disabled:opacity-50">{voteBusy ? "Menyimpan..." : "Ya, simpan pilihan"}</button></div></div></div>}
+         {confirming && selected.length === POSITIONS.length && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-5 backdrop-blur-sm"><div className="w-full max-w-md rounded-[2rem] bg-white p-7 shadow-2xl"><div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-100 text-amber-700"><Vote className="h-5 w-5" /></div><div><p className="text-xs font-black uppercase tracking-widest text-amber-600">Konfirmasi akhir</p><h3 className="font-black text-slate-950">Simpan empat pilihan?</h3></div></div><p className="mt-5 text-sm leading-relaxed text-slate-600">Semua pilihan akan disimpan sekaligus dan tidak dapat diubah.</p><div className="mt-4 space-y-2">{selected.map(({ position, candidate }) => <div key={position.id} className="flex items-center gap-3 rounded-xl bg-slate-50 p-3"><div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg bg-amber-100 text-sm font-black text-amber-700">{candidate.photoData ? <img src={candidate.photoData} alt="" className="h-full w-full object-contain p-0.5" /> : candidate.candidateNo}</div><div><p className="text-[10px] font-black uppercase tracking-widest text-amber-600">{position.label}</p><p className="text-sm font-black text-slate-950">{candidate.name} · Kelas {candidate.grade}</p></div></div>)}</div><div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button onClick={() => setConfirming(false)} className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-500 hover:text-slate-900">Periksa lagi</button><button onClick={() => void castVote()} disabled={voteBusy} className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white disabled:opacity-50">{voteBusy ? "Menyimpan..." : "Ya, simpan empat pilihan"}</button></div></div></div>}
       </main>
     );
   }
@@ -359,17 +381,17 @@ export default function PilketosPage() {
   );
 }
 
-function CandidateGrid({ candidates, selectedCandidates, lockedGrades = [], onSelect }: { candidates: Candidate[]; selectedCandidates?: Record<Grade, string>; lockedGrades?: Grade[]; onSelect?: (grade: Grade, id: string) => void }) {
+function CandidateGrid({ candidates, selectedCandidateId, blockedCandidateId, onSelect }: { candidates: Candidate[]; selectedCandidateId?: string; blockedCandidateId?: string; onSelect?: (id: string) => void }) {
   return (
     <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
       {candidates.map((candidate, index) => {
-        const selected = selectedCandidates?.[candidate.grade] === candidate.id;
-        const locked = lockedGrades.includes(candidate.grade);
-        const card = <div style={{ animationDelay: `${Math.min(index * 90, 450)}ms` }} className={`pilketos-card-reveal group relative overflow-hidden rounded-[1.75rem] border bg-white/95 shadow-[0_15px_45px_rgba(15,23,42,.08)] transition duration-500 ${locked ? "cursor-not-allowed opacity-75" : "hover:-translate-y-1 hover:shadow-[0_24px_60px_rgba(15,23,42,.14)]"} ${selected ? "border-amber-400 ring-4 ring-amber-400/15" : "border-slate-200/90"}`}>
+        const selected = selectedCandidateId === candidate.id;
+        const blocked = blockedCandidateId === candidate.id;
+        const card = <div style={{ animationDelay: `${Math.min(index * 90, 450)}ms` }} className={`pilketos-card-reveal group relative overflow-hidden rounded-[1.75rem] border bg-white/95 shadow-[0_15px_45px_rgba(15,23,42,.08)] transition duration-500 ${blocked ? "cursor-not-allowed opacity-50" : "hover:-translate-y-1 hover:shadow-[0_24px_60px_rgba(15,23,42,.14)]"} ${selected ? "border-amber-400 ring-4 ring-amber-400/15" : "border-slate-200/90"}`}>
           <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_50%_15%,rgba(251,191,36,.16),transparent_44%),linear-gradient(145deg,#fffdf7,#f1f5f9)] p-2 sm:p-3">{candidate.photoData ? <img src={candidate.photoData} alt={`Foto ${candidate.name}`} loading="lazy" decoding="async" className="h-full w-full object-contain drop-shadow-[0_14px_18px_rgba(15,23,42,.12)] transition duration-700 ease-out group-hover:scale-[1.025]" /> : <div className="flex h-full w-full items-center justify-center rounded-2xl bg-gradient-to-br from-amber-100 to-orange-50 text-6xl font-black text-amber-300">{candidate.candidateNo}</div>}<div className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-xl bg-slate-950 text-sm font-black text-white shadow-lg">{candidate.candidateNo}</div>{selected && <div className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-amber-400 text-slate-950 shadow-lg"><Check className="h-5 w-5" /></div>}</div>
-          <div className="p-5"><p className="text-[10px] font-black uppercase tracking-[.2em] text-amber-600">Kelas {candidate.grade} · Calon nomor {candidate.candidateNo}</p><h3 className="mt-2 text-xl font-black tracking-tight text-slate-950">{candidate.name}</h3>{onSelect && <p className="mt-2 text-xs text-slate-500">{locked ? "Pilihan kelas ini sudah tercatat." : selected ? "Kandidat ini dipilih." : "Klik kartu untuk memilih kandidat ini."}</p>}</div>
+          <div className="p-5"><p className="text-[10px] font-black uppercase tracking-[.2em] text-amber-600">Kelas {candidate.grade} · Calon nomor {candidate.candidateNo}</p><h3 className="mt-2 text-xl font-black tracking-tight text-slate-950">{candidate.name}</h3>{onSelect && <p className="mt-2 text-xs text-slate-500">{blocked ? "Sudah dipilih untuk jabatan pasangannya." : selected ? "Kandidat ini dipilih." : "Klik kartu untuk memilih kandidat ini."}</p>}</div>
         </div>;
-        return onSelect ? <button type="button" key={candidate.id} disabled={locked} onClick={() => onSelect(candidate.grade, candidate.id)} className="block w-full text-left disabled:cursor-not-allowed">{card}</button> : <div key={`${candidate.id}-${index}`}>{card}</div>;
+        return onSelect ? <button type="button" key={candidate.id} disabled={blocked} onClick={() => onSelect(candidate.id)} className="block w-full text-left disabled:cursor-not-allowed">{card}</button> : <div key={`${candidate.id}-${index}`}>{card}</div>;
       })}
     </div>
   );
