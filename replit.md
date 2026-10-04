@@ -42,8 +42,8 @@ Starts the Express server on **port 5000**, which also serves the Vite dev clien
 
 ## cPanel Deployment
 
-1. On cPanel, create the Node.js app with **Node.js 22**, set `DATABASE_URL` in the Node.js app environment variables (e.g. pointing to a Neon/Supabase/Aiven PostgreSQL instance), and use `app.js` as the startup file.
-2. Build on Replit: `VITE_BASE_PATH=/id/ npm run build` then commit `dist/` to GitHub.
+1. On cPanel, create the Node.js app with **Node.js 22**, set `DATABASE_URL` and deployment-specific `ADMIN_USERNAME` / `ADMIN_PASSWORD` bootstrap values in its environment variables, and use `app.js` as the startup file. The database `AdminCredential` record takes precedence when it exists; never commit `.env`.
+2. Build the cPanel artifact on Replit: `npm run build:cpanel`, then commit `dist/` to GitHub. This creates assets under `/id/`, as required by `deploy.sh`.
 3. On cPanel, run `bash deploy.sh` — this pulls from GitHub and runs `prisma migrate deploy` automatically.
     If the existing production database was created before Prisma Migrate and the
     deploy log reports `P3005`, run the explicit legacy recovery path:
@@ -168,8 +168,9 @@ Upload PDF/DOCX, storage adapter, ingestion job, parser preview, dan AI/RAG belu
 ## Build for production
 
 ```
-VITE_BASE_PATH=/id/ npm run build   # outputs dist/server.cjs + frontend assets
-npm start       # runs the compiled bundle
+npm run build:cpanel   # cPanel: outputs dist/server.cjs + assets rooted at /id/
+npm run build          # Replit production: assets rooted at /
+npm start              # local/root-path run; cPanel Node.js App Manager must start app.js (sets BASE_PATH=/id)
 ```
 
 The `.htaccess`, `app.js`, and `deploy.sh` files are for cPanel/Passenger deployment.

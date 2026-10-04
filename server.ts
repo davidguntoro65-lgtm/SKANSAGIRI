@@ -121,18 +121,17 @@ async function requireAuth(req: express.Request, res: express.Response, next: ex
 }
 
 // ─── Admin credentials helpers ────────────────────────────────────────────────
-async function getAdminCredentials(): Promise<{ username: string; password: string }> {
+async function getAdminCredentials(): Promise<{ username: string; password: string } | null> {
   // Keep this query independent from newer Prisma-generated relation metadata.
   // AdminCredential has been stable since the first production migration.
   const rows = await db.$queryRaw<Array<{ username: string; password: string }>>`
     SELECT "username", "password" FROM "AdminCredential" WHERE "id" = 1 LIMIT 1
   `;
   const cred = rows[0];
-  if (cred) return { username: cred.username, password: cred.password };
-  return {
-    username: process.env.ADMIN_USERNAME || "jobenenterprise",
-    password: process.env.ADMIN_PASSWORD || "KuraKuraNinja!0!",
-  };
+  if (cred?.username && cred.password) return { username: cred.username, password: cred.password };
+  const username = process.env.ADMIN_USERNAME?.trim();
+  const password = process.env.ADMIN_PASSWORD;
+  return username && password ? { username, password } : null;
 }
 
 // ─── Setting helpers (replaces all JSON file r/w for config + collections) ────
@@ -288,6 +287,11 @@ app.post("/api/auth/login", async (req, res) => {
   const { username, password } = req.body;
   try {
     const creds = await getAdminCredentials();
+    if (!creds) {
+      return res.status(503).json({
+        error: "Akun admin belum dikonfigurasi. Atur ADMIN_USERNAME dan ADMIN_PASSWORD di environment server.",
+      });
+    }
     if (username === creds.username && password === creds.password) {
       clearAttempts(ip);
       const token = crypto.randomBytes(48).toString("hex");
@@ -313,6 +317,11 @@ app.post("/api/auth/change-password", async (req, res) => {
   if (!currentPassword || !newPassword) return res.status(400).json({ error: "Password lama dan password baru wajib diisi." });
   if (newPassword.length < 8) return res.status(400).json({ error: "Password baru minimal 8 karakter." });
   const creds = await getAdminCredentials();
+  if (!creds) {
+    return res.status(503).json({
+      error: "Akun admin belum dikonfigurasi. Atur ADMIN_USERNAME dan ADMIN_PASSWORD di environment server.",
+    });
+  }
   if (currentPassword !== creds.password) return res.status(401).json({ error: "Password saat ini salah." });
   const updated = { username: (newUsername || "").trim() || creds.username, password: newPassword };
   try {
