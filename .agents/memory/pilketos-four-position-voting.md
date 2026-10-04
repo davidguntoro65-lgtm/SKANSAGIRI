@@ -14,3 +14,9 @@ Existing votes from the earlier two-grade flow are retained under separate legac
 **Why:** This preserves previous records without assigning them an invented office or allowing existing voters to cast another ballot.
 
 **How to apply:** Do not migrate legacy votes into Ketua Umum/Ketua 1/Ketua 3/Ketua 4 unless a verified mapping is supplied.
+
+Automatic voting schedules use WIB for both start and end instants. Supplying one time requires supplying both; the end must be later than the start. With neither time set, an OPEN election stays in manual mode.
+
+**Why:** Admin input is local school time, while the app server and student devices may use different time zones or clocks.
+
+**How to apply:** Normalize schedule input to WIB before storing it, calculate the countdown from server time, and enforce both boundaries again in the vote endpoint. Treat the scheduled phase as authoritative even when the persisted election status remains OPEN.

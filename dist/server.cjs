@@ -75620,6 +75620,13 @@ var PILKETOS_POSITION_GRADE = {
   KETUA_3: "X",
   KETUA_4: "X"
 };
+function getPilketosVotingPhase(election, now = /* @__PURE__ */ new Date()) {
+  if (election.status === "DRAFT") return "DRAFT";
+  if (election.status !== "OPEN") return "CLOSED";
+  if (election.startsAt && now < new Date(election.startsAt)) return "SCHEDULED";
+  if (election.endsAt && now >= new Date(election.endsAt)) return "ENDED";
+  return "OPEN";
+}
 function publicPilketosElection(election, votedPositions = [], votedCandidateIds = [], stats) {
   if (!election) return null;
   return {
@@ -75630,6 +75637,8 @@ function publicPilketosElection(election, votedPositions = [], votedCandidateIds
     status: election.status,
     startsAt: election.startsAt,
     endsAt: election.endsAt,
+    votingPhase: getPilketosVotingPhase(election),
+    serverTime: (/* @__PURE__ */ new Date()).toISOString(),
     hasVoted: votedCandidateIds.length > 0,
     votedPositions,
     votedCandidateIds,
@@ -75722,7 +75731,11 @@ function registerCorePlatformRoutes(app2, requireAuth2) {
       return fail(res, 400, "FOUR_POSITIONS_REQUIRED", "Pilih satu kandidat untuk masing-masing dari empat jabatan.");
     }
     const election = await db.pilketosElection.findUnique({ where: { id: electionId } });
-    if (!election || election.status !== "OPEN") return fail(res, 409, "ELECTION_NOT_OPEN", "Pemilihan belum dibuka atau sudah ditutup.");
+    if (!election) return fail(res, 409, "ELECTION_NOT_OPEN", "Pemilihan belum dibuka atau sudah ditutup.");
+    const votingPhase = getPilketosVotingPhase(election);
+    if (votingPhase === "SCHEDULED") return fail(res, 409, "VOTING_NOT_STARTED", "Waktu pemungutan suara belum dimulai.");
+    if (votingPhase === "ENDED") return fail(res, 409, "VOTING_ENDED", "Waktu pemungutan suara sudah berakhir.");
+    if (votingPhase !== "OPEN") return fail(res, 409, "ELECTION_NOT_OPEN", "Pemilihan belum dibuka atau sudah ditutup.");
     const candidates = await db.pilketosCandidate.findMany({
       where: { id: { in: candidateIds }, electionId }
     });
@@ -75839,6 +75852,14 @@ function registerCorePlatformRoutes(app2, requireAuth2) {
     const status = clean(req.body.status).toUpperCase();
     if (!title || !academicYear) return fail(res, 400, "REQUIRED_FIELD", "Judul dan tahun ajaran wajib diisi.");
     if (!["DRAFT", "OPEN", "CLOSED"].includes(status)) return fail(res, 400, "INVALID_STATUS", "Status pemilihan tidak valid.");
+    const startsAtInput = clean(req.body.startsAt);
+    const endsAtInput = clean(req.body.endsAt);
+    const startsAt = parseDate(startsAtInput);
+    const endsAt = parseDate(endsAtInput);
+    if (startsAtInput && !startsAt) return fail(res, 400, "INVALID_START_TIME", "Waktu mulai pemilihan tidak valid.");
+    if (endsAtInput && !endsAt) return fail(res, 400, "INVALID_END_TIME", "Waktu akhir pemilihan tidak valid.");
+    if (Boolean(startsAt) !== Boolean(endsAt)) return fail(res, 400, "SCHEDULE_INCOMPLETE", "Isi waktu mulai dan waktu akhir, atau kosongkan keduanya untuk mode manual.");
+    if (startsAt && endsAt && endsAt <= startsAt) return fail(res, 400, "INVALID_TIME_RANGE", "Waktu akhir harus setelah waktu mulai.");
     const candidates = electionId ? await db.pilketosCandidate.findMany({ where: { electionId }, select: { grade: true } }) : [];
     const gradeCounts = {
       X: candidates.filter((candidate) => candidate.grade === "X").length,
@@ -75847,7 +75868,7 @@ function registerCorePlatformRoutes(app2, requireAuth2) {
     if (status === "OPEN" && (candidates.length !== 8 || gradeCounts.X !== 4 || gradeCounts.XI !== 4)) {
       return fail(res, 409, "CANDIDATES_REQUIRED", "Pemilihan hanya dapat dibuka jika tersedia tepat 4 kandidat kelas X dan 4 kandidat kelas XI.");
     }
-    const data = { title, academicYear, description, status, startsAt: req.body.startsAt ? parseDate(req.body.startsAt) : null, endsAt: req.body.endsAt ? parseDate(req.body.endsAt) : null };
+    const data = { title, academicYear, description, status, startsAt, endsAt };
     const election = await db.$transaction(async (tx) => {
       if (data.status === "OPEN") await tx.pilketosElection.updateMany({ where: { status: "OPEN", ...electionId ? { id: { not: electionId } } : {} }, data: { status: "CLOSED" } });
       return electionId ? tx.pilketosElection.update({ where: { id: electionId }, data, include: { candidates: { orderBy: [{ grade: "asc" }, { candidateNo: "asc" }], include: { _count: { select: { votes: true } } } } } }) : tx.pilketosElection.create({ data, include: { candidates: true } });

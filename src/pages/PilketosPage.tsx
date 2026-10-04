@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -40,6 +40,8 @@ type Election = {
   votedCandidateIds: string[];
   startsAt?: string | null;
   endsAt?: string | null;
+  votingPhase: "DRAFT" | "SCHEDULED" | "OPEN" | "ENDED" | "CLOSED";
+  serverTime: string;
   candidates: Candidate[];
 };
 
@@ -76,7 +78,61 @@ function authHeaders(): HeadersInit {
 
 function formatDate(value?: string | null) {
   if (!value) return "";
-  return new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  return new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" }).format(new Date(value));
+}
+
+function phaseAt(election: Election, nowMs: number): Election["votingPhase"] {
+  if (election.status === "DRAFT") return "DRAFT";
+  if (election.status === "CLOSED") return "CLOSED";
+  const startsAt = election.startsAt ? Date.parse(election.startsAt) : NaN;
+  const endsAt = election.endsAt ? Date.parse(election.endsAt) : NaN;
+  if (Number.isFinite(startsAt) && nowMs < startsAt) return "SCHEDULED";
+  if (Number.isFinite(endsAt) && nowMs >= endsAt) return "ENDED";
+  return "OPEN";
+}
+
+function VotingSchedule({ election, phase, nowMs }: { election: Election; phase: Election["votingPhase"]; nowMs: number }) {
+  const target = phase === "SCHEDULED" ? election.startsAt : phase === "OPEN" ? election.endsAt : null;
+  const heading = phase === "SCHEDULED"
+    ? "Voting dimulai dalam"
+    : phase === "OPEN" && target
+      ? "Waktu voting tersisa"
+      : phase === "OPEN"
+        ? "Pemungutan suara sedang berlangsung"
+        : phase === "ENDED"
+          ? "Waktu pemungutan suara sudah berakhir"
+          : phase === "CLOSED"
+            ? "Pemilihan ditutup panitia"
+            : "Pemilihan belum dibuka";
+  const remaining = target ? Math.max(0, Date.parse(target) - nowMs) : 0;
+  const parts = [
+    { label: "Hari", value: Math.floor(remaining / 86_400_000) },
+    { label: "Jam", value: Math.floor((remaining % 86_400_000) / 3_600_000) },
+    { label: "Menit", value: Math.floor((remaining % 3_600_000) / 60_000) },
+    { label: "Detik", value: Math.floor((remaining % 60_000) / 1_000) },
+  ];
+  return (
+    <div role="timer" aria-live="off" className="mt-6 rounded-2xl border border-amber-200 bg-amber-50/90 p-4 sm:p-5">
+      <div className="flex items-center gap-2 text-sm font-black text-amber-900"><Clock3 className="h-4 w-4 text-amber-600" />{heading}</div>
+      {target ? (
+        <>
+          <div className="mt-4 grid grid-cols-4 gap-2">
+            {parts.map((part) => <div key={part.label} className="rounded-xl bg-white px-2 py-3 text-center shadow-sm">
+              <span className="block text-xl font-black tabular-nums text-slate-950 sm:text-2xl">{String(part.value).padStart(2, "0")}</span>
+              <span className="mt-1 block text-[9px] font-black uppercase tracking-wider text-slate-500">{part.label}</span>
+            </div>)}
+          </div>
+          <p className="mt-3 text-xs font-medium text-amber-900">Jadwal: {formatDate(target)} WIB · waktu resmi dari server</p>
+        </>
+      ) : phase === "OPEN" ? (
+        <p className="mt-2 text-xs leading-relaxed text-amber-900">Pemilihan berlangsung tanpa batas waktu terjadwal dan dapat ditutup oleh panitia.</p>
+      ) : phase === "ENDED" ? (
+        <p className="mt-2 text-xs leading-relaxed text-amber-900">Masa pemilihan berakhir pada {formatDate(election.endsAt)} WIB.</p>
+      ) : (
+        <p className="mt-2 text-xs leading-relaxed text-amber-900">Panitia belum membuka pemilihan.</p>
+      )}
+    </div>
+  );
 }
 
 function getStoredToken() {
@@ -87,6 +143,8 @@ export default function PilketosPage() {
   const { getLogo } = useBranding();
   const [view, setView] = useState<View>("landing");
   const [election, setElection] = useState<Election | null>(null);
+  const [serverClock, setServerClock] = useState<{ epochMs: number; receivedAt: number } | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [user, setUser] = useState<StudentUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [loginBusy, setLoginBusy] = useState(false);
@@ -100,6 +158,7 @@ export default function PilketosPage() {
   const [confirming, setConfirming] = useState(false);
 
   const logo = getLogo("light");
+  const votingPhase = election ? phaseAt(election, nowMs) : null;
   const selected = useMemo(
     () => POSITIONS
       .map((position) => ({
@@ -110,14 +169,31 @@ export default function PilketosPage() {
     [election, selectedCandidates],
   );
 
-  async function loadElection() {
+  useEffect(() => {
+    if (votingPhase !== "OPEN") setConfirming(false);
+  }, [votingPhase]);
+
+  const loadElection = useCallback(async () => {
     const response = await apiFetch("/api/v1/pilketos/active", { headers: authHeaders() });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error?.message || "Data pemilihan tidak dapat dimuat.");
     const next = payload.data?.election as Election | null;
     setElection(next);
+    const serverEpoch = next ? Date.parse(next.serverTime) : NaN;
+    setServerClock(Number.isFinite(serverEpoch) ? { epochMs: serverEpoch, receivedAt: performance.now() } : null);
     return next;
-  }
+  }, []);
+
+  useEffect(() => {
+    if (!serverClock) {
+      setNowMs(Date.now());
+      return;
+    }
+    const tick = () => setNowMs(serverClock.epochMs + performance.now() - serverClock.receivedAt);
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [serverClock]);
 
   useEffect(() => {
     document.title = "E-Pilketos 2026/2027 — SMKN 1 Wonogiri";
@@ -150,7 +226,20 @@ export default function PilketosPage() {
     };
 
     void restoreSession();
-  }, []);
+  }, [loadElection]);
+
+  useEffect(() => {
+    if (view === "landing") return;
+    const refresh = () => {
+      if (document.visibilityState === "visible") void loadElection().catch(() => {});
+    };
+    const timer = window.setInterval(refresh, 15_000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [loadElection, view]);
 
   function openLogin() {
     setLoginError("");
@@ -192,7 +281,7 @@ export default function PilketosPage() {
   }
 
   async function castVote() {
-    if (!election || selected.length !== POSITIONS.length || voteBusy) return;
+    if (!election || votingPhase !== "OPEN" || selected.length !== POSITIONS.length || voteBusy) return;
     setVoteBusy(true);
     try {
       const response = await apiFetch("/api/v1/pilketos/vote", {
@@ -251,7 +340,8 @@ export default function PilketosPage() {
               <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Masuk untuk memberikan suara.</h1>
               <p className="mt-3 text-sm leading-relaxed text-slate-500">Gunakan NIS atau NISN dan password akun siswa. Halaman ini khusus untuk autentikasi pemilih.</p>
             </div>
-            {election?.status === "OPEN" ? (
+            {election && votingPhase && election.status === "OPEN" && <VotingSchedule election={election} phase={votingPhase} nowMs={nowMs} />}
+            {election?.status === "OPEN" && votingPhase !== "ENDED" ? (
               <form onSubmit={login} className="mt-8">
                 <label className="block text-xs font-black uppercase tracking-wider text-slate-600">
                   NIS / NISN
@@ -274,7 +364,7 @@ export default function PilketosPage() {
                 </button>
               </form>
             ) : (
-              <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-relaxed text-amber-800"><Clock3 className="mb-2 h-5 w-5 text-amber-600" />Login pemilih akan dibuka setelah panitia mengaktifkan pemilihan. Kandidat yang sudah disiapkan dapat dilihat di halaman utama.</div>
+              <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-relaxed text-amber-800"><Clock3 className="mb-2 h-5 w-5 text-amber-600" />{votingPhase === "ENDED" ? "Masa pemungutan suara telah berakhir." : "Login pemilih akan dibuka setelah panitia mengaktifkan pemilihan."} {votingPhase !== "ENDED" && "Kandidat yang sudah disiapkan dapat dilihat di halaman utama."}</div>
             )}
           </section>
           <p className="mt-6 text-center text-xs font-medium text-slate-400">Satu siswa, satu suara · Sistem pemilihan resmi SMKN 1 Wonogiri</p>
@@ -307,8 +397,13 @@ export default function PilketosPage() {
               <h2 className="mt-6 text-2xl font-black text-slate-950">Suaramu sudah tercatat.</h2>
               <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-slate-500">Terima kasih telah menggunakan hak pilih. Sistem sudah mengunci suara untuk pemilihan ini.</p>
             </div>
+          ) : votingPhase !== "OPEN" ? (
+            <div className="mx-auto max-w-2xl">
+              <VotingSchedule election={election} phase={votingPhase || "CLOSED"} nowMs={nowMs} />
+            </div>
           ) : (
             <section>
+              <VotingSchedule election={election} phase={votingPhase} nowMs={nowMs} />
               <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h2 className="text-xl font-black text-slate-950">Pilih empat jabatan</h2><p className="mt-1 text-sm text-slate-500">Setiap jabatan mendapat satu pilihan. Suara dikirim sekaligus dan tidak dapat diubah.</p></div><span className="rounded-full bg-amber-100 px-3 py-1.5 text-xs font-black text-amber-700">{selected.length}/4 pilihan</span></div>
               {POSITIONS.map((position) => {
                 const candidates = election.candidates.filter((candidate) => candidate.grade === position.grade);
@@ -329,7 +424,7 @@ export default function PilketosPage() {
           )}
         </div>
         {feedback && <Toast feedback={feedback} />}
-         {confirming && selected.length === POSITIONS.length && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-5 backdrop-blur-sm"><div className="w-full max-w-md rounded-[2rem] bg-white p-7 shadow-2xl"><div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-100 text-amber-700"><Vote className="h-5 w-5" /></div><div><p className="text-xs font-black uppercase tracking-widest text-amber-600">Konfirmasi akhir</p><h3 className="font-black text-slate-950">Simpan empat pilihan?</h3></div></div><p className="mt-5 text-sm leading-relaxed text-slate-600">Semua pilihan akan disimpan sekaligus dan tidak dapat diubah.</p><div className="mt-4 space-y-2">{selected.map(({ position, candidate }) => <div key={position.id} className="flex items-center gap-3 rounded-xl bg-slate-50 p-3"><div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg bg-amber-100 text-sm font-black text-amber-700">{candidate.photoData ? <img src={candidate.photoData} alt="" className="h-full w-full object-contain p-0.5" /> : candidate.candidateNo}</div><div><p className="text-[10px] font-black uppercase tracking-widest text-amber-600">{position.label}</p><p className="text-sm font-black text-slate-950">{candidate.name} · Kelas {candidate.grade}</p></div></div>)}</div><div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button onClick={() => setConfirming(false)} className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-500 hover:text-slate-900">Periksa lagi</button><button onClick={() => void castVote()} disabled={voteBusy} className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white disabled:opacity-50">{voteBusy ? "Menyimpan..." : "Ya, simpan empat pilihan"}</button></div></div></div>}
+         {confirming && votingPhase === "OPEN" && selected.length === POSITIONS.length && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-5 backdrop-blur-sm"><div className="w-full max-w-md rounded-[2rem] bg-white p-7 shadow-2xl"><div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-100 text-amber-700"><Vote className="h-5 w-5" /></div><div><p className="text-xs font-black uppercase tracking-widest text-amber-600">Konfirmasi akhir</p><h3 className="font-black text-slate-950">Simpan empat pilihan?</h3></div></div><p className="mt-5 text-sm leading-relaxed text-slate-600">Semua pilihan akan disimpan sekaligus dan tidak dapat diubah.</p><div className="mt-4 space-y-2">{selected.map(({ position, candidate }) => <div key={position.id} className="flex items-center gap-3 rounded-xl bg-slate-50 p-3"><div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg bg-amber-100 text-sm font-black text-amber-700">{candidate.photoData ? <img src={candidate.photoData} alt="" className="h-full w-full object-contain p-0.5" /> : candidate.candidateNo}</div><div><p className="text-[10px] font-black uppercase tracking-widest text-amber-600">{position.label}</p><p className="text-sm font-black text-slate-950">{candidate.name} · Kelas {candidate.grade}</p></div></div>)}</div><div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button onClick={() => setConfirming(false)} className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-500 hover:text-slate-900">Periksa lagi</button><button onClick={() => void castVote()} disabled={voteBusy} className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white disabled:opacity-50">{voteBusy ? "Menyimpan..." : "Ya, simpan empat pilihan"}</button></div></div></div>}
       </main>
     );
   }

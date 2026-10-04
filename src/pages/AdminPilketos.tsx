@@ -1,5 +1,5 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
-import { CheckCircle2, ImagePlus, Loader2, Plus, Save, Trash2, Vote } from "lucide-react";
+import { CheckCircle2, Clock3, ImagePlus, Loader2, Plus, Save, Trash2, Vote } from "lucide-react";
 import { apiFetch } from "../utils/navigation";
 
 type Candidate = {
@@ -18,6 +18,9 @@ type Election = {
   academicYear: string;
   description: string;
   status: "DRAFT" | "OPEN" | "CLOSED";
+  startsAt?: string | null;
+  endsAt?: string | null;
+  votingPhase?: "DRAFT" | "SCHEDULED" | "OPEN" | "ENDED" | "CLOSED";
   candidates: Candidate[];
 };
 
@@ -40,6 +43,34 @@ const POSITIONS: Array<{ id: Position; label: string; grade: "X" | "XI" }> = [
 ];
 
 const TOKEN_KEY = "smkn1_adm_token";
+
+function toJakartaInput(value?: string | null) {
+  if (!value) return "";
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(value));
+  const part = (type: string) => parts.find((item) => item.type === type)?.value || "";
+  return `${part("year")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}`;
+}
+
+function fromJakartaInput(value: string) {
+  return value ? new Date(`${value}:00+07:00`).toISOString() : null;
+}
+
+function serializeElectionForm(form: { title: string; academicYear: string; description: string; status: string; startsAt: string; endsAt: string }, status = form.status) {
+  return {
+    ...form,
+    status,
+    startsAt: fromJakartaInput(form.startsAt),
+    endsAt: fromJakartaInput(form.endsAt),
+  };
+}
 
 function headers() {
   return { Authorization: `Bearer ${localStorage.getItem(TOKEN_KEY) || ""}`, "Content-Type": "application/json" };
@@ -85,7 +116,7 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
   const muted = dark ? "text-slate-400" : "text-slate-500";
   const input = dark ? "border-white/10 bg-slate-950/50 text-white" : "border-slate-200 bg-white text-slate-900";
   const [election, setElection] = useState<Election | null>(null);
-  const [form, setForm] = useState({ title: "Pemilihan Ketua OSIS", academicYear: "2026/2027", description: "", status: "DRAFT" });
+  const [form, setForm] = useState({ title: "Pemilihan Ketua OSIS", academicYear: "2026/2027", description: "", status: "DRAFT", startsAt: "", endsAt: "" });
   const [candidate, setCandidate] = useState({ grade: "XI" as "X" | "XI", candidateNo: "", name: "", photoData: "" });
   const [stats, setStats] = useState<ParticipationStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -101,7 +132,14 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
       const next = payload.data?.election as Election | null;
       setElection(next);
       setStats(payload.data?.stats || null);
-      if (next) setForm({ title: next.title, academicYear: next.academicYear, description: next.description, status: next.status });
+      if (next) setForm({
+        title: next.title,
+        academicYear: next.academicYear,
+        description: next.description,
+        status: next.status,
+        startsAt: toJakartaInput(next.startsAt),
+        endsAt: toJakartaInput(next.endsAt),
+      });
     } catch (error) {
       setNotice({ type: "error", text: error instanceof Error ? error.message : "Data Pilketos tidak dapat dimuat." });
     } finally {
@@ -115,7 +153,7 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
     event.preventDefault();
     setSaving(true);
     try {
-      const response = await apiFetch("/api/v1/pilketos/admin/election", { method: "POST", headers: headers(), body: JSON.stringify({ ...form, id: election?.id }) });
+      const response = await apiFetch("/api/v1/pilketos/admin/election", { method: "POST", headers: headers(), body: JSON.stringify({ ...serializeElectionForm(form), id: election?.id }) });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error?.message || "Pengaturan belum tersimpan.");
       setNotice({ type: "success", text: "Pengaturan pemilihan berhasil disimpan." });
@@ -149,7 +187,7 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
         const electionResponse = await apiFetch("/api/v1/pilketos/admin/election", {
           method: "POST",
           headers: headers(),
-          body: JSON.stringify({ ...form, status: "DRAFT" }),
+          body: JSON.stringify(serializeElectionForm(form, "DRAFT")),
         });
         const electionPayload = await electionResponse.json().catch(() => ({}));
         if (!electionResponse.ok) throw new Error(electionPayload.error?.message || "Draft pemilihan belum dapat dibuat.");
@@ -246,7 +284,16 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
           <label className={`mt-6 block text-xs font-bold ${muted}`}>Judul pemilihan<input required value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} className={`mt-2 w-full rounded-xl border px-3.5 py-3 text-sm outline-none focus:border-amber-400 ${input}`} /></label>
           <label className={`mt-4 block text-xs font-bold ${muted}`}>Tahun ajaran<input required value={form.academicYear} onChange={(event) => setForm({ ...form, academicYear: event.target.value })} className={`mt-2 w-full rounded-xl border px-3.5 py-3 text-sm outline-none focus:border-amber-400 ${input}`} /></label>
           <label className={`mt-4 block text-xs font-bold ${muted}`}>Deskripsi<textarea value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} rows={4} className={`mt-2 w-full resize-none rounded-xl border px-3.5 py-3 text-sm outline-none focus:border-amber-400 ${input}`} placeholder="Pesan singkat untuk pemilih..." /></label>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className={`block text-xs font-bold ${muted}`}>Mulai voting (WIB)<input type="datetime-local" step={60} required={Boolean(form.startsAt || form.endsAt)} value={form.startsAt} onChange={(event) => setForm({ ...form, startsAt: event.target.value })} className={`mt-2 w-full rounded-xl border px-3 py-3 text-sm outline-none focus:border-amber-400 ${input}`} /></label>
+            <label className={`block text-xs font-bold ${muted}`}>Akhir voting (WIB)<input type="datetime-local" step={60} min={form.startsAt || undefined} required={Boolean(form.startsAt || form.endsAt)} value={form.endsAt} onChange={(event) => setForm({ ...form, endsAt: event.target.value })} className={`mt-2 w-full rounded-xl border px-3 py-3 text-sm outline-none focus:border-amber-400 ${input}`} /></label>
+          </div>
+          <p className={`mt-2 text-xs leading-relaxed ${muted}`}>Isi kedua waktu untuk jadwal otomatis. Voting dibuka dan ditutup oleh server sesuai jadwal WIB. Kosongkan keduanya untuk mode manual.</p>
           <label className={`mt-4 block text-xs font-bold ${muted}`}>Status<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })} className={`mt-2 w-full rounded-xl border px-3.5 py-3 text-sm outline-none focus:border-amber-400 ${input}`}><option value="DRAFT">Draft — masih menyiapkan kandidat</option><option value="OPEN">Buka pemilihan</option><option value="CLOSED">Tutup pemilihan</option></select></label>
+          {election?.status === "OPEN" && <div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-xs">
+            <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+            <p className={muted}>Status waktu: <strong className="text-amber-500">{({ SCHEDULED: "Terjadwal", OPEN: "Sedang berlangsung", ENDED: "Waktu voting selesai", CLOSED: "Ditutup", DRAFT: "Draft" } as Record<string, string>)[election.votingPhase || election.status]}</strong>{election.startsAt && election.endsAt && <span className="mt-1 block">WIB: {toJakartaInput(election.startsAt).replace("T", " ")}–{toJakartaInput(election.endsAt).replace("T", " ")}</span>}</p>
+          </div>}
           <button disabled={saving} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-3 font-black text-slate-950 transition hover:bg-amber-300 disabled:opacity-50"><Save className="h-4 w-4" />{saving ? "Menyimpan..." : "Simpan pengaturan"}</button>
           {form.status === "OPEN" && !readyToOpen && <p className="mt-3 text-xs leading-relaxed text-rose-500">Tambahkan tepat 4 kandidat kelas X dan 4 kandidat kelas XI sebelum membuka pemilihan.</p>}
         </form>
