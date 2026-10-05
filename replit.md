@@ -44,53 +44,9 @@ Starts the Express server on **port 5000**, which also serves the Vite dev clien
 
 ## cPanel Deployment
 
-1. On cPanel, create the Node.js app with **Node.js 22**, set `DATABASE_URL` and deployment-specific `ADMIN_USERNAME` / `ADMIN_PASSWORD` bootstrap values in its environment variables, and use `app.js` as the startup file. The database `AdminCredential` record takes precedence when it exists; never commit `.env`.
-2. From the Replit project root, run `npm run build:cpanel`. This builds `dist/` with the `/id/` asset prefix expected by the cPanel site. Verify the files before pushing:
+Follow the manual release runbook in [`docs/PANDUAN-RILIS-MANUAL-CPANEL.md`](docs/PANDUAN-RILIS-MANUAL-CPANEL.md). The production site is mounted at `/id`, so use `npm run build:cpanel` in Replit; it sets the required asset prefix and runs the normal build. Commit and push through Replit's Git interface, then run `deploy.sh` manually on cPanel. Production migrations must run on cPanel against its production `DATABASE_URL`, never against Replit's development database.
 
-   ```bash
-   test -s dist/server.cjs
-   test -s dist/index.html
-   test -d dist/assets
-   grep -Eq '(src|href)="/id/assets/' dist/index.html
-   ```
-
-3. Check whether the build produced tracked changes and whether the local branch has commits to send:
-
-   ```bash
-   git status -sb
-   ```
-
-   If `dist/` changed, stage and commit it (also stage any source files changed for this release):
-
-   ```bash
-   git add dist/
-   git commit -m "build: cPanel production artifacts"
-   ```
-
-   If the working tree is clean and the branch is up to date with `origin/main`, the build is already committed and there is nothing to push.
-
-4. Push local commits to GitHub using the existing repository connection:
-
-   ```bash
-   git push origin main
-   ```
-
-   Do not run `gh auth login` for the already-connected repository. If Git reports that the branch is up to date, no push is needed.
-
-5. **On the cPanel server only**, from the app directory, run `bash deploy.sh main`. The script fetches GitHub, hard-resets tracked files to the selected branch, restores protected server files, checks and applies pending Prisma migrations, verifies `dist/`, and restarts Passenger. Do not run this script in Replit: it is a cPanel pull-and-restart script, not a Replit build/deploy command. Ensure there are no uncommitted tracked changes on cPanel that must be kept before running it.
-
-    If the existing production database was created before Prisma Migrate and the
-    deploy log reports `P3005`, run the explicit legacy recovery path:
-
-   ```bash
-   BASELINE_EXISTING_SCHEMA=1 bash deploy.sh
-   ```
-
-    The script compares the live database with
-    `prisma/legacy-baseline.prisma` (the schema from the first migration), marks
-    only `20260721114333_init` as applied, and then applies all later migrations
-    including Core Platform and Pilketos. It aborts when the legacy schema
-    differs, and it never resets, seeds, or deletes application data.
+The cPanel app uses **Node.js 22** and `app.js` as its Passenger startup file. Keep `.env` and all credentials out of Git. If Prisma reports `P3005`, follow the runbook's guarded legacy-baseline instructions; never mark an existing database as baselined without verifying its schema.
 
 ### External PostgreSQL options (free tier):
 - **Neon** — https://neon.tech (recommended, serverless, generous free tier)
