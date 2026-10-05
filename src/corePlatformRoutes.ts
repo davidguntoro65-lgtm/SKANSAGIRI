@@ -369,6 +369,18 @@ const PILKETOS_POSITION_GRADE: Record<PilketosPosition, PilketosGrade> = {
   KETUA_4: "X",
 };
 
+async function resolvePilketosStudent(identifierValue: unknown) {
+  const identifier = clean(identifierValue);
+  if (!identifier || identifier.length > 64) return null;
+  return db.coreStudent.findFirst({
+    where: {
+      status: "ACTIVE",
+      OR: [{ nis: identifier }, { nisn: identifier }],
+    },
+    select: { id: true, userId: true, fullName: true, nis: true, nisn: true },
+  });
+}
+
 function getPilketosVotingPhase(election: { status: string; startsAt?: Date | string | null; endsAt?: Date | string | null }, now = new Date()): PilketosVotingPhase {
   if (election.status === "DRAFT") return "DRAFT";
   if (election.status !== "OPEN") return "CLOSED";
@@ -474,11 +486,39 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
     });
   });
 
+  app.post("/api/v1/pilketos/identify", async (req, res) => {
+    const student = await resolvePilketosStudent(req.body?.identifier);
+    if (!student) {
+      return fail(res, 404, "STUDENT_NOT_FOUND", "NIS/NISN tidak ditemukan atau siswa tidak aktif.");
+    }
+
+    const election = await db.pilketosElection.findFirst({
+      where: { status: "OPEN" },
+      include: { candidates: { orderBy: [{ grade: "asc" }, { candidateNo: "asc" }] } },
+      orderBy: { updatedAt: "desc" },
+    });
+    if (!election) {
+      return fail(res, 409, "ELECTION_NOT_OPEN", "Pemilihan belum dibuka atau sudah ditutup.");
+    }
+
+    const votes = await db.pilketosVote.findMany({
+      where: { electionId: election.id, studentId: student.id },
+      select: { position: true, candidateId: true },
+    });
+    return ok(res, {
+      student: { fullName: student.fullName },
+      election: publicPilketosElection(
+        election,
+        votes.map((vote) => vote.position),
+        votes.map((vote) => vote.candidateId),
+      ),
+    });
+  });
+
   app.post("/api/v1/pilketos/vote", async (req, res) => {
-    const session = await getPilketosSession(req);
-    const student = session?.coreUser?.student;
-    if (!session || !student || !session.coreUser.roles.some(({ role }) => role.name === "SISWA")) {
-      return fail(res, 401, "STUDENT_AUTH_REQUIRED", "Silakan login sebagai siswa terlebih dahulu.");
+    const student = await resolvePilketosStudent(req.body?.identifier);
+    if (!student) {
+      return fail(res, 404, "STUDENT_NOT_FOUND", "NIS/NISN tidak ditemukan atau siswa tidak aktif.");
     }
     const electionId = clean(req.body.electionId);
     const submittedVotes = Array.isArray(req.body.votes)
@@ -544,7 +584,7 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
               grade: candidate.grade,
               position: vote.position,
               studentId: student.id,
-              userId: session.coreUser.id,
+              userId: student.userId,
             };
           }),
         });
@@ -553,8 +593,8 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
             action: "PILKETOS_VOTE_CAST",
             entity: "PilketosElection",
             entityId: electionId,
-            actor: session.coreUser.id,
-            userId: session.coreUser.id,
+            actor: student.userId || student.id,
+            userId: student.userId,
             metadata: {
               positions: submittedVotes.map((vote: any) => vote.position),
               candidateNos: submittedVotes.map((vote: any) => candidateById.get(vote.candidateId)?.candidateNo),

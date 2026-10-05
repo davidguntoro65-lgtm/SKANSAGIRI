@@ -7,10 +7,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock3,
-  Eye,
-  EyeOff,
   LogOut,
-  LockKeyhole,
   ShieldCheck,
   Sparkles,
   UserRound,
@@ -47,8 +44,6 @@ type Election = {
 
 type StudentUser = {
   fullName: string;
-  student?: { nis: string | null; nisn: string } | null;
-  roles: string[];
 };
 
 type View = "landing" | "login" | "vote";
@@ -68,13 +63,6 @@ const EMPTY_SELECTIONS: Record<Position, string> = {
   KETUA_3: "",
   KETUA_4: "",
 };
-
-const TOKEN_KEY = "smkn1_core_token";
-
-function authHeaders(): HeadersInit {
-  const stored = typeof window !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null;
-  return stored ? { Authorization: `Bearer ${stored}` } : {};
-}
 
 function formatDate(value?: string | null) {
   if (!value) return "";
@@ -135,10 +123,6 @@ function VotingSchedule({ election, phase, nowMs }: { election: Election; phase:
   );
 }
 
-function getStoredToken() {
-  return typeof window !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null;
-}
-
 export default function PilketosPage() {
   const { getLogo } = useBranding();
   const [view, setView] = useState<View>("landing");
@@ -150,8 +134,6 @@ export default function PilketosPage() {
   const [loginBusy, setLoginBusy] = useState(false);
   const [voteBusy, setVoteBusy] = useState(false);
   const [identifier, setIdentifier] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [selectedCandidates, setSelectedCandidates] = useState<Record<Position, string>>(EMPTY_SELECTIONS);
   const [loginError, setLoginError] = useState("");
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -173,11 +155,18 @@ export default function PilketosPage() {
     if (votingPhase !== "OPEN") setConfirming(false);
   }, [votingPhase]);
 
-  const loadElection = useCallback(async () => {
-    const response = await apiFetch("/api/v1/pilketos/active", { headers: authHeaders() });
+  const loadElection = useCallback(async (studentIdentifier?: string) => {
+    const response = studentIdentifier
+      ? await apiFetch("/api/v1/pilketos/identify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ identifier: studentIdentifier }),
+        })
+      : await apiFetch("/api/v1/pilketos/active");
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error?.message || "Data pemilihan tidak dapat dimuat.");
     const next = payload.data?.election as Election | null;
+    if (studentIdentifier) setUser((payload.data?.student as StudentUser | undefined) || null);
     setElection(next);
     const serverEpoch = next ? Date.parse(next.serverTime) : NaN;
     setServerClock(Number.isFinite(serverEpoch) ? { epochMs: serverEpoch, receivedAt: performance.now() } : null);
@@ -209,15 +198,6 @@ export default function PilketosPage() {
     const restoreSession = async () => {
       try {
         await loadElection();
-        if (!getStoredToken()) return;
-        const response = await apiFetch("/api/v1/auth/session", { headers: authHeaders() });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok || !payload.data?.user?.roles?.includes("SISWA")) {
-          localStorage.removeItem(TOKEN_KEY);
-          return;
-        }
-        setUser(payload.data.user);
-        setView("vote");
       } catch (error) {
         setFeedback({ type: "error", text: error instanceof Error ? error.message : "Data pemilihan tidak dapat dimuat." });
       } finally {
@@ -231,7 +211,9 @@ export default function PilketosPage() {
   useEffect(() => {
     if (view === "landing") return;
     const refresh = () => {
-      if (document.visibilityState === "visible") void loadElection().catch(() => {});
+      if (document.visibilityState !== "visible") return;
+      const studentIdentifier = view === "vote" ? identifier.trim() : "";
+      void loadElection(studentIdentifier || undefined).catch(() => {});
     };
     const timer = window.setInterval(refresh, 15_000);
     document.addEventListener("visibilitychange", refresh);
@@ -239,7 +221,7 @@ export default function PilketosPage() {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [loadElection, view]);
+  }, [identifier, loadElection, view]);
 
   function openLogin() {
     setLoginError("");
@@ -251,6 +233,9 @@ export default function PilketosPage() {
   function returnToLanding() {
     setLoginError("");
     setFeedback(null);
+    setIdentifier("");
+    setUser(null);
+    setSelectedCandidates(EMPTY_SELECTIONS);
     setView("landing");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -258,23 +243,18 @@ export default function PilketosPage() {
   async function login(event: FormEvent) {
     event.preventDefault();
     setLoginError("");
+    const studentIdentifier = identifier.trim();
+    if (!studentIdentifier) {
+      setLoginError("Masukkan NIS atau NISN.");
+      return;
+    }
     setLoginBusy(true);
     try {
-      const response = await apiFetch("/api/v1/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identifier: identifier.trim(), password }),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error?.message || "Login gagal.");
-      if (!payload.data?.user?.roles?.includes("SISWA")) throw new Error("Akun ini bukan akun siswa.");
-      localStorage.setItem(TOKEN_KEY, payload.data.token);
-      setUser(payload.data.user);
-      await loadElection();
-      setPassword("");
+      await loadElection(studentIdentifier);
+      setIdentifier(studentIdentifier);
       setView("vote");
     } catch (error) {
-      setLoginError(error instanceof Error ? error.message : "Login gagal.");
+      setLoginError(error instanceof Error ? error.message : "NIS/NISN tidak dapat diperiksa.");
     } finally {
       setLoginBusy(false);
     }
@@ -286,9 +266,10 @@ export default function PilketosPage() {
     try {
       const response = await apiFetch("/api/v1/pilketos/vote", {
         method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           electionId: election.id,
+          identifier: identifier.trim(),
           votes: selected.map(({ position, candidate }) => ({
             position: position.id,
             candidateId: candidate.id,
@@ -307,13 +288,8 @@ export default function PilketosPage() {
     }
   }
 
-  async function logout() {
-    await apiFetch("/api/v1/auth/logout", { method: "POST", headers: authHeaders() }).catch(() => {});
-    localStorage.removeItem(TOKEN_KEY);
-    setUser(null);
-    setSelectedCandidates(EMPTY_SELECTIONS);
-    setFeedback(null);
-    setView("landing");
+  function logout() {
+    returnToLanding();
   }
 
   if (view === "login") {
@@ -337,8 +313,8 @@ export default function PilketosPage() {
             </div>
             <div className="mt-10">
               <p className="text-xs font-black uppercase tracking-[.2em] text-amber-600">Portal pemilih</p>
-              <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Masuk untuk memberikan suara.</h1>
-              <p className="mt-3 text-sm leading-relaxed text-slate-500">Gunakan NIS atau NISN dan password akun siswa. Halaman ini khusus untuk autentikasi pemilih.</p>
+              <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Masukkan NIS/NISN untuk memilih.</h1>
+              <p className="mt-3 text-sm leading-relaxed text-slate-500">Gunakan NIS atau NISN yang terdaftar. Tidak perlu memasukkan password.</p>
             </div>
             {election && votingPhase && election.status === "OPEN" && <VotingSchedule election={election} phase={votingPhase} nowMs={nowMs} />}
             {election?.status === "OPEN" && votingPhase !== "ENDED" ? (
@@ -350,21 +326,13 @@ export default function PilketosPage() {
                     <input required value={identifier} onChange={(event) => setIdentifier(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3.5 pl-11 pr-4 text-sm font-medium text-slate-900 outline-none transition focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-400/15" placeholder="Masukkan NIS atau NISN" autoComplete="username" />
                   </span>
                 </label>
-                <label className="mt-4 block text-xs font-black uppercase tracking-wider text-slate-600">
-                  Password
-                  <span className="relative mt-2 block">
-                    <LockKeyhole className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                    <input required type={showPassword ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3.5 pl-11 pr-12 text-sm font-medium text-slate-900 outline-none transition focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-400/15" placeholder="Masukkan password" autoComplete="current-password" />
-                    <button type="button" onClick={() => setShowPassword((value) => !value)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-2 text-slate-400 transition hover:text-slate-700" aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
-                  </span>
-                </label>
                 {loginError && <p role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-700">{loginError}</p>}
                 <button disabled={loginBusy} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 py-3.5 text-sm font-black text-white shadow-lg shadow-slate-950/15 transition hover:-translate-y-0.5 hover:bg-amber-500 hover:text-slate-950 disabled:cursor-wait disabled:opacity-50">
-                  {loginBusy ? "Memeriksa data..." : "Masuk ke halaman voting"} <ArrowRight className="h-4 w-4" />
+                  {loginBusy ? "Memeriksa NIS/NISN..." : "Lanjut ke halaman pemilihan"} <ArrowRight className="h-4 w-4" />
                 </button>
               </form>
             ) : (
-              <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-relaxed text-amber-800"><Clock3 className="mb-2 h-5 w-5 text-amber-600" />{votingPhase === "ENDED" ? "Masa pemungutan suara telah berakhir." : "Login pemilih akan dibuka setelah panitia mengaktifkan pemilihan."} {votingPhase !== "ENDED" && "Kandidat yang sudah disiapkan dapat dilihat di halaman utama."}</div>
+              <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-relaxed text-amber-800"><Clock3 className="mb-2 h-5 w-5 text-amber-600" />{votingPhase === "ENDED" ? "Masa pemungutan suara telah berakhir." : "Akses pemilih akan dibuka setelah panitia mengaktifkan pemilihan."} {votingPhase !== "ENDED" && "Kandidat yang sudah disiapkan dapat dilihat di halaman utama."}</div>
             )}
           </section>
           <p className="mt-6 text-center text-xs font-medium text-slate-400">Satu siswa, satu suara · Sistem pemilihan resmi SMKN 1 Wonogiri</p>

@@ -3,6 +3,12 @@ name: Four-position Pilketos voting
 description: Product rules and compatibility decisions for the four-role student election
 ---
 
+Voter access is intentionally limited to entering NIS or NISN; do not require a password or CoreUser session for the e-voting page. NIS/NISN identifies a student record but does not prove who is entering it, so anyone who knows another student's number could impersonate that student.
+
+**Why:** The user asked students to go directly to voting with NIS/NISN only while preserving one ballot per student.
+
+**How to apply:** Resolve the identifier to an active student on the server, and continue enforcing the one-ballot transaction, schedule, candidate-grade, and duplicate-choice rules server-side.
+
 Each student has one ballot per election containing four choices: Ketua Umum and Ketua 1 from the four grade XI candidates, plus Ketua 3 and Ketua 4 from the four grade X candidates. The same candidate cannot be selected for both roles in either grade pair. Admin scores are tallied independently for each role.
 
 **Why:** The user specified exactly eight candidates (four from each grade), one voting right per NIS/NISN/student, and four role-specific results.

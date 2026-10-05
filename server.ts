@@ -268,6 +268,8 @@ app.use((req, res, next) => {
     "/api/aduan",
     "/api/v1/auth/login",
     "/api/v1/auth/activate",
+    "/api/v1/pilketos/identify",
+    "/api/v1/pilketos/vote",
   ];
   if (publicExact.includes(req.path)) return next();
   const publicPatterns = [
