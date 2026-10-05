@@ -10,9 +10,9 @@ Production deploys must apply only pending Prisma migrations, reject destructive
 The live cPanel app stores its persistent content, accounts, sessions, and academic data in PostgreSQL rather than the repository. The deployment needs schema updates for new code, but a deployment must not turn an application update into a data reset.
 
 **How to apply:**
-Keep database migrations before the Node restart, load `DATABASE_URL` from the app environment or protected `.env` without logging it, and abort before restart if the Prisma CLI or safety check fails. When Prisma runs from an isolated npx cache, use a temporary plain config with absolute app paths; the app-local `prisma.config.ts` may not resolve `prisma/config` from that cache. Check CLI availability separately from the database migration, stream output instead of buffering it, and bound both operations with a timeout so a registry stall is distinguishable from a PostgreSQL connection or migration lock. On this cPanel host, do not rely on `/bin/timeout`: it aborts in the jailed environment. Use the cPanel Node runtime to supervise Prisma in a separate process group, terminate the group on timeout, and preserve CLI output and exit status. Also inspect command output for config/Prisma errors because a CLI can log a failure while returning success.
+Keep database migrations before the Node restart, load `DATABASE_URL` from the app environment or protected `.env` without logging it, and abort before restart if the Prisma CLI or safety check fails. Use an offline Prisma CLI bundle built in Replit with the Linux schema-engine targets needed by cPanel; the host's npm registry access is unreliable. Use a temporary plain Prisma config with absolute app paths, stream output, and supervise the CLI in a process group with a timeout. Also inspect command output for config/Prisma errors because a CLI can log a failure while returning success.
 
-**Why:** A cPanel deploy stalled during `npx`/Prisma with output buffered until process exit, and the host's `/bin/timeout` later dumped core before Prisma started. Logs could not distinguish CLI setup from a database failure.
+**Why:** cPanel had no local Prisma CLI, could not complete `npx` registry access, and its `/bin/timeout` dumped core before Prisma started. Logs could not distinguish CLI setup from a database failure.
 
 ## Existing database baseline
 

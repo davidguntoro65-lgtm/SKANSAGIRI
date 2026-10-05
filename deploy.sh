@@ -242,19 +242,89 @@ if [ "${1:-}" = "--post-reset" ]; then
 
   # ── Database migration ──────────────────────────────────────────────────────
   # dist/server.cjs self-contained untuk runtime aplikasi, tetapi prisma migrate
-  # deploy membutuhkan Prisma CLI. Jangan jalankan npm ci di APP_DIR: pada cPanel
-  # node_modules dapat berupa symlink/layout yang dikelola Node.js App Manager,
-  # dan npm ci akan menghapusnya lalu sering gagal dengan "Exit handler never
-  # called". Cari binary pada nodevenv cPanel terlebih dahulu, lalu binary lokal,
-  # dan terakhir gunakan npx cache terisolasi.
+  # deploy membutuhkan Prisma CLI. Jangan jalankan npm ci di APP_DIR: cPanel
+  # Node.js App Manager dapat mengelola node_modules di luar repo. Utamakan CLI
+  # yang dibundel saat build Replit agar deploy tidak bergantung pada registry.
   PRISMA_RUNNER=()
   PRISMA_RUNNER_LABEL=""
 
   prepare_prisma_cli() {
     local node_bin="${CPANEL_NODE_BIN:-$(command -v node 2>/dev/null || true)}"
-    local npx_bin="${CPANEL_NPX_BIN:-$(command -v npx 2>/dev/null || true)}"
+    local bundle_parts_prefix="$APP_DIR/dist/prisma-cli-cpanel.tar.gz.part"
     local search_dir
 
+    [ -n "$node_bin" ] && command -v "$node_bin" >/dev/null 2>&1 || {
+      log_err "Node.js dari environment cPanel tidak tersedia; Prisma migration dibatalkan."
+      return 1
+    }
+
+    # Prefer the exact, offline-capable CLI from the Replit cPanel build.
+    if [ -s "${bundle_parts_prefix}00" ]; then
+      command -v tar >/dev/null 2>&1 || {
+        log_err "Perintah tar tidak tersedia untuk mengekstrak Prisma CLI bundle."
+        return 1
+      }
+      # Extract under the cPanel home/node environment, not /tmp: shared hosts
+      # may mount /tmp with noexec, but Prisma must execute schema-engine.
+      local bundle_temp_base="${CPANEL_NODEENV_DIR:-${HOME:-$APP_DIR}}"
+      if [ ! -d "$bundle_temp_base" ] || [ ! -w "$bundle_temp_base" ]; then
+        bundle_temp_base="${HOME:-$APP_DIR}"
+      fi
+      PRISMA_CLI_TEMP_DIR="$(mktemp -d "$bundle_temp_base/.smkn-prisma-cli.XXXXXX")" || {
+        log_err "Tidak bisa membuat direktori sementara untuk Prisma CLI."
+        return 1
+      }
+      local bundle_archive="$PRISMA_CLI_TEMP_DIR/prisma-cli-cpanel.tar.gz"
+      local part_index=0 part_suffix part_path part_count=0
+      : > "$bundle_archive" || {
+        log_err "Tidak bisa menyiapkan arsip sementara Prisma CLI."
+        return 1
+      }
+      while :; do
+        part_suffix="$(printf '%02d' "$part_index")"
+        part_path="${bundle_parts_prefix}${part_suffix}"
+        [ -s "$part_path" ] || break
+        if ! cat "$part_path" >> "$bundle_archive"; then
+          log_err "Gagal menyatukan bagian Prisma CLI bundle ($part_suffix)."
+          return 1
+        fi
+        part_count=$((part_count + 1))
+        part_index=$((part_index + 1))
+      done
+      if [ "$part_count" -eq 0 ] ||
+         ! tar -tzf "$bundle_archive" >/dev/null 2>&1; then
+        log_err "Bagian Prisma CLI bundle tidak lengkap atau rusak."
+        return 1
+      fi
+      if ! tar -xzf "$bundle_archive" -C "$PRISMA_CLI_TEMP_DIR" >/dev/null 2>&1; then
+        log_err "Prisma CLI bundle tidak dapat diekstrak."
+        return 1
+      fi
+
+      local bundled_cli="$PRISMA_CLI_TEMP_DIR/node_modules/prisma/build/index.js"
+      local bundled_schema_engine_dir="$PRISMA_CLI_TEMP_DIR/node_modules/@prisma/engines"
+      if [ ! -f "$bundled_cli" ] ||
+         [ ! -x "$bundled_schema_engine_dir/schema-engine-rhel-openssl-1.0.x" ] ||
+         [ ! -x "$bundled_schema_engine_dir/schema-engine-rhel-openssl-3.0.x" ]; then
+        log_err "Prisma CLI bundle tidak memuat CLI atau schema-engine RHEL yang diwajibkan."
+        return 1
+      fi
+
+      local bundled_version
+      bundled_version="$(
+        PRISMA_PACKAGE_JSON="$PRISMA_CLI_TEMP_DIR/node_modules/prisma/package.json" \
+          "$node_bin" -e 'process.stdout.write(require(process.env.PRISMA_PACKAGE_JSON).version)' 2>/dev/null
+      )" || {
+        log_err "Versi Prisma CLI bundle tidak dapat diverifikasi."
+        return 1
+      }
+      PRISMA_RUNNER=("$node_bin" "$bundled_cli")
+      PRISMA_RUNNER_LABEL="release bundle Prisma $bundled_version"
+      log_info "Memakai Prisma CLI offline dari build release (schema-engine RHEL 1.0/3.0)."
+      return 0
+    fi
+
+    # Compatibility fallback for hosts where cPanel already installed Prisma.
     for search_dir in "$CPANEL_NODE_MODULES_DIR" "$APP_DIR/node_modules"; do
       [ -n "$search_dir" ] || continue
       if [ -x "$search_dir/.bin/prisma" ]; then
@@ -274,35 +344,9 @@ if [ "${1:-}" = "--post-reset" ]; then
       fi
     done
 
-    [ -n "$npx_bin" ] || {
-      log_err "'npx' tidak ada di PATH; Prisma CLI tidak bisa dijalankan."
-      return 1
-    }
-    [ -n "$node_bin" ] || {
-      log_err "'node' tidak ada di PATH; versi Prisma tidak bisa dibaca."
-      return 1
-    }
-
-    local prisma_version
-    prisma_version="$(
-      APP_DIR_FOR_NODE="$APP_DIR" "$node_bin" -e '
-        const path = require("path");
-        const p = require(path.join(process.env.APP_DIR_FOR_NODE, "package.json"));
-        const version = (p.dependencies && p.dependencies.prisma) ||
-          (p.devDependencies && p.devDependencies.prisma);
-        if (!version) process.exit(1);
-        process.stdout.write(version);
-      ' 2>/dev/null
-    )" || {
-      log_err "Versi Prisma tidak ditemukan di package.json — deploy dibatalkan."
-      return 1
-    }
-
-    # --package memasang Prisma ke cache npx, bukan ke APP_DIR/node_modules.
-    # Ini sengaja menghindari npm ci yang merusak symlink node_modules cPanel.
-    PRISMA_RUNNER=("$npx_bin" --yes --package "prisma@$prisma_version" prisma)
-    PRISMA_RUNNER_LABEL="npx cache ($prisma_version)"
-    log_info "Prisma CLI lokal tidak tersedia; memakai $PRISMA_RUNNER_LABEL tanpa mengubah node_modules."
+    log_err "Prisma CLI tidak ditemukan dan dist/prisma-cli-cpanel.tar.gz.part00 tidak tersedia."
+    log_err "Di Replit jalankan npm run build:cpanel, commit/push seluruh dist/, lalu ulangi deploy."
+    return 1
   }
 
   load_database_url() {
@@ -382,11 +426,6 @@ if [ "${1:-}" = "--post-reset" ]; then
       return 1
     fi
 
-    # Batasi waktu akses registry untuk fallback npx. Jika CLI sudah tersedia
-    # lokal, pengaturan ini tidak memengaruhi dependensi aplikasi.
-    export NPM_CONFIG_FETCH_RETRIES="${NPM_CONFIG_FETCH_RETRIES:-1}"
-    export NPM_CONFIG_FETCH_TIMEOUT="${NPM_CONFIG_FETCH_TIMEOUT:-30000}"
-
     run_prisma_logged() {
       local label="$1"
       shift
@@ -421,7 +460,7 @@ if [ "${1:-}" = "--post-reset" ]; then
     if [ "$PRISMA_COMMAND_STATUS" -ne 0 ]; then
       if [ "$PRISMA_COMMAND_STATUS" -eq 124 ] || [ "$PRISMA_COMMAND_STATUS" -eq 137 ]; then
         log_err "Pemeriksaan Prisma CLI melewati batas ${prisma_timeout_seconds} detik."
-        log_err "Jika memakai npx, periksa akses server ke registry.npmjs.org dan cache npm."
+        log_err "Database belum dihubungi; periksa CLI bundle dan kompatibilitas Node/engine cPanel."
       else
         log_err "Prisma CLI gagal dijalankan (exit $PRISMA_COMMAND_STATUS); lihat output [prisma-cli] di atas."
       fi
@@ -429,10 +468,8 @@ if [ "${1:-}" = "--post-reset" ]; then
     fi
 
     log_info "Menerapkan migration PostgreSQL yang belum pernah dijalankan (batas ${prisma_timeout_seconds} detik)..."
-    # When Prisma is supplied through an isolated npx cache, a config file
-    # inside APP_DIR cannot resolve `prisma/config` from its own node_modules.
-    # Use a plain temporary config instead; it is still Prisma 7-compatible
-    # and keeps the app's cPanel-managed node_modules untouched.
+    # Use a plain temporary config so Prisma 7 resolves the app schema without
+    # importing configuration packages from the protected app node_modules.
     local config_file
     config_file="$(mktemp "${TMPDIR:-/tmp}/smkn-prisma-config.XXXXXX.ts")" || {
       log_err "Tidak bisa membuat config Prisma sementara — deploy dibatalkan."
@@ -540,7 +577,7 @@ PRISMA_CONFIG
     log_info "cPanel dependency path: $CPANEL_NODE_MODULES_DIR"
   fi
   if ! apply_database_migrations; then
-    log_err "Migration gagal. Proses yang sedang berjalan tidak dihentikan; backup konfigurasi dipertahankan di: $PROTECT_DIR"
+    log_err "Migration gagal; deploy dibatalkan sebelum restart. Backup konfigurasi dipertahankan di: $PROTECT_DIR"
     exit 1
   fi
 

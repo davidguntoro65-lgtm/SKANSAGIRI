@@ -15,9 +15,10 @@ dari Replit.
    ```
 
     `build:cpanel` menjalankan `npm run build` dengan asset prefix `/id/`,
-    lalu membuat `dist/prisma-cli-cpanel.tar.gz`. Bundle ini berisi Prisma CLI
-    sesuai lockfile beserta schema-engine untuk host cPanel RHEL, sehingga
-    migration tidak perlu mengunduh paket dari npm saat deploy.
+    lalu membuat bagian bundle Prisma CLI berukuran kurang dari 50 MiB per file.
+    Bundle ini berisi Prisma CLI sesuai lockfile beserta schema-engine untuk
+    host cPanel RHEL, sehingga migration tidak perlu mengunduh paket dari npm
+    saat deploy.
     Untuk situs yang dipasang di `/id`, jangan gunakan `npm run build` biasa:
     hasilnya memakai path root `/` dan aset bisa gagal dimuat setelah di-deploy.
 3. Pastikan hasil build lengkap:
@@ -26,7 +27,7 @@ dari Replit.
    test -s dist/server.cjs
    test -s dist/index.html
    test -d dist/assets
-    test -s dist/prisma-cli-cpanel.tar.gz
+    test -s dist/prisma-cli-cpanel.tar.gz.part00
    grep -Eq '(src|href)="/id/assets/' dist/index.html
    ```
 
@@ -37,8 +38,8 @@ dari Replit.
 
 1. Buka panel **Git / Version Control** Replit dan periksa daftar perubahan.
 2. Stage perubahan source code dan dokumentasi yang memang termasuk rilis.
-    Stage juga `dist/` termasuk `dist/prisma-cli-cpanel.tar.gz`. Pastikan
-    `deploy.sh` ikut di-commit jika ada perubahan pada prosedur deploy.
+    Stage juga `dist/` termasuk semua bagian `prisma-cli-cpanel.tar.gz.part*`.
+    Pastikan `deploy.sh` ikut di-commit jika ada perubahan pada prosedur deploy.
 3. Jangan stage atau commit `.env`, file rahasia, `logs/`, `app.js`,
    `.htaccess`, atau data lokal. File-file tersebut khusus untuk server dan
    tidak boleh diganti oleh commit rilis.
@@ -91,8 +92,9 @@ Buka juga halaman utama `/id` dan periksa bahwa halaman serta asetnya termuat.
 ## 5. Jika migration atau deploy gagal
 
 - Deploy menggunakan Prisma CLI dari bundle build; cPanel tidak perlu mengakses
-  `registry.npmjs.org` untuk menyiapkan Prisma. Jika CLI bundle tidak ada, ulangi
-  `npm run build:cpanel` di Replit dan pastikan file bundle ikut di-push.
+  `registry.npmjs.org` untuk menyiapkan Prisma. Jika bundle tidak ada atau
+  bagiannya tidak lengkap, ulangi `npm run build:cpanel` di Replit dan pastikan
+  semua file `prisma-cli-cpanel.tar.gz.part*` ikut di-push.
 - Jika pemeriksaan **Prisma CLI** timeout sebelum migration dimulai, database
   belum disentuh. Simpan `deploy.log` dan pastikan bundle cocok dengan host.
 - Jika Prisma mengeluarkan `P1001`, periksa host dan port PostgreSQL, koneksi

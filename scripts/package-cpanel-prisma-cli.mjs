@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -20,16 +21,30 @@ if (!prismaVersion) {
   throw new Error("package-lock.json does not contain the pinned Prisma CLI version.");
 }
 
-// cPanel uses RHEL-family hosts; Debian is included to validate the bundle on
-// the Replit build machine. The CLI needs schema-engine, not the query engine.
-const binaryTargets = [
+// Include Debian only to validate `prisma --version` on the Replit build host;
+// remove it before packaging. cPanel's OS release is unknown, so retain both
+// RHEL OpenSSL generations. The migration CLI needs schema-engine only.
+const buildTargets = [
   "debian-openssl-3.0.x",
   "rhel-openssl-1.0.x",
   "rhel-openssl-3.0.x",
 ];
+const deploymentTargets = buildTargets.filter((target) => target.startsWith("rhel-"));
 const artifact = path.join(projectRoot, "dist", "prisma-cli-cpanel.tar.gz");
+const artifactPartPrefix = `${artifact}.part`;
 const stagingDir = mkdtempSync(path.join(os.tmpdir(), "smkn-prisma-cli-"));
-const temporaryArchive = path.join(os.tmpdir(), `smkn-prisma-cli-${process.pid}.tar.gz`);
+const temporaryArchive = path.join(
+  projectRoot,
+  "dist",
+  `.prisma-cli-cpanel-${process.pid}.tmp.tar.gz`,
+);
+const temporaryPartPrefix = path.join(
+  projectRoot,
+  "dist",
+  `.prisma-cli-cpanel-${process.pid}.part`,
+);
+const createdParts = [];
+let packagingSucceeded = false;
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -47,6 +62,11 @@ try {
   rmSync(artifact, { force: true });
   rmSync(temporaryArchive, { force: true });
   mkdirSync(path.join(projectRoot, "dist"), { recursive: true });
+  for (const entry of readdirSync(path.dirname(artifact))) {
+    if (entry.startsWith(path.basename(artifactPartPrefix))) {
+      rmSync(path.join(path.dirname(artifact), entry), { force: true });
+    }
+  }
 
   writeFileSync(
     path.join(stagingDir, "package.json"),
@@ -63,7 +83,7 @@ try {
   );
 
   console.log(
-    `Packaging Prisma CLI ${prismaVersion} with engines for ${binaryTargets.join(", ")}...`,
+    `Packaging Prisma CLI ${prismaVersion} with engines for ${deploymentTargets.join(", ")}...`,
   );
   run(
     "npm",
@@ -73,7 +93,7 @@ try {
       timeout: 300_000,
       env: {
         ...process.env,
-        PRISMA_CLI_BINARY_TARGETS: binaryTargets.join(","),
+        PRISMA_CLI_BINARY_TARGETS: buildTargets.join(","),
       },
     },
   );
@@ -83,8 +103,16 @@ try {
   if (!existsSync(cliPath)) {
     throw new Error("The packaged Prisma CLI entry point is missing.");
   }
+  const packagedVersion = JSON.parse(
+    readFileSync(path.join(packageRoot, "prisma", "package.json"), "utf8"),
+  ).version;
+  if (packagedVersion !== prismaVersion) {
+    throw new Error(
+      `Packaged Prisma version ${packagedVersion} does not match lockfile ${prismaVersion}.`,
+    );
+  }
 
-  for (const target of binaryTargets) {
+  for (const target of buildTargets) {
     const enginePath = path.join(
       packageRoot,
       "@prisma",
@@ -97,11 +125,28 @@ try {
   }
 
   run(process.execPath, [cliPath, "--version"], {
-    cwd: projectRoot,
+    cwd: stagingDir,
     timeout: 30_000,
+    stdio: "ignore",
     env: {
       ...process.env,
-      PRISMA_CLI_BINARY_TARGETS: binaryTargets.join(","),
+      PRISMA_CLI_BINARY_TARGETS: buildTargets.join(","),
+    },
+  });
+
+  // The Debian engine is only for the build-host version check; do not ship it.
+  rmSync(
+    path.join(packageRoot, "@prisma", "engines", "schema-engine-debian-openssl-3.0.x"),
+  );
+
+  // Check that the exact command used by cPanel is available in the reduced bundle.
+  run(process.execPath, [cliPath, "migrate", "deploy", "--help"], {
+    cwd: stagingDir,
+    timeout: 30_000,
+    stdio: "ignore",
+    env: {
+      ...process.env,
+      PRISMA_CLI_BINARY_TARGETS: deploymentTargets.join(","),
     },
   });
 
@@ -123,11 +168,43 @@ try {
     );
   }
 
-  renameSync(temporaryArchive, artifact);
+  run("split", ["-b", "40M", "-d", "-a", "2", temporaryArchive, temporaryPartPrefix]);
+  const temporaryParts = readdirSync(path.dirname(temporaryPartPrefix))
+    .filter((entry) => entry.startsWith(path.basename(temporaryPartPrefix)))
+    .sort();
+  if (temporaryParts.length === 0) {
+    throw new Error("The Prisma CLI archive was not split into Git-safe parts.");
+  }
+
+  let totalPartBytes = 0;
+  for (const entry of temporaryParts) {
+    const source = path.join(path.dirname(temporaryPartPrefix), entry);
+    const suffix = entry.slice(path.basename(temporaryPartPrefix).length);
+    const destination = `${artifactPartPrefix}${suffix}`;
+    const partBytes = statSync(source).size;
+    if (partBytes > 40 * 1024 * 1024) {
+      throw new Error(`Prisma CLI part ${suffix} exceeds the 40 MiB Git-safe limit.`);
+    }
+    renameSync(source, destination);
+    createdParts.push(destination);
+    totalPartBytes += partBytes;
+  }
+  if (totalPartBytes !== archiveBytes) {
+    throw new Error("The split Prisma CLI parts do not match the verified archive size.");
+  }
+  packagingSucceeded = true;
   console.log(
-    `Created dist/prisma-cli-cpanel.tar.gz (${Math.ceil(archiveBytes / 1024 / 1024)} MiB).`,
+    `Created ${createdParts.length} Git-safe Prisma CLI parts (${Math.ceil(archiveBytes / 1024 / 1024)} MiB total).`,
   );
 } finally {
   rmSync(stagingDir, { recursive: true, force: true });
   rmSync(temporaryArchive, { force: true });
+  for (const entry of readdirSync(path.dirname(temporaryPartPrefix))) {
+    if (entry.startsWith(path.basename(temporaryPartPrefix))) {
+      rmSync(path.join(path.dirname(temporaryPartPrefix), entry), { force: true });
+    }
+  }
+  if (!packagingSucceeded) {
+    for (const part of createdParts) rmSync(part, { force: true });
+  }
 }
