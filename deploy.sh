@@ -367,14 +367,17 @@ if [ "${1:-}" = "--post-reset" ]; then
     prepare_prisma_cli || return 1
 
     local prisma_timeout_seconds="${PRISMA_COMMAND_TIMEOUT_SECONDS:-180}"
-    local timeout_bin="${CPANEL_TIMEOUT_BIN:-$(command -v timeout 2>/dev/null || true)}"
+    local node_bin="${CPANEL_NODE_BIN:-$(command -v node 2>/dev/null || true)}"
     if [[ ! "$prisma_timeout_seconds" =~ ^[1-9][0-9]*$ ]]; then
       log_err "PRISMA_COMMAND_TIMEOUT_SECONDS harus berupa bilangan bulat positif."
       return 1
     fi
-    if [ -z "$timeout_bin" ] || ! command -v "$timeout_bin" >/dev/null 2>&1; then
-      log_err "Perintah 'timeout' tidak tersedia; migrasi dibatalkan agar tidak menggantung tanpa batas."
-      log_err "Pasang/aktifkan coreutils di cPanel atau tentukan CPANEL_TIMEOUT_BIN."
+    if [ -z "$node_bin" ] || ! command -v "$node_bin" >/dev/null 2>&1; then
+      log_err "Node.js dari environment cPanel tidak tersedia; Prisma migration dibatalkan."
+      return 1
+    fi
+    if [ ! -f "$APP_DIR/scripts/run-with-timeout.cjs" ]; then
+      log_err "scripts/run-with-timeout.cjs tidak ditemukan; Prisma migration dibatalkan."
       return 1
     fi
 
@@ -394,8 +397,8 @@ if [ "${1:-}" = "--post-reset" ]; then
         return 0
       }
 
-      if "$timeout_bin" --signal=TERM --kill-after=10s "${prisma_timeout_seconds}s" \
-        env PRISMA_APP_DIR="$APP_DIR" "${PRISMA_RUNNER[@]}" "$@" 2>&1 |
+      if PRISMA_APP_DIR="$APP_DIR" "$node_bin" "$APP_DIR/scripts/run-with-timeout.cjs" \
+        "$prisma_timeout_seconds" "${PRISMA_RUNNER[@]}" "$@" 2>&1 |
         tee "$output_file" |
         sed "s/^/  [$label] /" |
         tee -a "$LOG_FILE"; then
