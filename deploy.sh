@@ -366,7 +366,65 @@ if [ "${1:-}" = "--post-reset" ]; then
 
     prepare_prisma_cli || return 1
 
-    log_info "Menerapkan migration PostgreSQL yang belum pernah dijalankan ($PRISMA_RUNNER_LABEL)..."
+    local prisma_timeout_seconds="${PRISMA_COMMAND_TIMEOUT_SECONDS:-180}"
+    local timeout_bin="${CPANEL_TIMEOUT_BIN:-$(command -v timeout 2>/dev/null || true)}"
+    if [[ ! "$prisma_timeout_seconds" =~ ^[1-9][0-9]*$ ]]; then
+      log_err "PRISMA_COMMAND_TIMEOUT_SECONDS harus berupa bilangan bulat positif."
+      return 1
+    fi
+    if [ -z "$timeout_bin" ] || ! command -v "$timeout_bin" >/dev/null 2>&1; then
+      log_err "Perintah 'timeout' tidak tersedia; migrasi dibatalkan agar tidak menggantung tanpa batas."
+      log_err "Pasang/aktifkan coreutils di cPanel atau tentukan CPANEL_TIMEOUT_BIN."
+      return 1
+    fi
+
+    # Batasi waktu akses registry untuk fallback npx. Jika CLI sudah tersedia
+    # lokal, pengaturan ini tidak memengaruhi dependensi aplikasi.
+    export NPM_CONFIG_FETCH_RETRIES="${NPM_CONFIG_FETCH_RETRIES:-1}"
+    export NPM_CONFIG_FETCH_TIMEOUT="${NPM_CONFIG_FETCH_TIMEOUT:-30000}"
+
+    run_prisma_logged() {
+      local label="$1"
+      shift
+      local output_file status
+      output_file="$(mktemp "${TMPDIR:-/tmp}/smkn-prisma-output.XXXXXX")" || {
+        log_err "Tidak bisa membuat file sementara untuk output Prisma."
+        PRISMA_COMMAND_OUTPUT=""
+        PRISMA_COMMAND_STATUS=1
+        return 0
+      }
+
+      if "$timeout_bin" --signal=TERM --kill-after=10s "${prisma_timeout_seconds}s" \
+        env PRISMA_APP_DIR="$APP_DIR" "${PRISMA_RUNNER[@]}" "$@" 2>&1 |
+        tee "$output_file" |
+        sed "s/^/  [$label] /" |
+        tee -a "$LOG_FILE"; then
+        status=0
+      else
+        status=$?
+      fi
+
+      PRISMA_COMMAND_OUTPUT="$(cat "$output_file")"
+      PRISMA_COMMAND_STATUS="$status"
+      rm -f "$output_file"
+      return 0
+    }
+
+    log_info "Memastikan Prisma CLI dapat dijalankan ($PRISMA_RUNNER_LABEL)..."
+    if ! run_prisma_logged prisma-cli --version; then
+      return 1
+    fi
+    if [ "$PRISMA_COMMAND_STATUS" -ne 0 ]; then
+      if [ "$PRISMA_COMMAND_STATUS" -eq 124 ] || [ "$PRISMA_COMMAND_STATUS" -eq 137 ]; then
+        log_err "Pemeriksaan Prisma CLI melewati batas ${prisma_timeout_seconds} detik."
+        log_err "Jika memakai npx, periksa akses server ke registry.npmjs.org dan cache npm."
+      else
+        log_err "Prisma CLI gagal dijalankan (exit $PRISMA_COMMAND_STATUS); lihat output [prisma-cli] di atas."
+      fi
+      return 1
+    fi
+
+    log_info "Menerapkan migration PostgreSQL yang belum pernah dijalankan (batas ${prisma_timeout_seconds} detik)..."
     # When Prisma is supplied through an isolated npx cache, a config file
     # inside APP_DIR cannot resolve `prisma/config` from its own node_modules.
     # Use a plain temporary config instead; it is still Prisma 7-compatible
@@ -386,19 +444,9 @@ export default {
 PRISMA_CONFIG
 
     run_migrate_deploy() {
-      local output status
-      if output="$(
-        PRISMA_APP_DIR="$APP_DIR" \
-        "${PRISMA_RUNNER[@]}" migrate deploy --config "$config_file" 2>&1
-      )"; then
-        status=0
-      else
-        status=$?
-      fi
-      printf '%s\n' "$output" |
-        sed 's/^/  [prisma] /' | tee -a "$LOG_FILE"
-      MIGRATION_OUTPUT="$output"
-      MIGRATION_STATUS="$status"
+      run_prisma_logged prisma migrate deploy --config "$config_file"
+      MIGRATION_OUTPUT="$PRISMA_COMMAND_OUTPUT"
+      MIGRATION_STATUS="$PRISMA_COMMAND_STATUS"
     }
 
     local migration_output migration_status
@@ -419,20 +467,13 @@ PRISMA_CONFIG
       log_warn "P3005 terdeteksi; memeriksa schema legacy terhadap migration awal..."
 
       local diff_output diff_status
-      if diff_output="$(
-        PRISMA_APP_DIR="$APP_DIR" \
-        "${PRISMA_RUNNER[@]}" migrate diff \
-          --from-config-datasource \
-          --to-schema "$APP_DIR/prisma/legacy-baseline.prisma" \
-          --script --exit-code \
-          --config "$config_file" 2>&1
-      )"; then
-        diff_status=0
-      else
-        diff_status=$?
-      fi
-      printf '%s\n' "$diff_output" |
-        sed 's/^/  [prisma-diff] /' | tee -a "$LOG_FILE"
+      run_prisma_logged prisma-diff migrate diff \
+        --from-config-datasource \
+        --to-schema "$APP_DIR/prisma/legacy-baseline.prisma" \
+        --script --exit-code \
+        --config "$config_file"
+      diff_output="$PRISMA_COMMAND_OUTPUT"
+      diff_status="$PRISMA_COMMAND_STATUS"
 
       if [ "$diff_status" -ne 0 ]; then
         if [ "$diff_status" -eq 2 ]; then
@@ -448,18 +489,11 @@ PRISMA_CONFIG
       local baseline_migration="20260721114333_init"
       log_info "Mendaftarkan hanya migration awal sebagai applied: $baseline_migration"
       local resolve_output resolve_status
-      if resolve_output="$(
-        PRISMA_APP_DIR="$APP_DIR" \
-        "${PRISMA_RUNNER[@]}" migrate resolve \
-          --applied "$baseline_migration" \
-          --config "$config_file" 2>&1
-      )"; then
-        resolve_status=0
-      else
-        resolve_status=$?
-      fi
-      printf '%s\n' "$resolve_output" |
-        sed 's/^/  [prisma-resolve] /' | tee -a "$LOG_FILE"
+      run_prisma_logged prisma-resolve migrate resolve \
+        --applied "$baseline_migration" \
+        --config "$config_file"
+      resolve_output="$PRISMA_COMMAND_OUTPUT"
+      resolve_status="$PRISMA_COMMAND_STATUS"
       if [ "$resolve_status" -ne 0 ] ||
          printf '%s\n' "$resolve_output" |
            grep -qE 'Failed to load config|(^|[[:space:]])Error:|P[0-9]{4}:'; then
@@ -473,6 +507,10 @@ PRISMA_CONFIG
       migration_output="$MIGRATION_OUTPUT"
       migration_status="$MIGRATION_STATUS"
     elif [ "$migration_status" -ne 0 ]; then
+      if [ "$migration_status" -eq 124 ] || [ "$migration_status" -eq 137 ]; then
+        log_err "Migrasi melewati batas ${prisma_timeout_seconds} detik setelah Prisma CLI berhasil dijalankan."
+        log_err "Periksa koneksi PostgreSQL dari cPanel: host/port, firewall atau allowlist, SSL, dan lock migrasi."
+      fi
       log_err "Prisma migration mengembalikan error — deploy dibatalkan sebelum restart."
       log_err "Jika database existing dibuat sebelum Prisma Migrate, jalankan ulang dengan"
       log_err "BASELINE_EXISTING_SCHEMA=1 setelah memastikan schema production identik."
