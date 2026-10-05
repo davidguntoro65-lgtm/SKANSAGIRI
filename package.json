@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "npx --yes tsx server.ts",
     "build": "vite build && npx prisma generate && esbuild server.ts --bundle --platform=node --format=cjs --external:vite --external:fsevents --sourcemap --outfile=dist/server.cjs",
-    "build:cpanel": "VITE_BASE_PATH=/id/ npm run build",
+    "build:cpanel": "VITE_BASE_PATH=/id/ npm run build && node scripts/package-cpanel-prisma-cli.mjs",
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",

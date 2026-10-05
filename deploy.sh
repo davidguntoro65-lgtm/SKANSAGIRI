@@ -63,15 +63,11 @@ if [ -z "$CPANEL_NODE_MODULES_DIR" ] && [ -n "$CPANEL_NODEENV_DIR" ]; then
   fi
 fi
 CPANEL_NODE_BIN="${CPANEL_NODE_BIN:-}"
-CPANEL_NPX_BIN="${CPANEL_NPX_BIN:-}"
 
 # cPanel Node.js App Manager menyimpan binary runtime di nodevenv/<app>/<version>.
 # Jangan bergantung pada PATH shell SSH karena bisa menunjuk ke Node sistem lain.
 if [ -z "$CPANEL_NODE_BIN" ] && [ -n "$CPANEL_NODEENV_DIR" ] && [ -x "$CPANEL_NODEENV_DIR/bin/node" ]; then
   CPANEL_NODE_BIN="$CPANEL_NODEENV_DIR/bin/node"
-fi
-if [ -z "$CPANEL_NPX_BIN" ] && [ -n "$CPANEL_NODEENV_DIR" ] && [ -x "$CPANEL_NODEENV_DIR/bin/npx" ]; then
-  CPANEL_NPX_BIN="$CPANEL_NODEENV_DIR/bin/npx"
 fi
 
 # Folder/file yang wajib dilindungi dari git reset --hard (lapisan kedua)
@@ -205,11 +201,16 @@ if [ "${1:-}" = "--post-reset" ]; then
   PROTECT_DIR="${2}"
   BRANCH="${3}"
   COMMIT_BEFORE="${4}"
+  PRISMA_CLI_TEMP_DIR=""
 
   # PENTING: Backup dipertahankan sampai restore dikonfirmasi berhasil.
   # Jika restore GAGAL, PROTECT_DIR TIDAK dihapus agar data bisa dipulihkan manual.
   RESTORE_DONE=0
   cleanup_phase2() {
+    if [ -n "$PRISMA_CLI_TEMP_DIR" ]; then
+      rm -rf -- "$PRISMA_CLI_TEMP_DIR" 2>/dev/null || true
+      PRISMA_CLI_TEMP_DIR=""
+    fi
     if [ "$RESTORE_DONE" -eq 1 ]; then
       rm -rf "$PROTECT_DIR" 2>/dev/null || true
       log_info "Backup sementara dibersihkan."
