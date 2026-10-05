@@ -42,8 +42,8 @@ MAX_LOG_LINES=2000
 # cPanel Node.js App Manager menyimpan runtime dan dependency di luar
 # public_html, biasanya:
 #   /home/USER/nodevenv/<jalur-app>/<versi>/lib/node_modules
-# Nilai VIRTUAL_ENV tersedia bila deploy dijalankan setelah `source .../activate`.
-# Dua override ini disediakan untuk hosting yang memakai layout berbeda.
+# Environment Node cPanel dapat diaktifkan otomatis di bawah; dua override ini
+# disediakan untuk hosting yang memakai layout berbeda.
 CPANEL_NODEENV_DIR="${CPANEL_NODEENV_DIR:-${VIRTUAL_ENV:-}}"
 CPANEL_NODE_MODULES_DIR="${CPANEL_NODE_MODULES_DIR:-}"
 if [ -z "$CPANEL_NODEENV_DIR" ]; then
@@ -63,12 +63,6 @@ if [ -z "$CPANEL_NODE_MODULES_DIR" ] && [ -n "$CPANEL_NODEENV_DIR" ]; then
   fi
 fi
 CPANEL_NODE_BIN="${CPANEL_NODE_BIN:-}"
-
-# cPanel Node.js App Manager menyimpan binary runtime di nodevenv/<app>/<version>.
-# Jangan bergantung pada PATH shell SSH karena bisa menunjuk ke Node sistem lain.
-if [ -z "$CPANEL_NODE_BIN" ] && [ -n "$CPANEL_NODEENV_DIR" ] && [ -x "$CPANEL_NODEENV_DIR/bin/node" ]; then
-  CPANEL_NODE_BIN="$CPANEL_NODEENV_DIR/bin/node"
-fi
 
 # Folder/file yang wajib dilindungi dari git reset --hard (lapisan kedua)
 # Catatan: data/ juga ada di .gitignore (lapisan pertama — git tidak menyentuhnya)
@@ -93,6 +87,45 @@ log_ok()   { _log " OK " "$CG" "$1"; }
 log_info() { _log "INFO" ""   "$1"; }
 log_warn() { _log "WARN" "$CY" "$1"; }
 log_err()  { _log " ERR" "$CR" "$1"; }
+
+activate_cpanel_node_environment() {
+  [ -n "$CPANEL_NODEENV_DIR" ] || return 0
+
+  local activate_script="$CPANEL_NODEENV_DIR/bin/activate"
+  if [ -f "$activate_script" ]; then
+    # cPanel's Node shim expects the environment variables and PATH supplied by
+    # its activation script. Calling nodevenv/bin/node directly can fail before
+    # Prisma starts (for example, by looking for app-local activate helpers).
+    # shellcheck disable=SC1090
+    if ! . "$activate_script"; then
+      log_err "Gagal mengaktifkan environment Node cPanel: $activate_script"
+      return 1
+    fi
+    CPANEL_NODEENV_DIR="${VIRTUAL_ENV:-$CPANEL_NODEENV_DIR}"
+    log_ok "Environment Node cPanel aktif."
+  else
+    log_warn "File aktivasi Node cPanel tidak ditemukan: $activate_script"
+  fi
+
+  if [ -z "$CPANEL_NODE_MODULES_DIR" ] &&
+     [ -d "$CPANEL_NODEENV_DIR/lib/node_modules" ]; then
+    CPANEL_NODE_MODULES_DIR="$CPANEL_NODEENV_DIR/lib/node_modules"
+  fi
+
+  # Resolve Node only after activation so the selected executable runs with
+  # cPanel's expected environment. An explicit CPANEL_NODE_BIN remains honored.
+  if [ -z "$CPANEL_NODE_BIN" ]; then
+    CPANEL_NODE_BIN="$(command -v node 2>/dev/null || true)"
+  fi
+  if [ -z "$CPANEL_NODE_BIN" ] &&
+     [ -x "$CPANEL_NODEENV_DIR/bin/node" ]; then
+    CPANEL_NODE_BIN="$CPANEL_NODEENV_DIR/bin/node"
+  fi
+}
+
+if ! activate_cpanel_node_environment; then
+  exit 1
+fi
 
 rotate_log() {
   [ -f "$LOG_FILE" ] && [ "$(wc -l < "$LOG_FILE")" -gt "$MAX_LOG_LINES" ] && \

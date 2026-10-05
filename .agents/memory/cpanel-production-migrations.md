@@ -10,9 +10,11 @@ Production deploys must apply only pending Prisma migrations, reject destructive
 The live cPanel app stores its persistent content, accounts, sessions, and academic data in PostgreSQL rather than the repository. The deployment needs schema updates for new code, but a deployment must not turn an application update into a data reset.
 
 **How to apply:**
-Keep database migrations before the Node restart, load `DATABASE_URL` from the app environment or protected `.env` without logging it, and abort before restart if the Prisma CLI or safety check fails. Use an offline Prisma CLI bundle built in Replit with the Linux schema-engine targets needed by cPanel; the host's npm registry access is unreliable. Use a temporary plain Prisma config with absolute app paths, stream output, and supervise the CLI in a process group with a timeout. Also inspect command output for config/Prisma errors because a CLI can log a failure while returning success.
+Keep database migrations before the Node restart, load `DATABASE_URL` from the app environment or protected `.env` without logging it, and abort before restart if the Prisma CLI or safety check fails. Use an offline Prisma CLI bundle built in Replit with the Linux schema-engine targets needed by cPanel; the host's npm registry access is unreliable. Activate the detected cPanel Node environment before resolving or invoking its Node binary. Use a temporary plain Prisma config with absolute app paths, stream output, and supervise the CLI in a process group with a timeout. Also inspect command output for config/Prisma errors because a CLI can log a failure while returning success.
 
 **Why:** cPanel had no local Prisma CLI, could not complete `npx` registry access, and its `/bin/timeout` dumped core before Prisma started. Logs could not distinguish CLI setup from a database failure.
+
+**Why:** The Node binary under `nodevenv` can be a cPanel wrapper that expects its activated environment. Calling it directly may fail during Prisma startup, before any PostgreSQL connection is attempted.
 
 ## Existing database baseline
 
