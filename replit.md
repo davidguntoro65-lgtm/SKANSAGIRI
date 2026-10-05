@@ -11,6 +11,8 @@ A full-stack school website for SMK Negeri 1 Wonogiri built with **React + Vite 
 
 ## Replit setup (first time)
 
+Use Node.js 22, matching the cPanel runtime and the Prisma dependency engine requirement.
+
 ```bash
 npm install          # install all dependencies
 npm run db:migrate   # apply Prisma migrations to the Replit PostgreSQL database
@@ -43,8 +45,25 @@ Starts the Express server on **port 5000**, which also serves the Vite dev clien
 ## cPanel Deployment
 
 1. On cPanel, create the Node.js app with **Node.js 22**, set `DATABASE_URL` and deployment-specific `ADMIN_USERNAME` / `ADMIN_PASSWORD` bootstrap values in its environment variables, and use `app.js` as the startup file. The database `AdminCredential` record takes precedence when it exists; never commit `.env`.
-2. Build the cPanel artifact on Replit: `npm run build:cpanel`, then commit `dist/` to GitHub. This creates assets under `/id/`, as required by `deploy.sh`.
-3. On cPanel, run `bash deploy.sh` — this pulls from GitHub and runs `prisma migrate deploy` automatically.
+2. From the Replit project root, run `npm run build:cpanel`. This builds `dist/` with the `/id/` asset prefix expected by the cPanel site. Verify the files before pushing:
+
+   ```bash
+   test -s dist/server.cjs
+   test -s dist/index.html
+   test -d dist/assets
+   grep -Eq '(src|href)="/id/assets/' dist/index.html
+   ```
+
+3. Commit and push the generated cPanel build to the branch cPanel deploys (normally `main`):
+
+   ```bash
+   git add dist/
+   git commit -m "build: cPanel production artifacts"
+   git push origin main
+   ```
+
+4. **On the cPanel server only**, from the app directory, run `bash deploy.sh main`. The script fetches GitHub, hard-resets tracked files to the selected branch, restores protected server files, checks and applies pending Prisma migrations, verifies `dist/`, and restarts Passenger. Do not run this script in Replit: it is a cPanel pull-and-restart script, not a Replit build/deploy command. Ensure there are no uncommitted tracked changes on cPanel that must be kept before running it.
+
     If the existing production database was created before Prisma Migrate and the
     deploy log reports `P3005`, run the explicit legacy recovery path:
 
@@ -168,12 +187,12 @@ Upload PDF/DOCX, storage adapter, ingestion job, parser preview, dan AI/RAG belu
 ## Build for production
 
 ```
-npm run build:cpanel   # cPanel: outputs dist/server.cjs + assets rooted at /id/
-npm run build          # Replit production: assets rooted at /
-npm start              # local/root-path run; cPanel Node.js App Manager must start app.js (sets BASE_PATH=/id)
+npm run build          # Replit publish build: outputs dist/server.cjs + assets rooted at /
+npm start              # run the production bundle locally
+npm run build:cpanel   # cPanel release only: outputs dist/server.cjs + assets rooted at /id/
 ```
 
-The `.htaccess`, `app.js`, and `deploy.sh` files are for cPanel/Passenger deployment.
+The Replit deployment settings in `.replit` use `npm run build` and `node dist/server.cjs` on autoscale. The `.htaccess`, `app.js`, and `deploy.sh` files are for cPanel/Passenger deployment.
 
 ## User preferences
 
