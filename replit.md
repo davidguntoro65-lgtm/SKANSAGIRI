@@ -54,15 +54,30 @@ Starts the Express server on **port 5000**, which also serves the Vite dev clien
    grep -Eq '(src|href)="/id/assets/' dist/index.html
    ```
 
-3. Commit and push the generated cPanel build to the branch cPanel deploys (normally `main`):
+3. Check whether the build produced tracked changes and whether the local branch has commits to send:
+
+   ```bash
+   git status -sb
+   ```
+
+   If `dist/` changed, stage and commit it (also stage any source files changed for this release):
 
    ```bash
    git add dist/
    git commit -m "build: cPanel production artifacts"
+   ```
+
+   If the working tree is clean and the branch is up to date with `origin/main`, the build is already committed and there is nothing to push.
+
+4. Push local commits to GitHub using the existing repository connection:
+
+   ```bash
    git push origin main
    ```
 
-4. **On the cPanel server only**, from the app directory, run `bash deploy.sh main`. The script fetches GitHub, hard-resets tracked files to the selected branch, restores protected server files, checks and applies pending Prisma migrations, verifies `dist/`, and restarts Passenger. Do not run this script in Replit: it is a cPanel pull-and-restart script, not a Replit build/deploy command. Ensure there are no uncommitted tracked changes on cPanel that must be kept before running it.
+   Do not run `gh auth login` for the already-connected repository. If Git reports that the branch is up to date, no push is needed.
+
+5. **On the cPanel server only**, from the app directory, run `bash deploy.sh main`. The script fetches GitHub, hard-resets tracked files to the selected branch, restores protected server files, checks and applies pending Prisma migrations, verifies `dist/`, and restarts Passenger. Do not run this script in Replit: it is a cPanel pull-and-restart script, not a Replit build/deploy command. Ensure there are no uncommitted tracked changes on cPanel that must be kept before running it.
 
     If the existing production database was created before Prisma Migrate and the
     deploy log reports `P3005`, run the explicit legacy recovery path:
