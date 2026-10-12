@@ -26234,7 +26234,14 @@ var require_utils4 = __commonJS({
   "node_modules/pg/lib/utils.js"(exports2, module2) {
     "use strict";
     var defaults2 = require_defaults();
+    var nodeUtils = require("util");
     var { isDate } = require("util/types");
+    var invalidDateDeprecationNotice = nodeUtils.deprecate(
+      () => {
+      },
+      "Sending an invalid date to Postgres is deprecated and will throw an error in the next major version of pg. Ensure any Date object passed as a query parameter is valid.",
+      "PG_INVALID_DATE"
+    );
     function escapeElement(elementRepresentation) {
       const escaped = elementRepresentation.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
       return '"' + escaped + '"';
@@ -26274,6 +26281,9 @@ var require_utils4 = __commonJS({
           return Buffer.from(val.buffer, val.byteOffset, val.byteLength);
         }
         if (isDate(val)) {
+          if (isNaN(val.getTime())) {
+            invalidDateDeprecationNotice();
+          }
           if (defaults2.parseInputDatesAsUTC) {
             return dateToStringUTC(val);
           } else {
@@ -26324,7 +26334,7 @@ var require_utils4 = __commonJS({
       return ret;
     }
     function normalizeQueryConfig(config, values, callback) {
-      config = typeof config === "string" ? { text: config } : config;
+      config = typeof config === "string" ? { text: config } : cloneQueryConfig(config);
       if (values) {
         if (typeof values === "function") {
           config.callback = values;
@@ -26336,6 +26346,12 @@ var require_utils4 = __commonJS({
         config.callback = callback;
       }
       return config;
+    }
+    function cloneQueryConfig(config) {
+      if (config == null) {
+        return config;
+      }
+      return Object.defineProperties(Object.create(Object.getPrototypeOf(config)), Object.getOwnPropertyDescriptors(config));
     }
     var escapeIdentifier2 = function(str) {
       return '"' + str.replace(/"/g, '""') + '"';
@@ -26526,7 +26542,7 @@ var require_cert_signatures = __commonJS({
           }
           throw x509Error("unknown hash OID " + hashOID, data);
         }
-        // Ed25519 -- see https: return//github.com/openssl/openssl/issues/15477
+        // Ed25519 -- see https://github.com/openssl/openssl/issues/15477
         case "1.3.101.110":
         case "1.3.101.112":
           return "SHA-512";
@@ -26798,7 +26814,7 @@ var require_pg_connection_string = __commonJS({
         config.client_encoding = result.searchParams.get("encoding");
         return config;
       }
-      const hostname = dummyHost ? "" : result.hostname;
+      const hostname = (dummyHost ? "" : result.hostname).replace(/^\[(.+)\]$/, "$1");
       if (!config.host) {
         config.host = decodeURIComponent(hostname);
       } else if (hostname && /^%2f/i.test(hostname)) {
@@ -27335,7 +27351,7 @@ var require_query2 = __commonJS({
         return null;
       }
       hasBeenParsed(connection) {
-        return this.name && (connection.parsedStatements[this.name] || connection.submittedNamedStatements[this.name]);
+        return this.name && (connection.parsedStatements[this.name] !== void 0 || connection.submittedNamedStatements[this.name] !== void 0);
       }
       handlePortalSuspended(connection) {
         this._getRows(connection, this.rows);
@@ -27577,7 +27593,7 @@ var require_buffer_writer = __commonJS({
           const oldBuffer = this.buffer;
           const newSize = oldBuffer.length + (oldBuffer.length >> 1) + size;
           this.buffer = Buffer.allocUnsafe(newSize);
-          oldBuffer.copy(this.buffer);
+          oldBuffer.copy(this.buffer, 0, 0, this.offset);
         }
       }
       addInt32(num) {
@@ -27637,6 +27653,15 @@ var require_buffer_writer = __commonJS({
         otherBuffer.copy(this.buffer, this.offset);
         this.offset += otherBuffer.length;
         return this;
+      }
+      /**
+       * Appends an uninitialized block of {@link size} bytes to the buffer and returns its offset.
+       */
+      reserveUnsafe(size) {
+        const offset = this.offset;
+        this.ensure(size);
+        this.offset += size;
+        return offset;
       }
       join(code) {
         if (code) {
@@ -27730,30 +27755,23 @@ var require_serializer = __commonJS({
         /* code.parse */
       );
     };
-    var paramWriter = new buffer_writer_1.Writer();
-    var writeValues = function(values, valueMapper) {
-      for (let i = 0; i < values.length; i++) {
+    var writeValues = function(values, valueMapper, formatsOffset) {
+      const len = values.length;
+      for (let i = 0; i < len; i++) {
         const mappedVal = valueMapper ? valueMapper(values[i], i) : values[i];
+        let formatByte = 0;
         if (mappedVal == null) {
-          writer.addInt16(
-            0
-            /* ParamType.STRING */
-          );
-          paramWriter.addInt32(-1);
+          writer.addInt32(-1);
         } else if (mappedVal instanceof Buffer) {
-          writer.addInt16(
-            1
-            /* ParamType.BINARY */
-          );
-          paramWriter.addInt32(mappedVal.length);
-          paramWriter.add(mappedVal);
+          formatByte = 1;
+          writer.addInt32(mappedVal.length);
+          writer.add(mappedVal);
         } else {
-          writer.addInt16(
-            0
-            /* ParamType.STRING */
-          );
-          paramWriter.addInt32PrefixedString(mappedVal);
+          writer.addInt32PrefixedString(mappedVal);
         }
+        const buf = writer.buffer;
+        buf[formatsOffset++] = 0;
+        buf[formatsOffset++] = formatByte;
       }
     };
     var bind = (config = {}) => {
@@ -27764,15 +27782,14 @@ var require_serializer = __commonJS({
       const len = values.length;
       writer.addCString(portal).addCString(statement);
       writer.addInt16(len);
+      const formatsOffset = writer.reserveUnsafe(len * 2);
+      writer.addInt16(len);
       try {
-        writeValues(values, config.valueMapper);
+        writeValues(values, config.valueMapper, formatsOffset);
       } catch (err) {
         writer.clear();
-        paramWriter.clear();
         throw err;
       }
-      writer.addInt16(len);
-      writer.add(paramWriter.flush());
       writer.addInt16(1);
       writer.addInt16(
         binary ? 1 : 0
@@ -28430,7 +28447,12 @@ var require_connection = __commonJS({
       upgradeToSSL(host, reportStreamError) {
         const self2 = this;
         const options = {
-          socket: self2.stream
+          socket: self2.stream,
+          // tls.connect checks the server identity against `servername`, falling
+          // back to `host` and then to 'localhost'. `servername` must stay unset
+          // for IP addresses (see below), so `host` is needed to keep certificate
+          // validation working when connecting to an IP address.
+          host
         };
         if (self2.ssl !== true) {
           Object.assign(options, self2.ssl);
@@ -28508,7 +28530,6 @@ var require_connection = __commonJS({
         }
       }
       sync() {
-        this._ending = true;
         this._send(syncBuffer);
       }
       ref() {
@@ -29463,6 +29484,15 @@ var require_client = __commonJS({
         if (query._result && !query._result._types) {
           query._result._types = this._types;
         }
+        if (this.pipeline) {
+          const portalQuery = typeof config.submit === "function" && !(query instanceof Query2) ? "Custom query classes such as pg-cursor and pg-query-stream are" : query.rows ? "The `rows` option is" : null;
+          if (portalQuery) {
+            process.nextTick(() => {
+              query.handleError(new Error(`${portalQuery} not supported in pipeline mode`), this.connection);
+            });
+            return result;
+          }
+        }
         if (!this._queryable) {
           process.nextTick(() => {
             query.handleError(new Error("Client has encountered a connection error and is not queryable"), this.connection);
@@ -29984,6 +30014,8 @@ var require_query3 = __commonJS({
       sqlState: "code",
       statementPosition: "position",
       messagePrimary: "message",
+      messageDetail: "detail",
+      messageHint: "hint",
       context: "where",
       schemaName: "schema",
       tableName: "table",
@@ -30067,7 +30099,7 @@ var require_query3 = __commonJS({
           console.error("This can cause conflicts and silent errors executing queries");
         }
         const values = (this.values || []).map(utils2.prepareValue);
-        if (client.namedQueries[this.name]) {
+        if (client.namedQueries[this.name] !== void 0) {
           if (this.text && client.namedQueries[this.name] !== this.text) {
             const err = new Error(`Prepared statements must be unique - '${this.name}' was used for a different statement`);
             return after(err);
@@ -30359,7 +30391,7 @@ var require_client2 = __commonJS({
         this.hasExecuted = true;
         nativeQueries.push(query);
         const values = query.values ? query.values.map(utils2.prepareValue) : null;
-        const pipelineEntry = { text: query.text, name: query.name };
+        const pipelineEntry = { text: query.text, name: query.name, arrayMode: query._arrayMode };
         if (values) {
           pipelineEntry.values = values;
         }
@@ -30371,12 +30403,16 @@ var require_client2 = __commonJS({
       this.native.pipeline(queries, function(err, results) {
         self2._pipelineInFlight = false;
         if (err) {
+          self2._connected = false;
+          self2._queryable = false;
           for (let i = 0; i < nativeQueries.length; i++) {
             const q = nativeQueries[i];
             q.native = self2.native;
             q.handleError(err);
           }
-          self2._pulsePipelinedQueryQueue();
+          self2._errorAllQueries(err);
+          self2.emit("error", err);
+          self2.emit("end");
           return;
         }
         for (let i = 0; i < nativeQueries.length; i++) {
@@ -76103,6 +76139,91 @@ function registerCorePlatformRoutes(app2, requireAuth2) {
       db.coreStudent.findMany({ where: contains ? { OR: [{ nisn: contains }, { nis: contains }, { fullName: contains }] } : void 0, orderBy: { nisn: "asc" }, skip: (page - 1) * pageSize, take: pageSize })
     ]);
     return ok(res, { academicYears, departments, subjects, classes, teachers, students, page, pageSize, search });
+  });
+  app2.post("/api/v1/akademik/siswa", requireAuth2, async (req, res) => {
+    const nisn = clean(req.body.nisn);
+    const nis = clean(req.body.nis);
+    const fullName = clean(req.body.fullName || req.body.namaLengkap);
+    const email = clean(req.body.email).toLowerCase() || null;
+    const phone = clean(req.body.phone || req.body.noTelp) || null;
+    const birthPlace = clean(req.body.birthPlace || req.body.tempatLahir) || null;
+    const birthDateInput = clean(req.body.birthDate || req.body.tanggalLahir);
+    const birthDate = parseDate(birthDateInput);
+    const gender = clean(req.body.gender || req.body.jenisKelamin) || null;
+    const status = clean(req.body.status).toUpperCase() || "ACTIVE";
+    const password = String(req.body.password ?? "");
+    const classCode = clean(req.body.classCode || req.body.kodeKelas);
+    const academicYearCode = clean(req.body.academicYearCode || req.body.kodeTahunAjaran);
+    if (!nisn || !nis || !fullName) return fail(res, 400, "REQUIRED_FIELD", "NISN, NIS, dan nama lengkap wajib diisi.");
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail(res, 400, "INVALID_EMAIL", "Format email tidak valid.");
+    if (birthDateInput && !birthDate) return fail(res, 400, "INVALID_BIRTH_DATE", "Tanggal lahir tidak valid.");
+    if (!VALID_STATUSES.has(status)) return fail(res, 400, "INVALID_STATUS", "Status harus ACTIVE, INACTIVE, atau ARCHIVED.");
+    if (password && password.length < 8) return fail(res, 400, "WEAK_PASSWORD", "Password akun siswa harus minimal 8 karakter.");
+    if (Boolean(classCode) !== Boolean(academicYearCode)) return fail(res, 400, "INCOMPLETE_ENROLLMENT", "Kode kelas dan tahun ajaran harus diisi bersama-sama.");
+    const existing = await db.coreStudent.findFirst({
+      where: { OR: [{ nisn }, { nis }] },
+      select: { nis: true, nisn: true }
+    });
+    if (existing) {
+      const duplicate = existing.nisn === nisn ? "NISN" : "NIS";
+      return fail(res, 409, "DUPLICATE_STUDENT_IDENTIFIER", `${duplicate} sudah digunakan siswa lain.`);
+    }
+    let enrollment = null;
+    if (classCode && academicYearCode) {
+      const [classroom, academicYear] = await Promise.all([
+        db.academicClass.findUnique({ where: { code: classCode } }),
+        db.academicYear.findUnique({ where: { code: academicYearCode } })
+      ]);
+      if (!classroom || !academicYear) return fail(res, 422, "REFERENCE_NOT_FOUND", "Kode kelas atau tahun ajaran tidak ditemukan.");
+      if (classroom.academicYearId !== academicYear.id) return fail(res, 422, "ENROLLMENT_YEAR_MISMATCH", "Tahun ajaran tidak sesuai dengan kelas yang dipilih.");
+      enrollment = { classId: classroom.id, academicYearId: academicYear.id };
+    }
+    try {
+      const student = await db.$transaction(async (tx) => {
+        const created = await tx.coreStudent.create({
+          data: { nisn, nis, fullName, email, phone, gender, birthPlace, birthDate, status }
+        });
+        let saved = created;
+        if (password) {
+          const accountEmail = email || studentAccountEmail(nis);
+          const existingUser = await tx.coreUser.findUnique({ where: { email: accountEmail } });
+          if (existingUser) throw Object.assign(new Error("Email akun sudah digunakan."), { code: "DUPLICATE_ACCOUNT_EMAIL" });
+          const user = await tx.coreUser.create({
+            data: {
+              email: accountEmail,
+              fullName,
+              status: status === "ACTIVE" ? "ACTIVE" : "DISABLED",
+              passwordHash: hashPassword(password),
+              passwordChangeRecommended: true
+            }
+          });
+          saved = await tx.coreStudent.update({ where: { id: created.id }, data: { userId: user.id } });
+          const role = await tx.coreRole.upsert({ where: { name: "SISWA" }, update: {}, create: { name: "SISWA" } });
+          await tx.coreUserRole.upsert({
+            where: { userId_roleId: { userId: user.id, roleId: role.id } },
+            update: {},
+            create: { userId: user.id, roleId: role.id }
+          });
+        }
+        if (enrollment) {
+          await tx.studentEnrollment.upsert({
+            where: { studentId_academicYearId: { studentId: created.id, academicYearId: enrollment.academicYearId } },
+            update: { classId: enrollment.classId, status },
+            create: { studentId: created.id, classId: enrollment.classId, academicYearId: enrollment.academicYearId, status }
+          });
+        }
+        await tx.coreAuditLog.create({
+          data: { action: "MASTER_CREATE", entity: "CoreStudent", entityId: created.id, actor: "ADMIN_SESSION", metadata: { nis, nisn, hasAccount: Boolean(password), hasEnrollment: Boolean(enrollment) } }
+        });
+        return saved;
+      });
+      return res.status(201).json({ success: true, data: student });
+    } catch (error) {
+      if (error?.code === "P2002" || error?.code === "DUPLICATE_ACCOUNT_EMAIL") {
+        return fail(res, 409, "DUPLICATE_STUDENT_DATA", error?.code === "DUPLICATE_ACCOUNT_EMAIL" ? "Email akun sudah digunakan." : "NIS, NISN, atau email akun sudah digunakan.");
+      }
+      throw error;
+    }
   });
   app2.get("/api/v1/akademik/audit", requireAuth2, async (req, res) => {
     const { page, pageSize, search } = pageParams(req);

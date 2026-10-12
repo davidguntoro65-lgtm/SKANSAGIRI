@@ -930,6 +930,99 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
     return ok(res, { academicYears, departments, subjects, classes, teachers, students, page, pageSize, search });
   });
 
+  app.post("/api/v1/akademik/siswa", requireAuth, async (req, res) => {
+    const nisn = clean(req.body.nisn);
+    const nis = clean(req.body.nis);
+    const fullName = clean(req.body.fullName || req.body.namaLengkap);
+    const email = clean(req.body.email).toLowerCase() || null;
+    const phone = clean(req.body.phone || req.body.noTelp) || null;
+    const birthPlace = clean(req.body.birthPlace || req.body.tempatLahir) || null;
+    const birthDateInput = clean(req.body.birthDate || req.body.tanggalLahir);
+    const birthDate = parseDate(birthDateInput);
+    const gender = clean(req.body.gender || req.body.jenisKelamin) || null;
+    const status = clean(req.body.status).toUpperCase() || "ACTIVE";
+    const password = String(req.body.password ?? "");
+    const classCode = clean(req.body.classCode || req.body.kodeKelas);
+    const academicYearCode = clean(req.body.academicYearCode || req.body.kodeTahunAjaran);
+
+    if (!nisn || !nis || !fullName) return fail(res, 400, "REQUIRED_FIELD", "NISN, NIS, dan nama lengkap wajib diisi.");
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail(res, 400, "INVALID_EMAIL", "Format email tidak valid.");
+    if (birthDateInput && !birthDate) return fail(res, 400, "INVALID_BIRTH_DATE", "Tanggal lahir tidak valid.");
+    if (!VALID_STATUSES.has(status)) return fail(res, 400, "INVALID_STATUS", "Status harus ACTIVE, INACTIVE, atau ARCHIVED.");
+    if (password && password.length < 8) return fail(res, 400, "WEAK_PASSWORD", "Password akun siswa harus minimal 8 karakter.");
+    if (Boolean(classCode) !== Boolean(academicYearCode)) return fail(res, 400, "INCOMPLETE_ENROLLMENT", "Kode kelas dan tahun ajaran harus diisi bersama-sama.");
+
+    const existing = await db.coreStudent.findFirst({
+      where: { OR: [{ nisn }, { nis }] },
+      select: { nis: true, nisn: true },
+    });
+    if (existing) {
+      const duplicate = existing.nisn === nisn ? "NISN" : "NIS";
+      return fail(res, 409, "DUPLICATE_STUDENT_IDENTIFIER", `${duplicate} sudah digunakan siswa lain.`);
+    }
+
+    let enrollment: { classId: string; academicYearId: string } | null = null;
+    if (classCode && academicYearCode) {
+      const [classroom, academicYear] = await Promise.all([
+        db.academicClass.findUnique({ where: { code: classCode } }),
+        db.academicYear.findUnique({ where: { code: academicYearCode } }),
+      ]);
+      if (!classroom || !academicYear) return fail(res, 422, "REFERENCE_NOT_FOUND", "Kode kelas atau tahun ajaran tidak ditemukan.");
+      if (classroom.academicYearId !== academicYear.id) return fail(res, 422, "ENROLLMENT_YEAR_MISMATCH", "Tahun ajaran tidak sesuai dengan kelas yang dipilih.");
+      enrollment = { classId: classroom.id, academicYearId: academicYear.id };
+    }
+
+    try {
+      const student = await db.$transaction(async (tx) => {
+        const created = await tx.coreStudent.create({
+          data: { nisn, nis, fullName, email, phone, gender, birthPlace, birthDate, status: status as "ACTIVE" | "INACTIVE" | "ARCHIVED" },
+        });
+        let saved = created;
+
+        if (password) {
+          const accountEmail = email || studentAccountEmail(nis);
+          const existingUser = await tx.coreUser.findUnique({ where: { email: accountEmail } });
+          if (existingUser) throw Object.assign(new Error("Email akun sudah digunakan."), { code: "DUPLICATE_ACCOUNT_EMAIL" });
+          const user = await tx.coreUser.create({
+            data: {
+              email: accountEmail,
+              fullName,
+              status: status === "ACTIVE" ? "ACTIVE" : "DISABLED",
+              passwordHash: hashPassword(password),
+              passwordChangeRecommended: true,
+            },
+          });
+          saved = await tx.coreStudent.update({ where: { id: created.id }, data: { userId: user.id } });
+          const role = await tx.coreRole.upsert({ where: { name: "SISWA" }, update: {}, create: { name: "SISWA" } });
+          await tx.coreUserRole.upsert({
+            where: { userId_roleId: { userId: user.id, roleId: role.id } },
+            update: {},
+            create: { userId: user.id, roleId: role.id },
+          });
+        }
+
+        if (enrollment) {
+          await tx.studentEnrollment.upsert({
+            where: { studentId_academicYearId: { studentId: created.id, academicYearId: enrollment.academicYearId } },
+            update: { classId: enrollment.classId, status: status as "ACTIVE" | "INACTIVE" | "ARCHIVED" },
+            create: { studentId: created.id, classId: enrollment.classId, academicYearId: enrollment.academicYearId, status: status as "ACTIVE" | "INACTIVE" | "ARCHIVED" },
+          });
+        }
+
+        await tx.coreAuditLog.create({
+          data: { action: "MASTER_CREATE", entity: "CoreStudent", entityId: created.id, actor: "ADMIN_SESSION", metadata: { nis, nisn, hasAccount: Boolean(password), hasEnrollment: Boolean(enrollment) } },
+        });
+        return saved;
+      });
+      return res.status(201).json({ success: true, data: student });
+    } catch (error: any) {
+      if (error?.code === "P2002" || error?.code === "DUPLICATE_ACCOUNT_EMAIL") {
+        return fail(res, 409, "DUPLICATE_STUDENT_DATA", error?.code === "DUPLICATE_ACCOUNT_EMAIL" ? "Email akun sudah digunakan." : "NIS, NISN, atau email akun sudah digunakan.");
+      }
+      throw error;
+    }
+  });
+
   app.get("/api/v1/akademik/audit", requireAuth, async (req, res) => {
     const { page, pageSize, search } = pageParams(req);
     const where = search ? { OR: [{ action: { contains: search, mode: "insensitive" as const } }, { entity: { contains: search, mode: "insensitive" as const } }, { actor: { contains: search, mode: "insensitive" as const } }] } : undefined;
