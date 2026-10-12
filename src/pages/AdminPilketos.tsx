@@ -1,5 +1,5 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
-import { CheckCircle2, Clock3, ImagePlus, Loader2, Plus, Save, Trash2, Vote } from "lucide-react";
+import { Clock3, ImagePlus, Loader2, Pencil, Plus, RotateCcw, Save, Trash2, Vote, X } from "lucide-react";
 import { apiFetch } from "../utils/navigation";
 
 type Candidate = {
@@ -34,6 +34,7 @@ type ParticipationStats = {
 
 type Props = { theme?: "light" | "dark" };
 type Position = "KETUA_UMUM" | "KETUA_1" | "KETUA_3" | "KETUA_4";
+type AdminSection = "dashboard" | "candidates" | "settings" | "results";
 
 const POSITIONS: Array<{ id: Position; label: string; grade: "X" | "XI" }> = [
   { id: "KETUA_UMUM", label: "Ketua Umum", grade: "XI" },
@@ -121,9 +122,15 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
   const [election, setElection] = useState<Election | null>(null);
   const [form, setForm] = useState({ title: "Pemilihan Ketua OSIS", academicYear: "2026/2027", description: "", status: "DRAFT", startsAt: "", endsAt: "" });
   const [candidate, setCandidate] = useState({ grade: "XI" as "X" | "XI", candidateNo: "", name: "", photoData: "" });
+  const [editingCandidateId, setEditingCandidateId] = useState<string | null>(null);
   const [stats, setStats] = useState<ParticipationStats | null>(null);
+  const [activeSection, setActiveSection] = useState<AdminSection>("dashboard");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetError, setResetError] = useState("");
+  const [resettingVotes, setResettingVotes] = useState(false);
   const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   async function load() {
@@ -181,12 +188,29 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
     }
   }
 
-  async function addCandidate(event: FormEvent) {
+  function beginEditCandidate(item: Candidate) {
+    setCandidate({
+      grade: item.grade,
+      candidateNo: String(item.candidateNo),
+      name: item.name,
+      photoData: item.photoData || "",
+    });
+    setEditingCandidateId(item.id);
+    setActiveSection("candidates");
+    setNotice(null);
+  }
+
+  function cancelCandidateEdit() {
+    setEditingCandidateId(null);
+    setCandidate({ grade: "XI", candidateNo: "", name: "", photoData: "" });
+  }
+
+  async function saveCandidate(event: FormEvent) {
     event.preventDefault();
     setSaving(true);
     try {
       let targetElection = election;
-      if (!targetElection) {
+      if (!editingCandidateId && !targetElection) {
         const electionResponse = await apiFetch("/api/v1/pilketos/admin/election", {
           method: "POST",
           headers: headers(),
@@ -199,24 +223,73 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
         setElection(targetElection);
       }
 
-      const response = await apiFetch(`/api/v1/pilketos/admin/election/${targetElection.id}/candidates`, { method: "POST", headers: headers(), body: JSON.stringify({ ...candidate, candidateNo: Number(candidate.candidateNo) }) });
+      const editing = Boolean(editingCandidateId);
+      const url = editing
+        ? `/api/v1/pilketos/admin/candidates/${editingCandidateId}`
+        : `/api/v1/pilketos/admin/election/${targetElection!.id}/candidates`;
+      const response = await apiFetch(url, {
+        method: editing ? "PATCH" : "POST",
+        headers: headers(),
+        body: JSON.stringify({ ...candidate, candidateNo: Number(candidate.candidateNo) }),
+      });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error?.message || "Kandidat belum tersimpan.");
-      setCandidate({ grade: "XI", candidateNo: "", name: "", photoData: "" });
-      setNotice({ type: "success", text: election ? "Kandidat berhasil ditambahkan." : "Draft pemilihan dan kandidat pertama berhasil dibuat." });
+      if (!response.ok) throw new Error(payload.error?.message || (editing ? "Perubahan kandidat belum tersimpan." : "Kandidat belum tersimpan."));
+      cancelCandidateEdit();
+      setNotice({
+        type: "success",
+        text: editing
+          ? "Perubahan kandidat berhasil disimpan."
+          : election ? "Kandidat berhasil ditambahkan." : "Draft pemilihan dan kandidat pertama berhasil dibuat.",
+      });
       await load();
     } catch (error) {
-      setNotice({ type: "error", text: error instanceof Error ? error.message : "Kandidat belum tersimpan." });
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "Perubahan kandidat belum tersimpan." });
     } finally {
       setSaving(false);
     }
   }
 
-  async function removeCandidate(id: string) {
-    if (!window.confirm("Hapus kandidat ini dari draft pemilihan?")) return;
+  async function resetAllVotes(event: FormEvent) {
+    event.preventDefault();
+      if (!resetPassword || !election?.id || resettingVotes) return;
+    setResettingVotes(true);
+    try {
+      const response = await apiFetch("/api/v1/pilketos/admin/reset-votes", {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({ password: resetPassword, electionId: election.id }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error?.message || "Reset suara belum berhasil.");
+      const deletedCount = Number(payload.data?.deletedCount || 0);
+      setResetDialogOpen(false);
+      setResetPassword("");
+      setResetError("");
+      setNotice({
+        type: "success",
+        text: `${deletedCount} suara pada pemilihan yang sedang dikelola berhasil direset. Data siswa, kandidat, pengaturan, dan suara periode lain tetap tersimpan.`,
+      });
+      await load();
+    } catch (error) {
+      setResetPassword("");
+      setResetError(error instanceof Error ? error.message : "Reset suara belum berhasil.");
+    } finally {
+      setResettingVotes(false);
+    }
+  }
+
+  function closeResetDialog() {
+    if (resettingVotes) return;
+    setResetDialogOpen(false);
+    setResetPassword("");
+    setResetError("");
+  }
+
+  async function removeCandidate(item: Candidate) {
+    if (!window.confirm(`Hapus kandidat ${item.name} (kelas ${item.grade}, nomor ${item.candidateNo}) dari pemilihan?`)) return;
     setSaving(true);
     try {
-      const response = await apiFetch(`/api/v1/pilketos/admin/candidates/${id}`, { method: "DELETE", headers: headers() });
+      const response = await apiFetch(`/api/v1/pilketos/admin/candidates/${item.id}`, { method: "DELETE", headers: headers() });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error?.message || "Kandidat belum dihapus.");
       setNotice({ type: "success", text: "Kandidat berhasil dihapus." });
@@ -242,6 +315,21 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
       </div>
       {notice && <div role="status" className={`mt-5 rounded-2xl border px-4 py-3 text-sm ${notice.type === "success" ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-600" : "border-rose-400/25 bg-rose-400/10 text-rose-600"}`}>{notice.text}</div>}
       {loading ? <div className={`mt-6 rounded-3xl border p-12 text-center ${card}`}><Loader2 className="mx-auto h-7 w-7 animate-spin text-amber-500" /></div> : <div className="mt-6">
+        <div className={`mb-6 flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${card}`}>
+          <div><p className={`text-xs font-black uppercase tracking-widest ${muted}`}>Menu Pilketos</p><p className="mt-1 text-sm font-bold">Pilih halaman pengelolaan</p></div>
+          <select
+            aria-label="Menu Pilketos"
+            value={activeSection}
+            onChange={(event) => setActiveSection(event.target.value as AdminSection)}
+            className={`w-full rounded-xl border px-3.5 py-3 text-sm font-bold outline-none focus:border-amber-400 sm:max-w-xs ${input}`}
+          >
+            <option value="dashboard">Dashboard Pilketos</option>
+            <option value="candidates">Input data kandidat</option>
+            <option value="settings">Pengaturan pemilihan</option>
+            <option value="results">Rekap hasil — skor per jabatan</option>
+          </select>
+        </div>
+        {activeSection === "dashboard" && <>
         <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[
             ["Total pemilih", stats?.totalVoters ?? 0, "Akun siswa aktif"],
@@ -261,9 +349,26 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
           <div className={`rounded-2xl border p-4 ${card}`}><div className="flex items-center justify-between"><span className="text-xs font-black uppercase tracking-widest text-amber-500">Kelas XI</span><span className={`text-sm font-black ${gradeCounts.XI === 4 ? "text-emerald-500" : "text-rose-500"}`}>{gradeCounts.XI}/4 kandidat</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-current/10"><div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${Math.min(gradeCounts.XI / 4, 1) * 100}%` }} /></div></div>
         </div>
         {!!stats?.legacyVoterCount && <div role="status" className={`mb-5 rounded-2xl border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-sm ${muted}`}>{stats.legacyVoterCount} pemilih memiliki catatan dari format pemilihan sebelumnya. Data lama tetap disimpan, tetapi tidak digabungkan ke skor empat jabatan.</div>}
-        {election && election.status !== "DRAFT" && <section className={`mb-6 rounded-3xl border p-5 sm:p-6 ${card}`}>
+        <section className={`rounded-3xl border border-rose-400/20 bg-rose-400/[.06] p-5 sm:p-6 ${card}`}>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="font-black text-rose-500">Reset suara pemilihan ini</h3>
+              <p className={`mt-1 max-w-2xl text-sm leading-relaxed ${muted}`}>Menghapus catatan suara untuk pemilihan yang sedang dikelola agar siswa dapat memilih kembali. Data siswa, kandidat, pengaturan, dan suara periode lain tidak akan dihapus. Tindakan ini tidak dapat dibatalkan.</p>
+            </div>
+            <button
+              type="button"
+              disabled={!election}
+              onClick={() => { setResetPassword(""); setResetError(""); setResetDialogOpen(true); }}
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-rose-400/40 px-4 py-3 text-sm font-black text-rose-500 transition hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <RotateCcw className="h-4 w-4" /> Reset suara
+            </button>
+          </div>
+        </section>
+        </>}
+        {activeSection === "results" && <section className={`rounded-3xl border p-5 sm:p-6 ${card}`}>
           <div><h3 className="font-black">Rekap skor per jabatan</h3><p className={`mt-1 text-xs ${muted}`}>Setiap kandidat memiliki skor terpisah untuk jabatan yang dipilih.</p></div>
-          <div className="mt-5 grid gap-4 xl:grid-cols-2">
+          {election ? <div className="mt-5 grid gap-4 xl:grid-cols-2">
             {POSITIONS.map((position) => {
               const candidates = election.candidates.filter((item) => item.grade === position.grade);
               const total = candidates.reduce((sum, item) => sum + (item.voteCounts?.[position.id] || 0), 0);
@@ -279,10 +384,9 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
                 </div>
               </div>;
             })}
-          </div>
+          </div> : <div className={`mt-5 rounded-2xl border border-dashed border-current/15 p-8 text-center text-sm ${muted}`}>Belum ada data pemilihan untuk ditampilkan.</div>}
         </section>}
-        <div className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]">
-        <form onSubmit={saveElection} className={`rounded-3xl border p-5 sm:p-6 ${card}`}>
+        {activeSection === "settings" && <form onSubmit={saveElection} className={`rounded-3xl border p-5 sm:p-6 ${card}`}>
           <div className="flex items-center gap-3"><Vote className="h-5 w-5 text-amber-500" /><div><h3 className="font-black">Pengaturan pemilihan</h3><p className={`text-xs ${muted}`}>Informasi yang tampil pada landing page.</p></div></div>
           <label className={`mt-6 block text-xs font-bold ${muted}`}>Judul pemilihan<input required value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} className={`mt-2 w-full rounded-xl border px-3.5 py-3 text-sm outline-none focus:border-amber-400 ${input}`} /></label>
           <label className={`mt-4 block text-xs font-bold ${muted}`}>Tahun ajaran<input required value={form.academicYear} onChange={(event) => setForm({ ...form, academicYear: event.target.value })} className={`mt-2 w-full rounded-xl border px-3.5 py-3 text-sm outline-none focus:border-amber-400 ${input}`} /></label>
@@ -299,25 +403,70 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
           </div>}
           <button disabled={saving} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-3 font-black text-slate-950 transition hover:bg-amber-300 disabled:opacity-50"><Save className="h-4 w-4" />{saving ? "Menyimpan..." : "Simpan pengaturan"}</button>
           {form.status === "OPEN" && !readyToOpen && <p className="mt-3 text-xs leading-relaxed text-rose-500">Tambahkan tepat 4 kandidat kelas X dan 4 kandidat kelas XI sebelum membuka pemilihan.</p>}
-        </form>
-        <div className={`rounded-3xl border p-5 sm:p-6 ${card}`}>
+        </form>}
+        {activeSection === "candidates" && <div className={`rounded-3xl border p-5 sm:p-6 ${card}`}>
           <div className="flex items-center justify-between gap-3"><div><h3 className="font-black">Daftar pilihan kandidat</h3><p className={`mt-1 text-xs ${muted}`}>{election?.candidates.length || 0}/8 kandidat terdaftar · masing-masing kelas wajib 4.</p></div><span className="rounded-lg bg-amber-400/15 px-2 py-1 text-xs font-black text-amber-600">Nama + foto</span></div>
-          <form onSubmit={addCandidate} className="mt-6 rounded-2xl border border-dashed border-current/15 p-4">
+          {election && election.status !== "DRAFT" && <p className={`mt-4 rounded-xl border border-amber-400/25 bg-amber-400/10 px-3 py-2.5 text-xs leading-relaxed ${muted}`}>Data kandidat terkunci karena pemilihan sudah dibuka atau ditutup. Ubah status pemilihan menjadi Draft terlebih dahulu. Kandidat yang sudah menerima suara tetap tidak dapat diedit atau dihapus.</p>}
+          <form onSubmit={saveCandidate} className="mt-6 rounded-2xl border border-dashed border-current/15 p-4">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h4 className="font-black">{editingCandidateId ? "Edit data kandidat" : "Tambah kandidat"}</h4>
+              {editingCandidateId && <button type="button" onClick={cancelCandidateEdit} className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold ${muted}`}><X className="h-3.5 w-3.5" /> Batal edit</button>}
+            </div>
             {!election && <p className={`mb-4 rounded-xl bg-amber-400/10 px-3 py-2.5 text-xs leading-relaxed ${muted}`}>Draft pemilihan akan dibuat otomatis saat pilihan kandidat pertama ditambahkan.</p>}
             <div className="grid gap-3 sm:grid-cols-[120px_100px_1fr]">
-              <label className={`text-xs font-bold ${muted}`}>Kelas<select required value={candidate.grade} onChange={(event) => setCandidate({ ...candidate, grade: event.target.value as "X" | "XI" })} className={`mt-2 w-full rounded-xl border px-3 py-3 text-sm outline-none focus:border-amber-400 ${input}`}><option value="X">Kelas X</option><option value="XI">Kelas XI</option></select></label>
-              <label className={`text-xs font-bold ${muted}`}>Nomor<input required type="number" min={1} max={99} value={candidate.candidateNo} onChange={(event) => setCandidate({ ...candidate, candidateNo: event.target.value })} className={`mt-2 w-full rounded-xl border px-3 py-3 text-sm outline-none focus:border-amber-400 ${input}`} placeholder="1" /></label>
-              <label className={`text-xs font-bold ${muted}`}>Nama kandidat<input required value={candidate.name} onChange={(event) => setCandidate({ ...candidate, name: event.target.value })} className={`mt-2 w-full rounded-xl border px-3 py-3 text-sm outline-none focus:border-amber-400 ${input}`} placeholder="Nama lengkap kandidat" /></label>
+              <label className={`text-xs font-bold ${muted}`}>Kelas<select required disabled={saving || Boolean(election && election.status !== "DRAFT")} value={candidate.grade} onChange={(event) => setCandidate({ ...candidate, grade: event.target.value as "X" | "XI" })} className={`mt-2 w-full rounded-xl border px-3 py-3 text-sm outline-none focus:border-amber-400 disabled:opacity-50 ${input}`}><option value="X">Kelas X</option><option value="XI">Kelas XI</option></select></label>
+              <label className={`text-xs font-bold ${muted}`}>Nomor<input required disabled={saving || Boolean(election && election.status !== "DRAFT")} type="number" min={1} max={99} value={candidate.candidateNo} onChange={(event) => setCandidate({ ...candidate, candidateNo: event.target.value })} className={`mt-2 w-full rounded-xl border px-3 py-3 text-sm outline-none focus:border-amber-400 disabled:opacity-50 ${input}`} placeholder="1" /></label>
+              <label className={`text-xs font-bold ${muted}`}>Nama kandidat<input required disabled={saving || Boolean(election && election.status !== "DRAFT")} value={candidate.name} onChange={(event) => setCandidate({ ...candidate, name: event.target.value })} className={`mt-2 w-full rounded-xl border px-3 py-3 text-sm outline-none focus:border-amber-400 disabled:opacity-50 ${input}`} placeholder="Nama lengkap kandidat" /></label>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-3">
-              <label className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-bold transition hover:border-amber-400 ${input}`}><ImagePlus className="h-4 w-4 text-amber-500" />{candidate.photoData ? "Ganti foto" : "Upload foto"}<input type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadPhoto} className="sr-only" /></label>
+              <label className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-bold transition hover:border-amber-400 ${input}`}><ImagePlus className="h-4 w-4 text-amber-500" />{candidate.photoData ? "Ganti foto" : "Upload foto"}<input disabled={saving || Boolean(election && election.status !== "DRAFT")} type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadPhoto} className="sr-only" /></label>
               {candidate.photoData && <img src={candidate.photoData} alt="Preview kandidat" className="h-16 w-16 rounded-xl border border-current/10 bg-white object-contain p-1" />}
-              <button disabled={saving} className="ml-auto inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-slate-950"><Plus className="h-4 w-4" />{saving ? "Menyimpan..." : "Tambah pilihan"}</button>
+              <button disabled={saving || Boolean(election && election.status !== "DRAFT")} className="ml-auto inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-slate-950">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : editingCandidateId ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}{saving ? "Menyimpan..." : editingCandidateId ? "Simpan perubahan" : "Tambah pilihan"}</button>
             </div>
           </form>
-          <div className="mt-5 space-y-3">{election?.candidates.map((item) => <div key={item.id} className="flex items-center gap-3 rounded-2xl border border-current/10 p-3"><div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-amber-400/15 text-lg font-black text-amber-600">{item.photoData ? <img src={item.photoData} alt="" className="h-full w-full object-contain p-1" /> : item.candidateNo}</div><div className="min-w-0 flex-1"><p className="text-[10px] font-black uppercase tracking-widest text-amber-500">Kelas {item.grade} · Nomor {item.candidateNo}</p><p className="truncate font-black">{item.name}</p></div>{election.status === "DRAFT" ? <button onClick={() => void removeCandidate(item.id)} className="rounded-lg p-2 text-rose-500 transition hover:bg-rose-500/10" title="Hapus kandidat"><Trash2 className="h-4 w-4" /></button> : <CheckCircle2 className="h-5 w-5 text-emerald-500" />}</div>)}{!election?.candidates.length && <div className={`rounded-2xl border border-dashed p-8 text-center text-sm ${muted}`}>Belum ada kandidat. Tambahkan 4 kandidat kelas X dan 4 kandidat kelas XI untuk membuka pemilihan.</div>}</div>
+          <div className="mt-5 space-y-3">{election?.candidates.map((item) => {
+            const canManageCandidate = election.status === "DRAFT" && !saving;
+            return <div key={item.id} className="flex items-center gap-3 rounded-2xl border border-current/10 p-3">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-amber-400/15 text-lg font-black text-amber-600">{item.photoData ? <img src={item.photoData} alt="" className="h-full w-full object-contain p-1" /> : item.candidateNo}</div>
+              <div className="min-w-0 flex-1"><p className="text-[10px] font-black uppercase tracking-widest text-amber-500">Kelas {item.grade} · Nomor {item.candidateNo}</p><p className="truncate font-black">{item.name}</p></div>
+              <button type="button" disabled={!canManageCandidate} onClick={() => beginEditCandidate(item)} className="rounded-lg p-2 text-amber-500 transition hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-35" title={canManageCandidate ? `Edit ${item.name}` : "Kandidat terkunci selama pemilihan berlangsung"} aria-label={`Edit kandidat ${item.name}`}><Pencil className="h-4 w-4" /></button>
+              <button type="button" disabled={!canManageCandidate} onClick={() => void removeCandidate(item)} className="rounded-lg p-2 text-rose-500 transition hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-35" title={canManageCandidate ? `Hapus ${item.name}` : "Kandidat terkunci selama pemilihan berlangsung"} aria-label={`Hapus kandidat ${item.name}`}><Trash2 className="h-4 w-4" /></button>
+            </div>;
+          })}{!election?.candidates.length && <div className={`rounded-2xl border border-dashed p-8 text-center text-sm ${muted}`}>Belum ada kandidat. Tambahkan 4 kandidat kelas X dan 4 kandidat kelas XI untuk membuka pemilihan.</div>}</div>
         </div>
-        </div>
+        }
+      </div>}
+      {resetDialogOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4" role="presentation">
+        <section role="dialog" aria-modal="true" aria-labelledby="pilketos-reset-title" className={`w-full max-w-md rounded-3xl border p-6 shadow-2xl ${card} ${dark ? "bg-slate-900" : "bg-white"}`}>
+          <div className="flex items-start justify-between gap-4">
+            <div><p className="text-xs font-black uppercase tracking-widest text-rose-500">Konfirmasi tindakan</p><h3 id="pilketos-reset-title" className="mt-2 text-xl font-black">Reset suara pemilihan ini?</h3></div>
+            <button type="button" onClick={closeResetDialog} disabled={resettingVotes} aria-label="Tutup konfirmasi" className={`rounded-lg p-2 ${muted}`}><X className="h-5 w-5" /></button>
+          </div>
+          <p className={`mt-4 text-sm leading-relaxed ${muted}`}>Semua suara pada pemilihan yang sedang dikelola akan dihapus. Suara periode lain, data siswa, kandidat, dan pengaturan tetap aman. Masukkan kata sandi admin untuk melanjutkan.</p>
+          {resetError && <p role="alert" className="mt-4 rounded-xl border border-rose-400/25 bg-rose-400/10 px-3 py-2.5 text-sm text-rose-500">{resetError}</p>}
+          <form onSubmit={resetAllVotes} className="mt-5">
+            <label htmlFor="pilketos-reset-password" className={`block text-xs font-bold ${muted}`}>Kata sandi admin</label>
+            <input
+              id="pilketos-reset-password"
+              type="password"
+              autoComplete="current-password"
+              required
+              autoFocus
+              disabled={resettingVotes}
+              value={resetPassword}
+              onChange={(event) => setResetPassword(event.target.value)}
+              className={`mt-2 w-full rounded-xl border px-3.5 py-3 text-sm outline-none focus:border-rose-400 disabled:opacity-50 ${input}`}
+              placeholder="Masukkan kata sandi admin"
+            />
+            <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button type="button" onClick={closeResetDialog} disabled={resettingVotes} className={`rounded-xl border border-current/15 px-4 py-3 text-sm font-bold disabled:opacity-50 ${muted}`}>Batal</button>
+              <button type="submit" disabled={resettingVotes || !resetPassword} className="inline-flex items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-3 text-sm font-black text-white transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-50">
+                {resettingVotes ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                {resettingVotes ? "Memproses reset..." : "Konfirmasi reset"}
+              </button>
+            </div>
+          </form>
+        </section>
       </div>}
     </div>
   );

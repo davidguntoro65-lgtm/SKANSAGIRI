@@ -4,6 +4,7 @@ import * as XLSX from "xlsx";
 import { db } from "./db";
 
 type AuthMiddleware = (req: Request, res: Response, next: NextFunction) => void | Promise<void>;
+type AdminPasswordProvider = () => Promise<string | null>;
 type ImportType =
   | "tahun-ajaran"
   | "jurusan"
@@ -58,6 +59,12 @@ function fail(res: Response, status: number, code: string, message: string, fiel
 
 function clean(value: unknown) {
   return String(value ?? "").trim();
+}
+
+function safeTextEqual(leftText: string, rightText: string) {
+  const left = Buffer.from(leftText);
+  const right = Buffer.from(rightText);
+  return left.length === right.length && crypto.timingSafeEqual(left, right);
 }
 
 function hashPassword(password: string, salt = crypto.randomBytes(16).toString("hex")) {
@@ -459,7 +466,7 @@ function moduleScope(actor: LmsActor) {
   return canManageAllLms(actor.roles) ? {} : { ownerTeacherId: actor.teacher?.id || "__missing_teacher__" };
 }
 
-export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddleware) {
+export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddleware, getAdminPassword: AdminPasswordProvider) {
   app.get("/api/v1/pilketos/active", async (req, res) => {
     // The public landing page also needs to preview candidates while the
     // committee is still preparing a draft. Prefer the live election, then
@@ -740,9 +747,13 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
 
   app.patch("/api/v1/pilketos/admin/candidates/:candidateId", requireAuth, async (req, res) => {
     if (!(await hasPilketosAdminAccess(req))) return fail(res, 403, "FORBIDDEN", "Akses pengelolaan Pilketos tidak diizinkan.");
-    const current = await db.pilketosCandidate.findUnique({ where: { id: req.params.candidateId }, include: { election: true } });
+    const current = await db.pilketosCandidate.findUnique({
+      where: { id: req.params.candidateId },
+      include: { election: true, _count: { select: { votes: true } } },
+    });
     if (!current) return fail(res, 404, "CANDIDATE_NOT_FOUND", "Kandidat tidak ditemukan.");
     if (current.election.status !== "DRAFT") return fail(res, 409, "ELECTION_LOCKED", "Kandidat hanya dapat diubah saat status masih draft.");
+    if (current._count.votes) return fail(res, 409, "CANDIDATE_HAS_VOTES", "Kandidat yang sudah menerima suara tidak dapat diubah.");
     const name = req.body.name === undefined ? current.name : clean(req.body.name);
     const grade = (req.body.grade === undefined ? current.grade : clean(req.body.grade).toUpperCase()) as PilketosGrade;
     const photoData = req.body.photoData === undefined ? current.photoData : (clean(req.body.photoData) || null);
@@ -773,6 +784,52 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
     if (current._count.votes) return fail(res, 409, "CANDIDATE_HAS_VOTES", "Kandidat yang sudah menerima suara tidak dapat dihapus.");
     await db.pilketosCandidate.delete({ where: { id: current.id } });
     return ok(res, { deleted: true });
+  });
+
+  app.post("/api/v1/pilketos/admin/reset-votes", requireAuth, async (req, res) => {
+    if (!(await hasPilketosAdminAccess(req))) return fail(res, 403, "FORBIDDEN", "Akses pengelolaan Pilketos tidak diizinkan.");
+    const password = typeof req.body?.password === "string" ? req.body.password : "";
+    const electionId = clean(req.body?.electionId);
+    if (!password) return fail(res, 400, "PASSWORD_REQUIRED", "Kata sandi admin wajib diisi untuk reset suara.");
+    if (!electionId) return fail(res, 400, "ELECTION_REQUIRED", "Pemilihan yang akan direset tidak valid.");
+
+    const election = await db.pilketosElection.findUnique({ where: { id: electionId }, select: { id: true } });
+    if (!election) return fail(res, 404, "ELECTION_NOT_FOUND", "Pemilihan yang akan direset tidak ditemukan.");
+
+    let adminPassword: string | null;
+    try {
+      adminPassword = await getAdminPassword();
+    } catch {
+      return fail(res, 503, "ADMIN_CREDENTIALS_UNAVAILABLE", "Kata sandi admin tidak dapat diverifikasi saat ini.");
+    }
+    if (!adminPassword) return fail(res, 503, "ADMIN_CREDENTIALS_UNAVAILABLE", "Akun admin belum dikonfigurasi.");
+    if (!safeTextEqual(password, adminPassword)) {
+      return fail(res, 401, "INVALID_ADMIN_PASSWORD", "Kata sandi admin salah. Tidak ada suara yang dihapus.");
+    }
+
+    let deletedCount: number;
+    try {
+      deletedCount = await db.$transaction(async (tx) => {
+        const deleted = await tx.pilketosVote.deleteMany({ where: { electionId: election.id } });
+        await tx.coreAuditLog.create({
+          data: {
+            action: "PILKETOS_VOTE_RESET",
+            entity: "PilketosVote",
+            entityId: election.id,
+            actor: "ADMIN_SESSION",
+            metadata: {
+              deletedCount: deleted.count,
+              scope: "CURRENT_ELECTION",
+            },
+          },
+        });
+        return deleted.count;
+      });
+    } catch {
+      return fail(res, 500, "VOTE_RESET_FAILED", "Reset suara gagal. Tidak ada perubahan yang diterapkan.");
+    }
+
+    return ok(res, { deletedCount });
   });
 
   // Wave 2 / Sprint 5: curriculum module foundation. Upload and ingestion are

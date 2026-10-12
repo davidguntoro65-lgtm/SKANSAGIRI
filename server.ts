@@ -478,7 +478,10 @@ app.get("/api/health", async (_req, res) => {
 });
 
 // ─── Core Platform: identity and academic master data ─────────────────────────
-registerCorePlatformRoutes(app, requireAuth as any);
+registerCorePlatformRoutes(app, requireAuth as any, async () => {
+  const credentials = await getAdminCredentials();
+  return credentials?.password || null;
+});
 
 // ─── Logs Endpoint ────────────────────────────────────────────────────────────
 app.get("/api/logs", requireAuth as any, (_req, res) => {
