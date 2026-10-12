@@ -317,7 +317,7 @@ export default function PilketosPage() {
               <p className="mt-3 text-sm leading-relaxed text-slate-500">Gunakan NIS atau NISN yang terdaftar. Tidak perlu memasukkan password.</p>
             </div>
             {election && votingPhase && election.status === "OPEN" && <VotingSchedule election={election} phase={votingPhase} nowMs={nowMs} />}
-            {election?.status === "OPEN" && votingPhase !== "ENDED" ? (
+            {votingPhase === "OPEN" ? (
               <form onSubmit={login} className="mt-8">
                 <label className="block text-xs font-black uppercase tracking-wider text-slate-600">
                   NIS / NISN
@@ -332,7 +332,7 @@ export default function PilketosPage() {
                 </button>
               </form>
             ) : (
-              <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-relaxed text-amber-800"><Clock3 className="mb-2 h-5 w-5 text-amber-600" />{votingPhase === "ENDED" ? "Masa pemungutan suara telah berakhir." : "Akses pemilih akan dibuka setelah panitia mengaktifkan pemilihan."} {votingPhase !== "ENDED" && "Kandidat yang sudah disiapkan dapat dilihat di halaman utama."}</div>
+              <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-relaxed text-amber-800"><Clock3 className="mb-2 h-5 w-5 text-amber-600" />{votingPhase === "ENDED" ? "Masa pemungutan suara telah berakhir." : votingPhase === "SCHEDULED" ? "Form NIS/NISN akan terbuka otomatis saat waktu pemilihan dimulai." : "Akses pemilih belum dibuka panitia."} {votingPhase !== "ENDED" && "Kandidat yang sudah disiapkan dapat dilihat di halaman utama."}</div>
             )}
           </section>
           <p className="mt-6 text-center text-xs font-medium text-slate-400">Satu siswa, satu suara · Sistem pemilihan resmi SMKN 1 Wonogiri</p>

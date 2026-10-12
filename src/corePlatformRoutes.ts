@@ -491,11 +491,6 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
   });
 
   app.post("/api/v1/pilketos/identify", async (req, res) => {
-    const student = await resolvePilketosStudent(req.body?.identifier);
-    if (!student) {
-      return fail(res, 404, "STUDENT_NOT_FOUND", "NIS/NISN tidak ditemukan atau siswa tidak aktif.");
-    }
-
     const election = await db.pilketosElection.findFirst({
       where: { status: "OPEN" },
       include: { candidates: { orderBy: [{ grade: "asc" }, { candidateNo: "asc" }] } },
@@ -503,6 +498,21 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
     });
     if (!election) {
       return fail(res, 409, "ELECTION_NOT_OPEN", "Pemilihan belum dibuka atau sudah ditutup.");
+    }
+    const votingPhase = getPilketosVotingPhase(election);
+    if (votingPhase === "SCHEDULED") {
+      return fail(res, 409, "VOTING_NOT_STARTED", "Waktu pemungutan suara belum dimulai.");
+    }
+    if (votingPhase === "ENDED") {
+      return fail(res, 409, "VOTING_ENDED", "Waktu pemungutan suara sudah berakhir.");
+    }
+    if (votingPhase !== "OPEN") {
+      return fail(res, 409, "ELECTION_NOT_OPEN", "Pemilihan belum dibuka atau sudah ditutup.");
+    }
+
+    const student = await resolvePilketosStudent(req.body?.identifier);
+    if (!student) {
+      return fail(res, 404, "STUDENT_NOT_FOUND", "NIS/NISN tidak ditemukan atau siswa tidak aktif.");
     }
 
     const votes = await db.pilketosVote.findMany({
