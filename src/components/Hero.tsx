@@ -413,15 +413,19 @@ export default function Hero({ theme }: { theme: "light" | "dark" }) {
                   }`}
                 >
                   {/* Thumbnail */}
-                  <div className={`w-14 h-14 rounded-lg overflow-hidden shrink-0 border ${
-                    isDark ? "border-white/10" : "border-slate-200"
+                  <div className={`w-14 h-14 rounded-lg shrink-0 border p-1 flex items-center justify-center ${
+                    isDark ? "border-white/10 bg-slate-950" : "border-slate-200 bg-white"
                   }`}>
-                    <img
-                      src={item.image}
-                      alt={item.title}
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                    />
+                    {item.image ? (
+                      <img
+                        src={item.image}
+                        alt={item.title}
+                        referrerPolicy="no-referrer"
+                        className="max-w-full max-h-full object-contain"
+                      />
+                    ) : (
+                      <Newspaper className={`w-5 h-5 ${isDark ? "text-slate-600" : "text-slate-400"}`} aria-hidden="true" />
+                    )}
                   </div>
 
                   {/* Text */}

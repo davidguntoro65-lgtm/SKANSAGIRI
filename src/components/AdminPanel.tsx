@@ -2496,11 +2496,11 @@ export default function AdminPanel({
                           <label className="block text-xs font-mono uppercase tracking-wider text-slate-400 mb-2">Tautan / Gambar Berita Utama</label>
                           {/* Image preview */}
                           {editingItem.image && (
-                            <div className="mb-2 rounded-lg overflow-hidden border border-white/10 h-28 bg-slate-900">
+                            <div className="mb-2 h-44 rounded-lg border border-white/10 bg-slate-900 p-2 flex items-center justify-center">
                               <img
                                 src={editingItem.image}
                                 alt="preview"
-                                className="w-full h-full object-cover"
+                                className="max-w-full max-h-full object-contain"
                                 onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                               />
                             </div>
@@ -2901,12 +2901,16 @@ export default function AdminPanel({
                   {activeTab === "news" && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
                       {news.map((n) => (
-                        <div key={n.id} className={`border rounded-xl p-5 flex justify-between items-start gap-4 ${isDarkTheme ? "bg-slate-900 border-white/5" : "bg-white border-slate-200"}`}>
-                          <div className="flex gap-4">
-                            <div className="w-20 h-20 md:w-24 md:h-24 rounded-lg overflow-hidden shrink-0 bg-slate-950 border border-white/5">
-                              <img src={n.image} alt={n.title} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+                        <div key={n.id} className={`border rounded-xl p-4 md:p-5 flex justify-between items-center gap-3 min-w-0 ${isDarkTheme ? "bg-slate-900 border-white/5" : "bg-white border-slate-200"}`}>
+                          <div className="flex gap-3 md:gap-4 min-w-0 flex-1">
+                            <div className={`w-24 h-20 md:w-32 md:h-24 rounded-lg shrink-0 border p-1 flex items-center justify-center ${isDarkTheme ? "bg-slate-950 border-white/5" : "bg-slate-100 border-slate-200"}`}>
+                              {n.image ? (
+                                <img src={n.image} alt={n.title} referrerPolicy="no-referrer" className="max-w-full max-h-full object-contain" />
+                              ) : (
+                                <Newspaper className="w-6 h-6 text-slate-500" aria-hidden="true" />
+                              )}
                             </div>
-                            <div>
+                            <div className="min-w-0">
                               <span className="text-[9px] text-amber-500 font-bold font-mono tracking-wider block uppercase">{n.category}</span>
                               <h4 className={`text-sm font-bold line-clamp-1 mt-0.5 ${isDarkTheme ? "text-white" : "text-slate-900"}`}>{n.title}</h4>
                               <p className={`text-[10px] ${isDarkTheme ? "text-slate-400" : "text-slate-650"} mt-1 line-clamp-2`}>{n.excerpt}</p>
