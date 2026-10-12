@@ -61,6 +61,62 @@ function clean(value: unknown) {
   return String(value ?? "").trim();
 }
 
+function asyncRoute(handler: (req: Request, res: Response, next: NextFunction) => Promise<unknown>) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    Promise.resolve(handler(req, res, next)).catch(next);
+  };
+}
+
+type PilketosRateBucket = { count: number; resetAt: number };
+const pilketosRateBuckets = new Map<string, PilketosRateBucket>();
+const PILKETOS_RATE_WINDOW_MS = 60_000;
+const PILKETOS_RATE_PER_SOURCE = 30_000;
+const PILKETOS_RATE_MAX_BUCKETS = 40_000;
+let pilketosRateChecks = 0;
+
+function pilketosRateLimit(scope: "identify" | "status" | "vote", perIdentifierLimit: number) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const now = Date.now();
+    if (++pilketosRateChecks % 256 === 0) {
+      for (const [key, bucket] of pilketosRateBuckets) {
+        if (bucket.resetAt <= now) pilketosRateBuckets.delete(key);
+      }
+    }
+
+    const identifier = clean(req.body?.identifier).toUpperCase();
+    const identifierHash = crypto.createHash("sha256").update(identifier || "__missing__").digest("hex");
+    const source = req.socket.remoteAddress || "unknown";
+    const keys = [
+      { key: `source:${source}`, limit: PILKETOS_RATE_PER_SOURCE },
+      { key: `${scope}:${identifierHash}`, limit: perIdentifierLimit },
+    ];
+    const blocked = keys
+      .map(({ key, limit }) => ({ key, limit, bucket: pilketosRateBuckets.get(key) }))
+      .find(({ bucket, limit }) => bucket && bucket.resetAt > now && bucket.count >= limit);
+
+    if (blocked) {
+      const retryAfter = Math.max(1, Math.ceil(((blocked.bucket?.resetAt || now + 1) - now) / 1000));
+      res.setHeader("Retry-After", String(retryAfter));
+      return fail(res, 429, "RATE_LIMITED", "Terlalu banyak permintaan Pilketos. Silakan coba lagi sebentar.");
+    }
+
+    for (const { key } of keys) {
+      const bucket = pilketosRateBuckets.get(key);
+      if (!bucket || bucket.resetAt <= now) {
+        pilketosRateBuckets.set(key, { count: 1, resetAt: now + PILKETOS_RATE_WINDOW_MS });
+      } else {
+        bucket.count += 1;
+      }
+    }
+    while (pilketosRateBuckets.size > PILKETOS_RATE_MAX_BUCKETS) {
+      const oldestKey = pilketosRateBuckets.keys().next().value;
+      if (!oldestKey) break;
+      pilketosRateBuckets.delete(oldestKey);
+    }
+    return next();
+  };
+}
+
 function safeTextEqual(leftText: string, rightText: string) {
   const left = Buffer.from(leftText);
   const right = Buffer.from(rightText);
@@ -400,7 +456,20 @@ function getPilketosVotingPhase(election: { status: string; startsAt?: Date | st
   return "OPEN";
 }
 
-function publicPilketosElection(election: any, votedPositions: string[] = [], votedCandidateIds: string[] = [], stats?: any) {
+function candidateRevision(candidates: any[] = []) {
+  return candidates
+    .map((candidate) => `${candidate.id}:${new Date(candidate.updatedAt || candidate.createdAt || 0).getTime()}`)
+    .sort()
+    .join("|");
+}
+
+function publicPilketosElection(
+  election: any,
+  votedPositions: string[] = [],
+  votedCandidateIds: string[] = [],
+  stats?: any,
+  options: { includePhotoData?: boolean } = {},
+) {
   if (!election) return null;
   return {
     id: election.id,
@@ -416,12 +485,15 @@ function publicPilketosElection(election: any, votedPositions: string[] = [], vo
     votedPositions,
     votedCandidateIds,
     stats,
+    candidateRevision: candidateRevision(election.candidates || []),
     candidates: (election.candidates || []).map((candidate: any) => ({
       id: candidate.id,
       grade: candidate.grade,
       candidateNo: candidate.candidateNo,
       name: candidate.name,
-      photoData: candidate.photoData,
+      ...(options.includePhotoData === false
+        ? { photoVersion: candidate.photoData ? new Date(candidate.updatedAt || candidate.createdAt || 0).getTime() : null }
+        : { photoData: candidate.photoData }),
       voteCount: candidate._count?.votes,
       voteCounts: candidate.voteCounts,
     })),

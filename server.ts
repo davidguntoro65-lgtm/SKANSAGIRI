@@ -232,6 +232,23 @@ async function seedDefaults() {
   }
 }
 
+// Pilketos voter requests contain only an identifier and four candidate IDs.
+// Parse these before the general upload parser so they cannot consume its 25 MB
+// allowance. Candidate photo uploads continue to use the larger general limit.
+const pilketosVoterBodyPaths = new Set([
+  "/api/v1/pilketos/identify",
+  "/api/v1/pilketos/status",
+  "/api/v1/pilketos/vote",
+]);
+const pilketosVoterJsonParser = express.json({ limit: "16kb" });
+app.use((req, res, next) => {
+  if (req.method !== "POST" || !pilketosVoterBodyPaths.has(req.path)) return next();
+  if (!req.is("application/json")) {
+    return res.status(415).json({ error: "Endpoint Pilketos hanya menerima application/json." });
+  }
+  return pilketosVoterJsonParser(req, res, next);
+});
+
 // ─── Parsing Middlewares ──────────────────────────────────────────────────────
 app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ extended: true, limit: "25mb" }));
@@ -269,6 +286,7 @@ app.use((req, res, next) => {
     "/api/v1/auth/login",
     "/api/v1/auth/activate",
     "/api/v1/pilketos/identify",
+    "/api/v1/pilketos/status",
     "/api/v1/pilketos/vote",
   ];
   if (publicExact.includes(req.path)) return next();
@@ -1494,7 +1512,13 @@ async function main() {
 
   app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
     serverLog("ERROR", `Unhandled Express error on ${req.method} ${req.originalUrl}: ${err.stack || err.message}`);
-    res.status(500).json({ error: "Internal server error" });
+    const status = Number.isInteger(err?.status) && err.status >= 400 && err.status < 500 ? err.status : 500;
+    const message = status === 413
+      ? "Ukuran data permintaan terlalu besar."
+      : status === 400
+        ? "Format data permintaan tidak valid."
+        : "Internal server error";
+    res.status(status).json({ error: message });
   });
 
   app.listen(PORT, "0.0.0.0", () => {
