@@ -53,14 +53,17 @@ function toJakartaInput(value?: string | null) {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
     hourCycle: "h23",
   }).formatToParts(new Date(value));
   const part = (type: string) => parts.find((item) => item.type === type)?.value || "";
-  return `${part("year")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}`;
+  return `${part("year")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}:${part("second")}`;
 }
 
 function fromJakartaInput(value: string) {
-  return value ? new Date(`${value}:00+07:00`).toISOString() : null;
+  if (!value) return null;
+  const valueWithSeconds = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value) ? `${value}:00` : value;
+  return new Date(`${valueWithSeconds}+07:00`).toISOString();
 }
 
 function serializeElectionForm(form: { title: string; academicYear: string; description: string; status: string; startsAt: string; endsAt: string }, status = form.status) {
@@ -285,10 +288,10 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
           <label className={`mt-4 block text-xs font-bold ${muted}`}>Tahun ajaran<input required value={form.academicYear} onChange={(event) => setForm({ ...form, academicYear: event.target.value })} className={`mt-2 w-full rounded-xl border px-3.5 py-3 text-sm outline-none focus:border-amber-400 ${input}`} /></label>
           <label className={`mt-4 block text-xs font-bold ${muted}`}>Deskripsi<textarea value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} rows={4} className={`mt-2 w-full resize-none rounded-xl border px-3.5 py-3 text-sm outline-none focus:border-amber-400 ${input}`} placeholder="Pesan singkat untuk pemilih..." /></label>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <label className={`block text-xs font-bold ${muted}`}>Mulai voting (WIB)<input type="datetime-local" step={60} required={Boolean(form.startsAt || form.endsAt)} value={form.startsAt} onChange={(event) => setForm({ ...form, startsAt: event.target.value })} className={`mt-2 w-full rounded-xl border px-3 py-3 text-sm outline-none focus:border-amber-400 ${input}`} /></label>
-            <label className={`block text-xs font-bold ${muted}`}>Akhir voting (WIB)<input type="datetime-local" step={60} min={form.startsAt || undefined} required={Boolean(form.startsAt || form.endsAt)} value={form.endsAt} onChange={(event) => setForm({ ...form, endsAt: event.target.value })} className={`mt-2 w-full rounded-xl border px-3 py-3 text-sm outline-none focus:border-amber-400 ${input}`} /></label>
+            <label className={`block text-xs font-bold ${muted}`}>Mulai voting (WIB, sampai detik)<input type="datetime-local" step={1} required={Boolean(form.startsAt || form.endsAt)} value={form.startsAt} onChange={(event) => setForm({ ...form, startsAt: event.target.value })} className={`mt-2 w-full rounded-xl border px-3 py-3 text-sm outline-none focus:border-amber-400 ${input}`} /></label>
+            <label className={`block text-xs font-bold ${muted}`}>Akhir voting (WIB, sampai detik)<input type="datetime-local" step={1} min={form.startsAt || undefined} required={Boolean(form.startsAt || form.endsAt)} value={form.endsAt} onChange={(event) => setForm({ ...form, endsAt: event.target.value })} className={`mt-2 w-full rounded-xl border px-3 py-3 text-sm outline-none focus:border-amber-400 ${input}`} /></label>
           </div>
-          <p className={`mt-2 text-xs leading-relaxed ${muted}`}>Isi kedua waktu untuk jadwal otomatis. Voting dibuka dan ditutup oleh server sesuai jadwal WIB. Kosongkan keduanya untuk mode manual.</p>
+          <p className={`mt-2 text-xs leading-relaxed ${muted}`}>Jadwal memakai WIB dengan presisi hingga HH:MM:SS. Isi tanggal mulai dan akhir untuk jadwal otomatis; kosongkan keduanya untuk mode manual. Waktu tetap ditegakkan oleh server.</p>
           <label className={`mt-4 block text-xs font-bold ${muted}`}>Status<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })} className={`mt-2 w-full rounded-xl border px-3.5 py-3 text-sm outline-none focus:border-amber-400 ${input}`}><option value="DRAFT">Draft — masih menyiapkan kandidat</option><option value="OPEN">Buka pemilihan</option><option value="CLOSED">Tutup pemilihan</option></select></label>
           {election?.status === "OPEN" && <div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-xs">
             <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />

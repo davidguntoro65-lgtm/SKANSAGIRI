@@ -66,7 +66,7 @@ const EMPTY_SELECTIONS: Record<Position, string> = {
 
 function formatDate(value?: string | null) {
   if (!value) return "";
-  return new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" }).format(new Date(value));
+  return new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "medium", timeZone: "Asia/Jakarta" }).format(new Date(value));
 }
 
 function phaseAt(election: Election, nowMs: number): Election["votingPhase"] {
@@ -427,7 +427,7 @@ export default function PilketosPage() {
             <div className="relative flex h-full flex-col justify-between">
               <div className="flex items-center justify-between"><span className="rounded-full bg-slate-950 px-3 py-1.5 text-[10px] font-black uppercase tracking-[.18em] text-white">Official election</span><Vote className="h-6 w-6 text-amber-500" /></div>
               <div className="py-10"><p className="text-sm font-bold text-amber-600">SMKN 1 WONOGIRI</p><h2 className="mt-3 text-4xl font-black leading-tight tracking-tight text-slate-950">Pilih dengan<br /><span className="text-amber-500">bijak.</span></h2><p className="mt-4 max-w-xs text-sm leading-relaxed text-slate-500">{election?.description || "Kepemimpinan baru, semangat baru, dan suara siswa untuk sekolah yang lebih baik."}</p></div>
-              <div className="flex flex-wrap gap-3 border-t border-slate-200 pt-5 text-xs font-bold text-slate-500"><span className="inline-flex items-center gap-2"><CalendarDays className="h-4 w-4 text-amber-500" /> Tahun ajaran {election?.academicYear || "2026/2027"}</span>{election?.endsAt && <span className="inline-flex items-center gap-2"><Clock3 className="h-4 w-4 text-amber-500" /> Sampai {formatDate(election.endsAt)}</span>}</div>
+              <div className="flex flex-wrap gap-3 border-t border-slate-200 pt-5 text-xs font-bold text-slate-500"><span className="inline-flex items-center gap-2"><CalendarDays className="h-4 w-4 text-amber-500" /> Tahun ajaran {election?.academicYear || "2026/2027"}</span>{election?.endsAt && <span className="inline-flex items-center gap-2"><Clock3 className="h-4 w-4 text-amber-500" /> Sampai {formatDate(election.endsAt)} WIB</span>}</div>
             </div>
           </div>
         </section>
