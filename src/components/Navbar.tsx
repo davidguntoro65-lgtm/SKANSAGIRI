@@ -326,34 +326,14 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
               target="_blank"
               rel="noopener noreferrer"
               id="btn-evote-desktop"
-              className="osdai-btn relative overflow-hidden group flex items-center gap-2 px-4 py-2.5 rounded-full font-sans text-xs uppercase tracking-widest font-bold text-white transition-all duration-300 hover:scale-105 active:scale-95"
-              style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #0c1445 70%, #0f172a 100%)", border: "1px solid rgba(99,102,241,0.5)" }}
+              className="evote-cta relative group flex items-center gap-2 px-3.5 py-2.5 rounded-full border border-amber-600/60 bg-gradient-to-r from-amber-300 via-amber-400 to-amber-500 text-slate-950 shadow-sm font-sans text-xs uppercase tracking-widest font-bold transition-all duration-300 hover:from-amber-200 hover:via-amber-300 hover:to-amber-400 hover:shadow-md hover:scale-105 active:scale-95"
             >
-              {/* Animated conic border ring */}
-              <span className="pointer-events-none absolute inset-0 rounded-full opacity-60 group-hover:opacity-100 transition-opacity duration-500"
-                style={{ background: "linear-gradient(135deg, rgba(14,165,233,0.15), rgba(99,102,241,0.15), rgba(139,92,246,0.15))" }} />
-
-              {/* Scan line sweep */}
-              <span className="osdai-scan-line pointer-events-none absolute top-0 left-0 h-full w-1/3"
-                style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent)" }} />
-
-              {/* Vote icon with pulse ring */}
-              <span className="relative flex items-center justify-center shrink-0">
-                <span className="absolute w-5 h-5 rounded-full bg-cyan-400/20 animate-ping" />
-                <Vote className="w-3.5 h-3.5 text-cyan-300 relative z-10" />
-              </span>
+              <Vote className="w-3.5 h-3.5 text-slate-950 shrink-0" aria-hidden="true" />
 
               {/* Label */}
-              <span className="osdai-label flex flex-col leading-none">
-                <span className="text-[10px] font-black tracking-[0.2em] text-white">E-VOTE</span>
-                <span className="text-[7px] font-light tracking-[0.15em] text-cyan-300/80 normal-case">Pilketos 2026</span>
-              </span>
-
-              {/* Animated dots indicator */}
-              <span className="flex items-center gap-[3px] ml-0.5">
-                <span className="osdai-dot-1 w-1 h-1 rounded-full bg-cyan-400" />
-                <span className="osdai-dot-2 w-1 h-1 rounded-full bg-indigo-400" />
-                <span className="osdai-dot-3 w-1 h-1 rounded-full bg-violet-400" />
+              <span className="flex flex-col leading-none">
+                <span className="text-[9px] font-black tracking-[0.08em] text-slate-950 whitespace-nowrap">Lakukan E-Voting</span>
+                <span className="text-[7px] font-semibold tracking-[0.12em] text-slate-700 normal-case mt-1">Pilketos 2026</span>
               </span>
             </a>
 
@@ -580,23 +560,12 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
             rel="noopener noreferrer"
             onClick={() => setIsOpen(false)}
             id="btn-evote-mobile"
-            className="osdai-btn relative overflow-hidden mt-3 w-full flex items-center justify-center gap-3 py-3.5 rounded-full font-sans font-extrabold uppercase tracking-widest text-xs text-white"
-            style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #0c1445 70%, #0f172a 100%)", border: "1px solid rgba(99,102,241,0.5)" }}
+            className="evote-cta relative mt-3 w-full flex items-center justify-center gap-3 py-3.5 rounded-full border border-amber-600/60 bg-gradient-to-r from-amber-300 via-amber-400 to-amber-500 text-slate-950 shadow-sm font-sans font-extrabold uppercase tracking-widest text-xs"
           >
-            <span className="osdai-scan-line pointer-events-none absolute top-0 left-0 h-full w-1/3"
-              style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent)" }} />
-            <span className="relative flex items-center justify-center shrink-0">
-              <span className="absolute w-5 h-5 rounded-full bg-cyan-400/20 animate-ping" />
-              <Vote className="w-4 h-4 text-cyan-300 relative z-10" />
-            </span>
-            <span className="osdai-label flex flex-col leading-none items-start">
-              <span className="text-[11px] font-black tracking-[0.2em] text-white">E-VOTE</span>
-              <span className="text-[8px] font-light tracking-[0.12em] text-cyan-300/80 normal-case">Pilketos 2026</span>
-            </span>
-            <span className="flex items-center gap-[3px]">
-              <span className="osdai-dot-1 w-1.5 h-1.5 rounded-full bg-cyan-400" />
-              <span className="osdai-dot-2 w-1.5 h-1.5 rounded-full bg-indigo-400" />
-              <span className="osdai-dot-3 w-1.5 h-1.5 rounded-full bg-violet-400" />
+            <Vote className="w-4 h-4 text-slate-950 shrink-0" aria-hidden="true" />
+            <span className="flex flex-col leading-none items-start">
+              <span className="text-[11px] font-black tracking-[0.08em] text-slate-950">Lakukan E-Voting</span>
+              <span className="text-[8px] font-semibold tracking-[0.12em] text-slate-700 normal-case mt-1">Pilketos 2026</span>
             </span>
           </a>
 

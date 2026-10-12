@@ -375,40 +375,18 @@ export default function App() {
         target="_blank"
         rel="noopener noreferrer"
         id="btn-evote-float"
-        className="osdai-btn fixed bottom-6 right-6 z-50 group flex items-center gap-2.5 pl-3 pr-4 py-3 rounded-2xl font-sans text-white transition-all duration-300 hover:scale-105 active:scale-95 hover:rounded-3xl"
-        style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e1b4b 45%, #0c1445 75%, #0f172a 100%)", border: "1px solid rgba(99,102,241,0.55)" }}
+        className="evote-cta fixed bottom-6 right-6 z-50 flex items-center gap-2.5 pl-3 pr-4 py-3 rounded-2xl border border-amber-600/60 bg-gradient-to-r from-amber-300 via-amber-400 to-amber-500 text-slate-950 shadow-md font-sans transition-all duration-300 hover:from-amber-200 hover:via-amber-300 hover:to-amber-400 hover:shadow-lg hover:scale-105 active:scale-95 hover:rounded-3xl"
       >
-        {/* Scan sweep */}
-        <span
-          className="osdai-scan-line pointer-events-none absolute top-0 left-0 h-full w-1/3 rounded-2xl"
-          style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent)" }}
-        />
-
-        {/* Vote icon with ping */}
-        <span className="relative flex items-center justify-center shrink-0 w-8 h-8 rounded-xl"
-          style={{ background: "rgba(99,102,241,0.15)" }}>
-          <span className="absolute w-5 h-5 rounded-full bg-cyan-400/25 animate-ping" />
-          <Vote className="w-4 h-4 text-cyan-300 relative z-10" />
+        <span className="flex items-center justify-center shrink-0 w-8 h-8 rounded-xl bg-slate-950/10">
+          <Vote className="w-4 h-4 text-slate-950" aria-hidden="true" />
         </span>
 
         {/* Label */}
-        <span className="osdai-label flex flex-col leading-none">
-          <span className="text-[11px] font-black tracking-[0.18em] text-white">E-VOTE</span>
-          <span className="text-[8px] font-light tracking-[0.1em] text-cyan-300/80 normal-case">Pilketos 2026</span>
+        <span className="flex flex-col leading-none">
+          <span className="text-[10px] font-black tracking-[0.06em] text-slate-950 whitespace-nowrap">Lakukan E-Voting</span>
+          <span className="text-[8px] font-semibold tracking-[0.12em] text-slate-700 normal-case mt-1">Pilketos 2026</span>
         </span>
 
-        {/* Dots */}
-        <span className="flex flex-col items-center gap-[3px] ml-0.5">
-          <span className="osdai-dot-1 w-1 h-1 rounded-full bg-cyan-400" />
-          <span className="osdai-dot-2 w-1 h-1 rounded-full bg-indigo-400" />
-          <span className="osdai-dot-3 w-1 h-1 rounded-full bg-violet-400" />
-        </span>
-
-        {/* Tooltip on hover */}
-        <span className="absolute bottom-full right-0 mb-2 px-3 py-1.5 rounded-xl text-[9px] font-mono tracking-widest uppercase text-white/80 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none whitespace-nowrap"
-          style={{ background: "rgba(15,23,42,0.9)", border: "1px solid rgba(99,102,241,0.3)" }}>
-          Buka E-VOTE Pilketos ↗
-        </span>
       </a>
     </div>
   );
