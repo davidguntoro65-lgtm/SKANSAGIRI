@@ -64,6 +64,8 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
   const [studentForm, setStudentForm] = useState<StudentFormState>(EMPTY_STUDENT_FORM);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [showStudentForm, setShowStudentForm] = useState(false);
+  const [studentSaving, setStudentSaving] = useState(false);
   const [importType, setImportType] = useState<ImportType>("guru");
   const [file, setFile] = useState<{ name: string; base64: string } | null>(null);
   const [preview, setPreview] = useState<{ jobId: string; rows: PreviewRow[]; totalRows: number; validRows: number; errorRows: number } | null>(null);
@@ -72,6 +74,9 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
   const [audit, setAudit] = useState<any[]>([]);
   const [auditTotal, setAuditTotal] = useState(0);
   const [expandedJob, setExpandedJob] = useState<any | null>(null);
+  const updateStudentForm = (field: keyof StudentFormState, value: string) => {
+    setStudentForm((current) => ({ ...current, [field]: value }));
+  };
 
   const request = async (url: string, options?: RequestInit) => {
     const response = await fetch(url, { ...options, headers: { ...authHeaders(Boolean(options?.body)), ...(options?.headers || {}) } });
@@ -107,16 +112,19 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
     }
   };
 
-  const load = async () => {
+  const load = async (options?: { pinnedStudent?: any; searchTerm?: string }) => {
     if (!loggedIn) return;
     setLoading(true);
     try {
       const [nextOverview, nextMaster, nextRequests] = await Promise.all([
         request("/api/v1/akademik/overview"),
-        request(`/api/v1/akademik/master?search=${encodeURIComponent(search)}&pageSize=50`),
+        request(`/api/v1/akademik/master?search=${encodeURIComponent(options?.searchTerm ?? search)}&pageSize=50`),
         request("/api/v1/akademik/teacher-requests"),
       ]);
-      setOverview(nextOverview); setMaster(nextMaster); setRequests(nextRequests || []);
+      const refreshedMaster = options?.pinnedStudent
+        ? { ...nextMaster, students: [options.pinnedStudent, ...nextMaster.students.filter((student: any) => student.id !== options.pinnedStudent.id)] }
+        : nextMaster;
+      setOverview(nextOverview); setMaster(refreshedMaster); setRequests(nextRequests || []);
     } catch (error) { setNotice({ type: "error", text: error instanceof Error ? error.message : "Data gagal dimuat." }); }
     finally { setLoading(false); }
   };
@@ -165,7 +173,16 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
     } catch (error) { setNotice({ type: "error", text: error instanceof Error ? error.message : "Commit gagal." }); }
     finally { setImportBusy(false); }
   };
-  const openCreate = () => { setEditingId(null); setForm({ ...EMPTY_FORM, academicYearId: master.academicYears[0]?.id || "" }); setShowForm(true); };
+  const openCreate = () => {
+    setEditingId(null);
+    if (masterKey === "students") {
+      setStudentForm(EMPTY_STUDENT_FORM);
+      setShowStudentForm(true);
+      return;
+    }
+    setForm({ ...EMPTY_FORM, academicYearId: master.academicYears[0]?.id || "" });
+    setShowForm(true);
+  };
   const openEdit = (item: any) => {
     setEditingId(item.id);
     setForm({ code: item.code || "", name: item.name || "", grade: item.grade || "X", academicYearId: item.academicYearId || "", departmentId: item.departmentId || "", isActive: Boolean(item.isActive), status: item.status || "ACTIVE" });
@@ -185,6 +202,43 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
       await request(`/api/v1/akademik/${endpoint}${editingId ? `/${editingId}` : ""}`, { method: editingId ? "PATCH" : "POST", body: JSON.stringify(payload) });
       setShowForm(false); setNotice({ type: "success", text: `${MASTER_META.find((item) => item.key === masterKey)?.label} berhasil ${editingId ? "diperbarui" : "ditambahkan"}.` }); await load();
     } catch (error) { setNotice({ type: "error", text: error instanceof Error ? error.message : "Data gagal disimpan." }); }
+  };
+  const saveStudent = async (event: FormEvent) => {
+    event.preventDefault();
+    if (Boolean(studentForm.classCode) !== Boolean(studentForm.academicYearCode)) {
+      setNotice({ type: "error", text: "Kode kelas dan tahun ajaran harus diisi bersama. Keduanya boleh dikosongkan." });
+      return;
+    }
+
+    setStudentSaving(true);
+    try {
+      const created = await request("/api/v1/akademik/siswa", {
+        method: "POST",
+        body: JSON.stringify({
+          nisn: studentForm.nisn.trim(),
+          nis: studentForm.nis.trim(),
+          fullName: studentForm.fullName.trim(),
+          email: studentForm.email.trim() || null,
+          phone: studentForm.phone.trim() || null,
+          gender: studentForm.gender || null,
+          birthPlace: studentForm.birthPlace.trim() || null,
+          birthDate: studentForm.birthDate || null,
+          classCode: studentForm.classCode || null,
+          academicYearCode: studentForm.academicYearCode || null,
+          password: studentForm.password || "",
+          status: studentForm.status || "ACTIVE",
+        }),
+      });
+      setShowStudentForm(false);
+      setStudentForm(EMPTY_STUDENT_FORM);
+      setSearch("");
+      await load({ pinnedStudent: created, searchTerm: "" });
+      setNotice({ type: "success", text: `Data siswa ${created.fullName} berhasil disimpan.` });
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "Data siswa gagal disimpan." });
+    } finally {
+      setStudentSaving(false);
+    }
   };
   const reviewRequest = async (item: any, status: "APPROVED" | "REJECTED" | "NEEDS_REVISION") => {
     const reviewNote = status === "APPROVED" ? "" : window.prompt("Catatan untuk guru (wajib untuk penolakan/revisi):", "") || "";
@@ -221,10 +275,120 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
   ];
   return (
     <main className={`relative z-10 min-h-screen ${shell} ${embedded ? "-mx-6 -mt-6 md:-mx-8" : ""}`}>
+      {showStudentForm && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="student-form-title"
+          aria-describedby="student-form-description"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 backdrop-blur-sm sm:items-center sm:p-5"
+        >
+          <form
+            onSubmit={saveStudent}
+            className={`max-h-[94vh] w-full overflow-y-auto rounded-t-[28px] border p-5 shadow-2xl sm:max-w-3xl sm:rounded-[28px] sm:p-7 ${dark ? "border-white/10 bg-[#0b1729]" : "border-slate-200 bg-white"}`}
+          >
+            <div className="mb-6 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-widest text-amber-600">Master data · Siswa</p>
+                <h3 id="student-form-title" className="mt-1 text-2xl font-black">Input manual data siswa</h3>
+                <p id="student-form-description" className="mt-2 text-sm opacity-65">
+                  NISN, NIS, dan nama lengkap wajib diisi. Kolom lainnya opsional.
+                </p>
+              </div>
+              <button type="button" aria-label="Tutup formulir siswa" onClick={() => setShowStudentForm(false)} className="rounded-xl p-2 hover:bg-current/5">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block text-xs font-black">
+                NISN <span className="text-rose-500">*</span>
+                <input autoFocus required autoComplete="off" value={studentForm.nisn} onChange={(event) => updateStudentForm("nisn", event.target.value)} className="mt-2 w-full rounded-xl border bg-transparent px-3 py-3 text-sm" placeholder="Nomor Induk Siswa Nasional" />
+              </label>
+              <label className="block text-xs font-black">
+                NIS <span className="text-rose-500">*</span>
+                <input required autoComplete="off" value={studentForm.nis} onChange={(event) => updateStudentForm("nis", event.target.value)} className="mt-2 w-full rounded-xl border bg-transparent px-3 py-3 text-sm" placeholder="Nomor Induk Siswa" />
+              </label>
+              <label className="block text-xs font-black sm:col-span-2">
+                Nama lengkap <span className="text-rose-500">*</span>
+                <input required autoComplete="name" value={studentForm.fullName} onChange={(event) => updateStudentForm("fullName", event.target.value)} className="mt-2 w-full rounded-xl border bg-transparent px-3 py-3 text-sm" placeholder="Nama lengkap siswa" />
+              </label>
+              <label className="block text-xs font-black">
+                Email <span className="font-normal opacity-50">(opsional)</span>
+                <input type="email" autoComplete="email" value={studentForm.email} onChange={(event) => updateStudentForm("email", event.target.value)} className="mt-2 w-full rounded-xl border bg-transparent px-3 py-3 text-sm" placeholder="nama@email.com" />
+              </label>
+              <label className="block text-xs font-black">
+                No. telepon <span className="font-normal opacity-50">(opsional)</span>
+                <input type="tel" autoComplete="tel" value={studentForm.phone} onChange={(event) => updateStudentForm("phone", event.target.value)} className="mt-2 w-full rounded-xl border bg-transparent px-3 py-3 text-sm" placeholder="Nomor telepon" />
+              </label>
+              <label className="block text-xs font-black">
+                Jenis kelamin <span className="font-normal opacity-50">(opsional)</span>
+                <select value={studentForm.gender} onChange={(event) => updateStudentForm("gender", event.target.value)} className="mt-2 w-full rounded-xl border bg-transparent px-3 py-3 text-sm">
+                  <option value="">Pilih jenis kelamin</option>
+                  <option value="L">Laki-laki (L)</option>
+                  <option value="P">Perempuan (P)</option>
+                </select>
+              </label>
+              <label className="block text-xs font-black">
+                Tempat lahir <span className="font-normal opacity-50">(opsional)</span>
+                <input value={studentForm.birthPlace} onChange={(event) => updateStudentForm("birthPlace", event.target.value)} className="mt-2 w-full rounded-xl border bg-transparent px-3 py-3 text-sm" placeholder="Kota/kabupaten" />
+              </label>
+              <label className="block text-xs font-black">
+                Tanggal lahir <span className="font-normal opacity-50">(opsional)</span>
+                <input type="date" value={studentForm.birthDate} onChange={(event) => updateStudentForm("birthDate", event.target.value)} className="mt-2 w-full rounded-xl border bg-transparent px-3 py-3 text-sm" />
+              </label>
+              <label className="block text-xs font-black">
+                Kode tahun ajaran <span className="font-normal opacity-50">(opsional)</span>
+                <select value={studentForm.academicYearCode} onChange={(event) => setStudentForm((current) => ({ ...current, academicYearCode: event.target.value, classCode: "" }))} className="mt-2 w-full rounded-xl border bg-transparent px-3 py-3 text-sm">
+                  <option value="">Tanpa penempatan</option>
+                  {master.academicYears.map((year) => <option key={year.id} value={year.code}>{year.code} · {year.name}</option>)}
+                </select>
+              </label>
+              <label className="block text-xs font-black">
+                Kode kelas <span className="font-normal opacity-50">(opsional)</span>
+                <select value={studentForm.classCode} onChange={(event) => {
+                  const classCode = event.target.value;
+                  const selectedClass = master.classes.find((item) => item.code === classCode);
+                  setStudentForm((current) => ({
+                    ...current,
+                    classCode,
+                    academicYearCode: classCode ? selectedClass?.academicYear?.code || current.academicYearCode : "",
+                  }));
+                }} className="mt-2 w-full rounded-xl border bg-transparent px-3 py-3 text-sm">
+                  <option value="">Tanpa penempatan</option>
+                  {master.classes.filter((item) => !studentForm.academicYearCode || item.academicYear?.code === studentForm.academicYearCode).map((item) => <option key={item.id} value={item.code}>{item.code} · {item.name}</option>)}
+                </select>
+                <span className="mt-1 block font-normal opacity-50">Kelas dan tahun ajaran diisi bersama jika ingin menambahkan penempatan.</span>
+              </label>
+              <label className="block text-xs font-black">
+                Password akun siswa <span className="font-normal opacity-50">(opsional)</span>
+                <input type="password" autoComplete="new-password" minLength={studentForm.password ? 8 : undefined} value={studentForm.password} onChange={(event) => updateStudentForm("password", event.target.value)} className="mt-2 w-full rounded-xl border bg-transparent px-3 py-3 text-sm" placeholder="Kosongkan jika belum membuat akun" />
+                <span className="mt-1 block font-normal opacity-50">Jika diisi, minimal 8 karakter dan akun siswa dibuat.</span>
+              </label>
+              <label className="block text-xs font-black">
+                Status <span className="font-normal opacity-50">(opsional · default aktif)</span>
+                <select value={studentForm.status} onChange={(event) => updateStudentForm("status", event.target.value)} className="mt-2 w-full rounded-xl border bg-transparent px-3 py-3 text-sm">
+                  <option value="ACTIVE">Aktif</option>
+                  <option value="INACTIVE">Tidak aktif</option>
+                  <option value="ARCHIVED">Arsip</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="mt-7 flex gap-3">
+              <button type="button" onClick={() => setShowStudentForm(false)} className="flex-1 rounded-xl border py-3 font-bold">Batal</button>
+              <button disabled={studentSaving} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-slate-950 py-3 font-black text-white disabled:cursor-not-allowed disabled:opacity-60 dark:bg-amber-400 dark:text-slate-950">
+                {studentSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+                {studentSaving ? "Menyimpan..." : "Simpan data siswa"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
       <header className={`sticky top-0 z-30 border-b backdrop-blur-xl ${dark ? "bg-[#07111f]/90 border-white/10" : "bg-white/90 border-slate-200"}`}>
         <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10 py-3.5 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0"><div className="w-10 h-10 shrink-0 rounded-xl bg-amber-400 flex items-center justify-center"><GraduationCap className="text-slate-950" /></div><div className="min-w-0"><p className="text-[10px] uppercase tracking-[.2em] text-amber-600 font-black truncate">SMKN 1 Wonogiri</p><h1 className="font-black truncate">Core Platform</h1></div></div>
-          <div className="flex items-center gap-2"><button aria-label="Muat ulang" onClick={load} className="p-2.5 rounded-xl border border-current/10 opacity-70 hover:opacity-100"><RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /></button><button onClick={onBack} className="flex items-center gap-2 px-3 py-2 rounded-xl border border-current/10 text-sm font-bold"><ArrowLeft className="w-4 h-4" /><span className="hidden sm:inline">Admin panel</span></button></div>
+          <div className="flex items-center gap-2"><button aria-label="Muat ulang" onClick={() => load()} className="p-2.5 rounded-xl border border-current/10 opacity-70 hover:opacity-100"><RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /></button><button onClick={onBack} className="flex items-center gap-2 px-3 py-2 rounded-xl border border-current/10 text-sm font-bold"><ArrowLeft className="w-4 h-4" /><span className="hidden sm:inline">Admin panel</span></button></div>
         </div>
       </header>
       <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10 py-7 sm:py-10">
