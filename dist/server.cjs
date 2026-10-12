@@ -23027,6 +23027,9 @@ var require_proxy_addr = __commonJS({
       return function trust(addr) {
         if (!isip(addr)) return false;
         var ip = parseip(addr);
+        if (ip.kind() === "ipv6" && ip.isIPv4MappedAddress()) {
+          ip = ip.toIPv4Address();
+        }
         var ipconv;
         var kind = ip.kind();
         for (var i = 0; i < subnets.length; i++) {
@@ -23039,10 +23042,15 @@ var require_proxy_addr = __commonJS({
             if (subnetkind === "ipv4" && !ip.isIPv4MappedAddress()) {
               continue;
             }
+            if (subnetkind !== "ipv4" && !(subnetrange >= 96 && subnetip.isIPv4MappedAddress())) {
+              continue;
+            }
             if (!ipconv) {
               ipconv = subnetkind === "ipv4" ? ip.toIPv4Address() : ip.toIPv4MappedAddress();
             }
             trusted = ipconv;
+          } else if (kind === "ipv6" && subnetip.isIPv4MappedAddress()) {
+            continue;
           }
           if (trusted.match(subnetip, subnetrange)) {
             return true;
@@ -23059,12 +23067,20 @@ var require_proxy_addr = __commonJS({
       return function trust(addr) {
         if (!isip(addr)) return false;
         var ip = parseip(addr);
+        if (ip.kind() === "ipv6" && ip.isIPv4MappedAddress()) {
+          ip = ip.toIPv4Address();
+        }
         var kind = ip.kind();
         if (kind !== subnetkind) {
           if (subnetisipv4 && !ip.isIPv4MappedAddress()) {
             return false;
           }
+          if (!subnetisipv4 && !(subnetrange >= 96 && subnetip.isIPv4MappedAddress())) {
+            return false;
+          }
           ip = subnetisipv4 ? ip.toIPv4Address() : ip.toIPv4MappedAddress();
+        } else if (kind === "ipv6" && subnetip.isIPv4MappedAddress()) {
+          return false;
         }
         return ip.match(subnetip, subnetrange);
       };
@@ -75578,6 +75594,7 @@ function imageDataError(value) {
   return null;
 }
 var PILKETOS_POSITIONS = ["KETUA_UMUM", "KETUA_1", "KETUA_3", "KETUA_4"];
+var PILKETOS_SIMULATION_NIS = "10101010";
 var PILKETOS_POSITION_GRADE = {
   KETUA_UMUM: "XI",
   KETUA_1: "XI",
@@ -75587,6 +75604,7 @@ var PILKETOS_POSITION_GRADE = {
 async function resolvePilketosStudent(identifierValue) {
   const identifier = clean(identifierValue);
   if (!identifier || identifier.length > 64) return null;
+  if (process.env.NODE_ENV === "production" && identifier === PILKETOS_SIMULATION_NIS) return null;
   return db.coreStudent.findFirst({
     where: {
       status: "ACTIVE",

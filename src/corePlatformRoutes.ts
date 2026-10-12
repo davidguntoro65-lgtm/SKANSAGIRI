@@ -362,6 +362,8 @@ type PilketosPosition = "KETUA_UMUM" | "KETUA_1" | "KETUA_3" | "KETUA_4";
 type PilketosVotingPhase = "DRAFT" | "SCHEDULED" | "OPEN" | "ENDED" | "CLOSED";
 
 const PILKETOS_POSITIONS: PilketosPosition[] = ["KETUA_UMUM", "KETUA_1", "KETUA_3", "KETUA_4"];
+// Temporary voter for development simulations; remove it when retiring this test account.
+const PILKETOS_SIMULATION_NIS = "10101010";
 const PILKETOS_POSITION_GRADE: Record<PilketosPosition, PilketosGrade> = {
   KETUA_UMUM: "XI",
   KETUA_1: "XI",
@@ -372,6 +374,8 @@ const PILKETOS_POSITION_GRADE: Record<PilketosPosition, PilketosGrade> = {
 async function resolvePilketosStudent(identifierValue: unknown) {
   const identifier = clean(identifierValue);
   if (!identifier || identifier.length > 64) return null;
+  // This reserved simulation voter must never be accepted by a production API.
+  if (process.env.NODE_ENV === "production" && identifier === PILKETOS_SIMULATION_NIS) return null;
   return db.coreStudent.findFirst({
     where: {
       status: "ACTIVE",
