@@ -280,6 +280,7 @@ if [ "${1:-}" = "--post-reset" ]; then
   # yang dibundel saat build Replit agar deploy tidak bergantung pada registry.
   PRISMA_RUNNER=()
   PRISMA_RUNNER_LABEL=""
+  PRISMA_RUNNER_CWD=""
 
   prepare_prisma_cli() {
     local node_bin="${CPANEL_NODE_BIN:-$(command -v node 2>/dev/null || true)}"
@@ -353,6 +354,10 @@ if [ "${1:-}" = "--post-reset" ]; then
       }
       PRISMA_RUNNER=("$node_bin" "$bundled_cli")
       PRISMA_RUNNER_LABEL="release bundle Prisma $bundled_version"
+      # Prisma auto-discovers prisma.config.ts from cwd. The app config imports
+      # prisma/config, which is shipped in this temporary bundle rather than
+      # the protected cPanel app node_modules. Run Prisma from the bundle root.
+      PRISMA_RUNNER_CWD="$PRISMA_CLI_TEMP_DIR"
       log_info "Memakai Prisma CLI offline dari build release (schema-engine RHEL 1.0/3.0)."
       return 0
     fi
@@ -362,6 +367,7 @@ if [ "${1:-}" = "--post-reset" ]; then
       [ -n "$search_dir" ] || continue
       if [ -x "$search_dir/.bin/prisma" ]; then
         PRISMA_RUNNER=("$search_dir/.bin/prisma")
+        PRISMA_RUNNER_CWD="$search_dir"
         if [ "$search_dir" = "$CPANEL_NODE_MODULES_DIR" ]; then
           PRISMA_RUNNER_LABEL="cPanel nodevenv ($search_dir)"
         else
@@ -372,6 +378,7 @@ if [ "${1:-}" = "--post-reset" ]; then
       # Fallback untuk instalasi global yang tidak membuat .bin symlink.
       if [ -n "$node_bin" ] && [ -f "$search_dir/prisma/build/index.js" ]; then
         PRISMA_RUNNER=("$node_bin" "$search_dir/prisma/build/index.js")
+        PRISMA_RUNNER_CWD="$search_dir"
         PRISMA_RUNNER_LABEL="cPanel nodevenv package ($search_dir)"
         return 0
       fi
@@ -470,8 +477,11 @@ if [ "${1:-}" = "--post-reset" ]; then
         return 0
       }
 
-      if PRISMA_APP_DIR="$APP_DIR" "$node_bin" "$APP_DIR/scripts/run-with-timeout.cjs" \
-        "$prisma_timeout_seconds" "${PRISMA_RUNNER[@]}" "$@" 2>&1 |
+      if (
+        cd "${PRISMA_RUNNER_CWD:-$APP_DIR}" &&
+          PRISMA_APP_DIR="$APP_DIR" "$node_bin" "$APP_DIR/scripts/run-with-timeout.cjs" \
+            "$prisma_timeout_seconds" "${PRISMA_RUNNER[@]}" "$@"
+      ) 2>&1 |
         tee "$output_file" |
         sed "s/^/  [$label] /" |
         tee -a "$LOG_FILE"; then
