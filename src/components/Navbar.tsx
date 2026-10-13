@@ -33,11 +33,14 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
   const [isScrolled, setIsScrolled] = useState(false);
   const [aktifitasOpen, setAktifitasOpen] = useState(false);
   const [tentangOpen, setTentangOpen] = useState(false);
+  const [modulIntegrasiOpen, setModulIntegrasiOpen] = useState(false);
   const [mobileAktifitasOpen, setMobileAktifitasOpen] = useState(false);
   const [mobileTentangOpen, setMobileTentangOpen] = useState(false);
+  const [mobileModulIntegrasiOpen, setMobileModulIntegrasiOpen] = useState(false);
   const [currentPath, setCurrentPath] = useState(() => getAppPath());
   const aktifitasRef = useRef<HTMLDivElement>(null);
   const tentangRef = useRef<HTMLDivElement>(null);
+  const modulIntegrasiRef = useRef<HTMLDivElement>(null);
   const isDark = theme === "dark";
 
   const { getLogo } = useBranding();
@@ -70,6 +73,9 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
       if (tentangRef.current && !tentangRef.current.contains(e.target as Node)) {
         setTentangOpen(false);
       }
+      if (modulIntegrasiRef.current && !modulIntegrasiRef.current.contains(e.target as Node)) {
+        setModulIntegrasiOpen(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -101,7 +107,8 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
   const isTracerActive = currentPath === "/tracer-studi";
   const isBeritaActive = currentPath === "/berita";
   const isHubungiActive = currentPath === "/hubungi-kami";
-  const isModulIntegrasiActive = currentPath === "/modul-integrasi";
+  const isModulIntegrasiActive = currentPath === "/modul-integrasi" || currentPath === "/pusat-diklat";
+  const isDiklatActive = currentPath === "/pusat-diklat";
   const isKelasVirtualActive = currentPath.startsWith("/kelas-virtual");
 
   const navScrolledBg = isDark
@@ -241,6 +248,65 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
                 link.href === "/hubungi-kami" ? isHubungiActive :
                 link.href === "/modul-integrasi" ? isModulIntegrasiActive :
                 link.href === "/kelas-virtual" ? isKelasVirtualActive : false;
+              if (link.href === "/modul-integrasi") {
+                return (
+                  <div key={link.name} className="relative flex items-center gap-0.5" ref={modulIntegrasiRef}>
+                    <a
+                      href={link.href}
+                      onClick={(e) => { e.preventDefault(); navigateToAnchor(link.href); }}
+                      className={linkClass(isActive)}
+                      id={`link-desk-${link.name.toLowerCase().replace(/\s/g, "-")}`}
+                    >
+                      {link.name}
+                      <span className={`absolute bottom-0 left-0 h-[1.5px] bg-amber-500 transition-all duration-300 ${isActive ? "w-full" : "w-0 group-hover:w-full"}`} />
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => setModulIntegrasiOpen((open) => !open)}
+                      className={`rounded p-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50 ${
+                        isActive ? "text-amber-500" : isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-950"
+                      }`}
+                      aria-label="Buka submenu Modul Integrasi"
+                      aria-haspopup="true"
+                      aria-expanded={modulIntegrasiOpen}
+                      aria-controls="modul-integrasi-dropdown-panel"
+                      id="btn-modul-integrasi-dropdown"
+                    >
+                      <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${modulIntegrasiOpen ? "rotate-180" : ""}`} />
+                    </button>
+                    <AnimatePresence>
+                      {modulIntegrasiOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 8, scale: 0.97 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 6, scale: 0.97 }}
+                          transition={{ duration: 0.18, ease: "easeOut" }}
+                          className={dropdownPanel(isDark)}
+                          id="modul-integrasi-dropdown-panel"
+                        >
+                          <div className="p-2">
+                            <a
+                              href="/pusat-diklat"
+                              onClick={(e) => { e.preventDefault(); navigate("/pusat-diklat"); setModulIntegrasiOpen(false); }}
+                              className={`${dropdownItem(isDark)} ${isDiklatActive ? (isDark ? "bg-amber-500/10" : "bg-amber-50") : ""}`}
+                              id="link-pusat-diklat-dropdown"
+                            >
+                              <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${isDiklatActive ? "bg-amber-500/20" : "bg-amber-500/10"}`}>
+                                <GraduationCap className="h-4 w-4 text-amber-500" />
+                              </div>
+                              <div>
+                                <span className={`block text-xs font-semibold uppercase tracking-widest ${isDiklatActive ? "text-amber-500" : isDark ? "text-white" : "text-slate-900"}`}>Pusat Diklat</span>
+                                <span className={`mt-0.5 block text-[9px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>Materi, LKPD &amp; tugas diklat</span>
+                              </div>
+                            </a>
+                          </div>
+                          <div className="h-[2px] bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              }
               return (
                 <a
                   key={link.name}
@@ -470,6 +536,62 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
               link.href === "/hubungi-kami" ? isHubungiActive :
               link.href === "/modul-integrasi" ? isModulIntegrasiActive :
               link.href === "/kelas-virtual" ? isKelasVirtualActive : false;
+            if (link.href === "/modul-integrasi") {
+              return (
+                <div key={link.name} className="w-full">
+                  <div className="flex items-center justify-center gap-2">
+                    <a
+                      href={link.href}
+                      onClick={(e) => { e.preventDefault(); navigateToAnchor(link.href); setIsOpen(false); }}
+                      className={`text-base font-serif tracking-widest hover:scale-105 transition-all py-1 ${
+                        isActive ? "text-amber-400" : "text-slate-300 hover:text-white"
+                      }`}
+                      id="link-mob-modul-integrasi"
+                    >
+                      {link.name}
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => setMobileModulIntegrasiOpen((open) => !open)}
+                      className="rounded p-1 text-amber-500 transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50"
+                      aria-label="Buka submenu Modul Integrasi"
+                      aria-haspopup="true"
+                      aria-expanded={mobileModulIntegrasiOpen}
+                      aria-controls="modul-integrasi-mobile-panel"
+                      id="btn-modul-integrasi-mobile"
+                    >
+                      <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${mobileModulIntegrasiOpen ? "rotate-180" : ""}`} />
+                    </button>
+                  </div>
+                  <AnimatePresence>
+                    {mobileModulIntegrasiOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="mt-2 overflow-hidden"
+                        id="modul-integrasi-mobile-panel"
+                      >
+                        <div className="mx-auto flex max-w-sm flex-col gap-1 rounded-2xl border border-white/5 bg-slate-900/60 p-3">
+                          <a
+                            href="/pusat-diklat"
+                            onClick={(e) => { e.preventDefault(); navigate("/pusat-diklat"); setIsOpen(false); setMobileModulIntegrasiOpen(false); }}
+                            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors ${isDiklatActive ? "bg-amber-500/10" : "hover:bg-white/5"}`}
+                            id="link-pusat-diklat-mobile"
+                          >
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-500/10">
+                              <GraduationCap className="h-3.5 w-3.5 text-amber-400" />
+                            </span>
+                            <span className={`text-sm font-serif tracking-widest ${isDiklatActive ? "text-amber-300" : "text-slate-300"}`}>Pusat Diklat</span>
+                          </a>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              );
+            }
             return (
               <a
                 key={link.name}

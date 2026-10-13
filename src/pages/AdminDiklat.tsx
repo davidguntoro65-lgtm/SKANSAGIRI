@@ -19,6 +19,7 @@ type Training = {
 type TaskType = {
   id: string; trainingId: string; name: string; description?: string | null; sortOrder: number;
   active: boolean; deadline?: string | null; maxFileSizeMb?: number | null; allowedMimeTypes?: string[] | null;
+  trainingName?: string;
 };
 type DocumentItem = {
   id: string; trainingId: string; type: "MATERIAL" | "LKPD"; title: string; description?: string | null;
@@ -40,7 +41,11 @@ type SettingsData = {
   submissionDriveAccess: "PRIVATE" | "LINK"; rootFolderId: string; driveConfigured: boolean;
   driveConnected: boolean; driveMessage?: string | null;
 };
-type DriveStatus = { configured: boolean; connected: boolean; rootFolderId?: string | null; message?: string | null; filesToVerify: number; missingFiles: number };
+type DriveStatus = {
+  configured: boolean; connected: boolean; rootFolderId?: string | null; message?: string | null;
+  filesToVerify: number; missingFiles: number; checked?: number; newlyMissing?: number;
+  restored?: number; remaining?: number; nextCursor?: string | null;
+};
 type TrainingDraft = {
   title: string; summary: string; description: string; category: string; period: string;
   year: string; status: Status; acceptsSubmissions: boolean; archiveVisible: boolean; sortOrder: string;
@@ -134,6 +139,7 @@ export default function AdminDiklat({ theme = "light" }: Props) {
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [editingDocument, setEditingDocument] = useState<DocumentItem | null>(null);
   const [submissionItems, setSubmissionItems] = useState<Submission[]>([]);
+  const [submissionTaskTypes, setSubmissionTaskTypes] = useState<TaskType[]>([]);
   const [submissionPagination, setSubmissionPagination] = useState<Pagination | null>(null);
   const [submissionLoading, setSubmissionLoading] = useState(false);
   const [submissionExporting, setSubmissionExporting] = useState(false);
@@ -147,6 +153,8 @@ export default function AdminDiklat({ theme = "light" }: Props) {
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [driveStatus, setDriveStatus] = useState<DriveStatus | null>(null);
   const [driveTesting, setDriveTesting] = useState(false);
+  const [driveReconciling, setDriveReconciling] = useState(false);
+  const [driveCursor, setDriveCursor] = useState("");
 
   const success = (text: string) => setNotice({ type: "success", text });
   const failure = (error: unknown, fallback: string) => setNotice({ type: "error", text: error instanceof Error ? error.message : fallback });
@@ -171,11 +179,12 @@ export default function AdminDiklat({ theme = "light" }: Props) {
     if (!selectedTraining) { setTrainingDetail(null); setDetailWarning(""); return; }
     let alive = true;
     setDetailLoading(true); setDetailWarning(""); setTrainingDetail(null);
-    apiFetch(`/api/v1/diklat/public/trainings/${encodeURIComponent(selectedTraining.slug)}`)
-      .then(async response => {
-        const payload = await response.json().catch(() => ({})) as Envelope<{ training: Training & { documents?: DocumentItem[]; taskTypes?: TaskType[] } }>;
-        if (!response.ok || payload.success === false) throw new Error(payload.error?.message || "Data materi dan jenis tugas belum tersedia dari endpoint publik.");
-        if (alive) setTrainingDetail({ documents: payload.data?.training.documents || [], taskTypes: payload.data?.training.taskTypes || [] });
+    Promise.all([
+      adminData<{ documents: DocumentItem[] }>(`/api/v1/diklat/admin/trainings/${selectedTraining.id}/documents`, { headers: authHeaders() }),
+      adminData<{ taskTypes: TaskType[] }>(`/api/v1/diklat/admin/trainings/${selectedTraining.id}/task-types`, { headers: authHeaders() }),
+    ])
+      .then(([documents, taskTypes]) => {
+        if (alive) setTrainingDetail({ documents: documents.documents || [], taskTypes: taskTypes.taskTypes || [] });
       })
       .catch(error => { if (alive) setDetailWarning(error instanceof Error ? error.message : "Data terkait diklat tidak dapat dimuat."); })
       .finally(() => { if (alive) setDetailLoading(false); });
@@ -193,6 +202,16 @@ export default function AdminDiklat({ theme = "light" }: Props) {
     finally { setSubmissionLoading(false); }
   }, [filters, submissionPage]);
   useEffect(() => { if (section === "submissions") void loadSubmissions(); }, [loadSubmissions, section]);
+  useEffect(() => {
+    if (section !== "submissions") return;
+    let alive = true;
+    const params = new URLSearchParams();
+    if (filters.trainingId) params.set("trainingId", filters.trainingId);
+    adminData<{ taskTypes: TaskType[] }>(`/api/v1/diklat/admin/task-types${params.size ? `?${params}` : ""}`, { headers: authHeaders() })
+      .then(data => { if (alive) setSubmissionTaskTypes(data.taskTypes || []); })
+      .catch(error => { if (alive) failure(error, "Filter jenis tugas tidak dapat dimuat."); });
+    return () => { alive = false; };
+  }, [filters.trainingId, section]);
 
   const loadAudit = useCallback(async () => {
     setAuditLoading(true);
@@ -373,7 +392,28 @@ export default function AdminDiklat({ theme = "light" }: Props) {
     } catch (error) { failure(error, "Pemeriksaan Google Drive belum berhasil."); }
     finally { setDriveTesting(false); }
   };
+  const reconcileDriveFiles = async () => {
+    setDriveReconciling(true);
+    try {
+      const data = await adminData<DriveStatus>("/api/v1/diklat/admin/drive/reconcile", {
+        method: "POST", headers: jsonHeaders(), body: JSON.stringify({ cursor: driveCursor }),
+      });
+      setDriveStatus(data);
+      setDriveCursor(data.nextCursor || "");
+      success(data.remaining
+        ? `${data.checked || 0} berkas diperiksa. Masih ada ${data.remaining} berkas untuk diperiksa.`
+        : `${data.checked || 0} berkas diperiksa. ${data.newlyMissing || 0} berkas tidak ditemukan, ${data.restored || 0} berkas dipulihkan.`);
+    } catch (error) { failure(error, "Pemeriksaan berkas Drive belum berhasil."); }
+    finally { setDriveReconciling(false); }
+  };
   const updateFilter = (key: keyof typeof filters, value: string) => { setFilters(current => ({ ...current, [key]: value })); setSubmissionPage(1); };
+  const overviewCards: Array<{ label: string; value: number; Icon: typeof Activity }> = [
+    { label: "Total diklat", value: overview?.stats.trainings ?? 0, Icon: GraduationCap },
+    { label: "Diklat aktif", value: overview?.stats.activeTrainings ?? 0, Icon: Activity },
+    { label: "Materi", value: overview?.stats.materials ?? 0, Icon: BookOpen },
+    { label: "LKPD", value: overview?.stats.lkpd ?? 0, Icon: File },
+    { label: "Pengumpulan", value: overview?.stats.submissions ?? 0, Icon: ClipboardList },
+  ];
 
   const navItems: Array<{ id: AdminSection; label: string; icon: typeof Activity }> = [
     { id: "dashboard", label: "Ringkasan", icon: Activity },
@@ -399,10 +439,7 @@ export default function AdminDiklat({ theme = "light" }: Props) {
             <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-bold ${overview.drive.connected ? dark ? "border-emerald-300/20 bg-emerald-300/10 text-emerald-200" : "border-[#c0dec9] bg-[#edf5ef] text-[#356849]" : dark ? "border-amber-300/20 bg-amber-300/10 text-amber-100" : "border-[#ead9b8] bg-[#fbf5e8] text-[#80622b]"}`}><span className={`h-2 w-2 rounded-full ${overview.drive.connected ? "bg-emerald-500" : "bg-amber-500"}`} />Drive {overview.drive.connected ? "terhubung" : overview.drive.configured ? "perlu pemeriksaan" : "belum dikonfigurasi"}</span>
           </SectionHeading>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            {[
-              ["Total diklat", overview.stats.trainings, GraduationCap], ["Diklat aktif", overview.stats.activeTrainings, Activity],
-              ["Materi", overview.stats.materials, BookOpen], ["LKPD", overview.stats.lkpd, File], ["Pengumpulan", overview.stats.submissions, ClipboardList],
-            ].map(([label, value, Icon]) => <PanelCard key={String(label)} dark={dark} className="p-4"><div className="flex items-center justify-between"><p className={`text-xs font-semibold ${palette.muted}`}>{label}</p><span className={`flex h-9 w-9 items-center justify-center rounded-xl ${dark ? "bg-white/[.06] text-[#d1b66f]" : "bg-[#eaf0ef] text-[#557589]"}`}><Icon size={17} /></span></div><p className={`mt-4 text-3xl font-extrabold tracking-tight ${palette.text}`}>{value}</p></PanelCard>)}
+            {overviewCards.map(({ label, value, Icon }) => <PanelCard key={label} dark={dark} className="p-4"><div className="flex items-center justify-between"><p className={`text-xs font-semibold ${palette.muted}`}>{label}</p><span className={`flex h-9 w-9 items-center justify-center rounded-xl ${dark ? "bg-white/[.06] text-[#d1b66f]" : "bg-[#eaf0ef] text-[#557589]"}`}><Icon size={17} /></span></div><p className={`mt-4 text-3xl font-extrabold tracking-tight ${palette.text}`}>{value}</p></PanelCard>)}
           </div>
           <PanelCard dark={dark} className="mt-5 overflow-hidden">
             <div className={`flex flex-col justify-between gap-3 border-b px-5 py-4 sm:flex-row sm:items-center ${dark ? "border-white/10" : "border-[#e2e8e8]"}`}><div><h3 className={`font-extrabold ${palette.text}`}>Pengumpulan terbaru</h3><p className={`mt-1 text-xs ${palette.muted}`}>Data peserta hanya terlihat di area administrator.</p></div><button onClick={() => setSection("submissions")} className="text-sm font-bold text-[#b08b45]">Semua pengumpulan <ArrowRightIcon /></button></div>
@@ -476,7 +513,7 @@ export default function AdminDiklat({ theme = "light" }: Props) {
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <label className={`text-[10px] font-bold uppercase tracking-wide ${palette.muted}`}><span className="sr-only">Cari pengumpulan</span><span className="relative block"><Search size={15} className={`absolute left-3 top-1/2 -translate-y-1/2 ${palette.muted}`} /><input value={filters.q} onChange={e => updateFilter("q", e.target.value)} placeholder="Cari nama atau referensi" className={`${palette.input} pl-9`} /></span></label>
               <select aria-label="Filter diklat" value={filters.trainingId} onChange={e => { updateFilter("trainingId", e.target.value); updateFilter("taskTypeId", ""); }} className={palette.input}><option value="">Semua diklat</option>{trainings.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select>
-              <select aria-label="Filter jenis tugas" value={filters.taskTypeId} onChange={e => updateFilter("taskTypeId", e.target.value)} className={palette.input}><option value="">Semua jenis tugas</option>{(trainingDetail?.taskTypes || []).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
+               <select aria-label="Filter jenis tugas" value={filters.taskTypeId} onChange={e => updateFilter("taskTypeId", e.target.value)} className={palette.input}><option value="">Semua jenis tugas</option>{submissionTaskTypes.map(item => <option key={item.id} value={item.id}>{item.trainingName ? `${item.trainingName} · ` : ""}{item.name}</option>)}</select>
               <input aria-label="Filter instansi" value={filters.institution} onChange={e => updateFilter("institution", e.target.value)} placeholder="Asal instansi" className={palette.input} />
               <input aria-label="Tanggal mulai" type="date" value={filters.dateFrom} onChange={e => updateFilter("dateFrom", e.target.value)} className={palette.input} />
               <input aria-label="Tanggal akhir" type="date" value={filters.dateTo} onChange={e => updateFilter("dateTo", e.target.value)} className={palette.input} />
@@ -525,6 +562,7 @@ export default function AdminDiklat({ theme = "light" }: Props) {
                 <div className="flex items-center gap-3"><span className={`flex h-10 w-10 items-center justify-center rounded-xl ${dark ? "bg-white/[.05] text-[#d1b66f]" : "bg-[#edf2f1] text-[#557589]"}`}><Cloud size={18} /></span><div><h3 className={`font-extrabold ${palette.text}`}>Google Drive</h3><p className={`text-xs ${palette.muted}`}>Status dari layanan server</p></div></div>
                 {driveStatus ? <div className="mt-5 space-y-3"><div className={`flex items-center justify-between rounded-xl p-3 ${dark ? "bg-white/[.04]" : "bg-[#f4f6f3]"}`}><span className={`text-xs ${palette.muted}`}>Konfigurasi</span><StatusBadge dark={dark} status={driveStatus.configured ? "SIAP" : "BELUM SIAP"} /></div><div className={`flex items-center justify-between rounded-xl p-3 ${dark ? "bg-white/[.04]" : "bg-[#f4f6f3]"}`}><span className={`text-xs ${palette.muted}`}>Koneksi</span><StatusBadge dark={dark} status={driveStatus.connected ? "TERHUBUNG" : "BELUM TERHUBUNG"} /></div><p className={`text-xs leading-5 ${palette.muted}`}>{driveStatus.message || "Belum ada pesan status dari server."}</p><div className={`grid grid-cols-2 gap-2 text-xs ${palette.muted}`}><p>Berkas perlu verifikasi <strong className={palette.text}>{driveStatus.filesToVerify}</strong></p><p>Berkas tidak ditemukan <strong className={palette.text}>{driveStatus.missingFiles}</strong></p></div></div> : <p className={`mt-4 text-sm ${palette.muted}`}>Status Drive belum dapat diverifikasi.</p>}
                 <button onClick={() => void testDrive()} disabled={driveTesting} className={`mt-5 flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold disabled:opacity-50 ${palette.button}`}>{driveTesting ? <LoaderCircle size={15} className="animate-spin" /> : <RefreshCw size={15} />} Uji koneksi Drive</button>
+                 <button onClick={() => void reconcileDriveFiles()} disabled={driveReconciling || !driveStatus?.connected} className={`mt-2 flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50 ${palette.button}`}>{driveReconciling ? <LoaderCircle size={15} className="animate-spin" /> : <ShieldCheck size={15} />}{driveCursor ? "Lanjutkan verifikasi berkas" : "Verifikasi berkas di Drive"}</button>
               </PanelCard>
               <PanelCard dark={dark} className="p-5">
                 <div className="flex items-center gap-3"><span className={`flex h-10 w-10 items-center justify-center rounded-xl ${settings.driveConnected ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-600"}`}><ShieldCheck size={18} /></span><div><h3 className={`font-extrabold ${palette.text}`}>Ringkasan konfigurasi</h3><p className={`text-xs ${palette.muted}`}>Tidak ada rahasia yang ditampilkan di halaman ini.</p></div></div>

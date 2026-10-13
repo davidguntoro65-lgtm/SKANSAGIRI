@@ -15,6 +15,7 @@ import { DataStore } from "../dataStore";
 import { useBranding, Branding } from "../hooks/useBranding";
 import AdminAkademik from "../pages/AdminAkademik";
 import AdminPilketos from "../pages/AdminPilketos";
+import AdminDiklat from "../pages/AdminDiklat";
 import { apiFetch } from "../utils/navigation";
 
 export default function AdminPanel({ 
@@ -37,7 +38,7 @@ export default function AdminPanel({
   const [loginLoading, setLoginLoading] = useState(false);
 
   // Active Admin Sidebar Tab
-  const [activeTab, setActiveTab] = useState<"competencies" | "milestones" | "gallery" | "alumni" | "news" | "partners" | "branding" | "about" | "kepala-sekolah" | "manajemen-sekolah" | "visi-misi" | "social-media" | "inbox-pesan" | "server-monitor" | "tracer-studi" | "core-platform" | "pilketos">("competencies");
+  const [activeTab, setActiveTab] = useState<"competencies" | "milestones" | "gallery" | "alumni" | "news" | "partners" | "branding" | "about" | "kepala-sekolah" | "manajemen-sekolah" | "visi-misi" | "social-media" | "inbox-pesan" | "server-monitor" | "tracer-studi" | "core-platform" | "pilketos" | "diklat">("competencies");
   const { branding, saveBranding, getLogo } = useBranding();
   const [brandingDraft, setBrandingDraft] = useState<Branding | null>(null);
   const [brandingLoading, setBrandingLoading] = useState(false);
@@ -1473,6 +1474,7 @@ export default function AdminPanel({
                     { id: "server-monitor", label: "Monitor Server", icon: Activity, count: null },
                     { id: "core-platform", label: "Core Platform Akademik", icon: GraduationCap, count: null },
                     { id: "pilketos", label: "Pengelolaan Pilketos", icon: Vote, count: null },
+                    { id: "diklat", label: "Pengelolaan Diklat", icon: BookOpen, count: null },
                   ].map((tab) => {
                     const TabIcon = tab.icon;
                     const isActive = activeTab === tab.id;
@@ -1540,6 +1542,8 @@ export default function AdminPanel({
                 />
               ) : activeTab === "pilketos" ? (
                 <AdminPilketos theme={theme} />
+              ) : activeTab === "diklat" ? (
+                <AdminDiklat theme={theme} />
               ) : (
                 <>
               

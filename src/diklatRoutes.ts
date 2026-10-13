@@ -433,6 +433,34 @@ function submissionShape(submission: any) {
   };
 }
 
+function privateSubmissionAccessToken(reference: string) {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) return null;
+  return crypto.createHmac("sha256", secret).update(`diklat-submission:${reference}`).digest("base64url");
+}
+
+function submissionReceiptShape(submission: any, duplicate = false) {
+  const driveFile = submission.driveFile;
+  const publicAccess = Boolean(driveFile?.publicAccess);
+  return {
+    reference: submission.reference,
+    trainingName: submission.training?.title || "",
+    taskName: submission.taskName,
+    fullName: submission.fullName,
+    nip: submission.nip,
+    institution: submission.institution,
+    fileName: driveFile?.name || "",
+    submittedAt: submission.submittedAt,
+    status: submission.status,
+    ...(publicAccess ? { driveUrl: driveFile.webUrl || `https://drive.google.com/file/d/${driveFile.driveFileId}/view` } : {}),
+    ...(!publicAccess && privateSubmissionAccessToken(submission.reference)
+      ? { secureFileUrl: `${API}/public/submissions/${encodeURIComponent(submission.reference)}/file?token=${encodeURIComponent(privateSubmissionAccessToken(submission.reference)!)}` }
+      : {}),
+    fileAccess: publicAccess ? "LINK" : "PRIVATE",
+    ...(duplicate ? { duplicate: true } : {}),
+  };
+}
+
 function submissionWhere(query: Request["query"]) {
   const where: any = {};
   const q = clean(query.q, 160);
@@ -575,11 +603,13 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
     const type = clean(req.query.type, 20).toUpperCase();
     if (type && !DOCUMENT_TYPES.has(type)) return fail(res, 400, "INVALID_DOCUMENT_TYPE", "Jenis dokumen tidak valid.");
     const trainingId = clean(req.query.trainingId, 100);
+    const category = clean(req.query.category, 120);
     const q = clean(req.query.q, 160);
     const where: any = {
       status: "PUBLISHED",
       ...(type ? { type } : {}),
       ...(trainingId ? { trainingId } : {}),
+      ...(category ? { category: { equals: category, mode: "insensitive" } } : {}),
       ...(q ? { OR: [{ title: { contains: q, mode: "insensitive" } }, { description: { contains: q, mode: "insensitive" } }, { category: { contains: q, mode: "insensitive" } }] } : {}),
       training: {
         OR: [{ status: "PUBLISHED" }, ...(settings.archiveVisible ? [{ status: "ARCHIVED", archiveVisible: true }] : [])],
@@ -597,6 +627,33 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
     return ok(res, { items: documents.map(publicDocumentShape), pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } });
   }));
 
+  app.get(`${API}/public/documents/filters`, route(async (_req, res) => {
+    const settings = await ensureSettings();
+    const visibleTrainingStates = [
+      { status: "PUBLISHED" },
+      ...(settings.archiveVisible ? [{ status: "ARCHIVED", archiveVisible: true }] : []),
+    ];
+    const [trainings, categories] = await Promise.all([
+      db.diklatTraining.findMany({
+        where: { OR: visibleTrainingStates },
+        select: { id: true, title: true },
+        orderBy: [{ sortOrder: "asc" }, { title: "asc" }],
+      }),
+      db.diklatDocument.findMany({
+        where: {
+          status: "PUBLISHED",
+          training: { OR: visibleTrainingStates },
+          driveFile: { is: { verificationStatus: "STORED" } },
+          NOT: { category: "" },
+        },
+        select: { category: true },
+        distinct: ["category"],
+        orderBy: { category: "asc" },
+      }),
+    ]);
+    return ok(res, { trainings, categories: categories.map((item) => item.category).filter(Boolean) });
+  }));
+
   app.get(`${API}/public/documents/:documentId/download`, route(async (req, res) => {
     const settings = await ensureSettings();
     const document = await db.diklatDocument.findUnique({
@@ -607,6 +664,24 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
       (document?.training.status === "ARCHIVED" && settings.archiveVisible && document.training.archiveVisible);
     if (!document || document.status !== "PUBLISHED" || !visible) return fail(res, 404, "DOCUMENT_NOT_FOUND", "Dokumen tidak tersedia.");
     return streamDriveFile(res, document.driveFile);
+  }));
+
+  app.get(`${API}/public/submissions/:reference/file`, route(async (req, res) => {
+    const reference = clean(req.params.reference, 80);
+    const provided = clean(req.query.token, 128);
+    const expected = privateSubmissionAccessToken(reference);
+    if (!expected || !provided) return fail(res, 403, "FILE_ACCESS_DENIED", "Tautan file tidak valid atau sudah tidak tersedia.");
+    const actualBytes = Buffer.from(provided);
+    const expectedBytes = Buffer.from(expected);
+    if (actualBytes.length !== expectedBytes.length || !crypto.timingSafeEqual(actualBytes, expectedBytes)) {
+      return fail(res, 403, "FILE_ACCESS_DENIED", "Tautan file tidak valid atau sudah tidak tersedia.");
+    }
+    const submission = await db.diklatSubmission.findUnique({
+      where: { reference },
+      include: { driveFile: true },
+    });
+    if (!submission) return fail(res, 404, "SUBMISSION_NOT_FOUND", "File pengumpulan tidak ditemukan.");
+    return streamDriveFile(res, submission.driveFile);
   }));
 
   app.post(`${API}/public/submissions`, submissionRateLimit, upload.single("file"), route(async (req, res) => {
@@ -623,8 +698,11 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
     }
     if (!/^[\p{L}\p{N} .,'’()-]+$/u.test(fullName) || !fullName.trim()) return fail(res, 400, "INVALID_NAME", "Nama lengkap tidak valid.");
     const idempotencyKey = crypto.createHash("sha256").update(rawKey).digest("hex");
-    const previous = await db.diklatSubmission.findUnique({ where: { idempotencyKey }, select: { reference: true, status: true } });
-    if (previous) return ok(res, { submission: { reference: previous.reference, status: previous.status, duplicate: true, fileAccess: "PRIVATE" } });
+    const previous = await db.diklatSubmission.findUnique({
+      where: { idempotencyKey },
+      include: { training: { select: { title: true } }, driveFile: true },
+    });
+    if (previous) return ok(res, { submission: submissionReceiptShape(previous, true) });
 
     const [training, taskType] = await Promise.all([
       db.diklatTraining.findUnique({ where: { id: trainingId } }),
@@ -676,19 +754,7 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
       });
       await audit("PUBLIC", "DIKLAT_SUBMISSION_CREATED", "DiklatSubmission", submission.id, { trainingId, taskTypeId });
       return ok(res, {
-        submission: {
-          reference: submission.reference,
-          trainingName: training.title,
-          taskName: submission.taskName,
-          fullName: submission.fullName,
-          nip: submission.nip,
-          institution: submission.institution,
-          fileName: submission.driveFile.name,
-          submittedAt: submission.submittedAt,
-          status: submission.status,
-          ...(submission.driveFile.publicAccess ? { driveUrl: submission.driveFile.webUrl } : {}),
-          fileAccess: submission.driveFile.publicAccess ? "LINK" : "PRIVATE",
-        },
+        submission: submissionReceiptShape({ ...submission, training: { title: training.title } }),
       });
     } catch (error) {
       if (driveFile) {
@@ -696,8 +762,11 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
         catch (cleanupError) { console.error("Pusat Diklat orphaned Drive file:", driveFile.driveFileId, (cleanupError as any)?.code || "unknown"); }
       }
       if ((error as any)?.code === "P2002") {
-        const existing = await db.diklatSubmission.findUnique({ where: { idempotencyKey }, select: { reference: true, status: true } });
-        if (existing) return ok(res, { submission: { reference: existing.reference, status: existing.status, duplicate: true, fileAccess: "PRIVATE" } });
+        const existing = await db.diklatSubmission.findUnique({
+          where: { idempotencyKey },
+          include: { training: { select: { title: true } }, driveFile: true },
+        });
+        if (existing) return ok(res, { submission: submissionReceiptShape(existing, true) });
       }
       await audit("PUBLIC", "DIKLAT_SUBMISSION_FAILED", "DiklatSubmission", undefined, { trainingId, taskTypeId, reason: (error as any)?.message === "GOOGLE_DRIVE_NOT_CONFIGURED" ? "DRIVE_NOT_CONFIGURED" : "UPLOAD_OR_DATABASE_FAILURE" });
       console.error("Pusat Diklat submission failed:", (error as any)?.code || (error as any)?.message || "unknown");
@@ -972,6 +1041,18 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
     return ok(res, { taskTypes: taskTypes.map(taskTypeShape) });
   }));
 
+  app.get(`${API}/admin/task-types`, admin, route(async (req, res) => {
+    const trainingId = clean(req.query.trainingId, 100);
+    const taskTypes = await db.diklatTaskType.findMany({
+      where: trainingId ? { trainingId } : {},
+      include: { training: { select: { title: true } } },
+      orderBy: [{ training: { title: "asc" } }, { sortOrder: "asc" }, { createdAt: "asc" }],
+    });
+    return ok(res, {
+      taskTypes: taskTypes.map((task) => ({ ...taskTypeShape(task), trainingName: task.training.title })),
+    });
+  }));
+
   app.get(`${API}/admin/submissions/export.xlsx`, admin, route(async (req, res) => {
     const result = await loadSubmissions(req, -1);
     const rows = result.items.map((item) => ({
@@ -1015,11 +1096,11 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
     const title = clean(req.body?.title, 160);
     const maxFileSizeMb = parseIntBounded(req.body?.maxFileSizeMb, 15, 1, 20);
     if (!title) return fail(res, 400, "VALIDATION_ERROR", "Nama portal wajib diisi.");
-    const allowedMimeTypes = Array.isArray(req.body?.allowedMimeTypes)
-      ? [...new Set(req.body.allowedMimeTypes.map((item: unknown) => clean(item, 150)).filter((item: string) => DEFAULT_ALLOWED_MIME_TYPES.includes(item)))]
+    const allowedMimeTypes: string[] = Array.isArray(req.body?.allowedMimeTypes)
+      ? [...new Set<string>((req.body.allowedMimeTypes as unknown[]).map((item) => clean(item, 150)).filter((item): item is string => DEFAULT_ALLOWED_MIME_TYPES.includes(item)))]
       : DEFAULT_ALLOWED_MIME_TYPES;
-    const allowedExtensions = Array.isArray(req.body?.allowedExtensions)
-      ? [...new Set(req.body.allowedExtensions.map((item: unknown) => clean(item, 12).toLowerCase()).filter((item: string) => DEFAULT_ALLOWED_EXTENSIONS.includes(item)))]
+    const allowedExtensions: string[] = Array.isArray(req.body?.allowedExtensions)
+      ? [...new Set<string>((req.body.allowedExtensions as unknown[]).map((item) => clean(item, 12).toLowerCase()).filter((item): item is string => DEFAULT_ALLOWED_EXTENSIONS.includes(item)))]
       : DEFAULT_ALLOWED_EXTENSIONS;
     if (!allowedMimeTypes.length || !allowedExtensions.length) return fail(res, 400, "INVALID_FILE_POLICY", "Pilih sedikitnya satu jenis dan ekstensi file yang diizinkan.");
     const submissionDriveAccess = clean(req.body?.submissionDriveAccess, 20).toUpperCase();
@@ -1089,6 +1170,83 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
       await audit("ADMIN_SESSION", "DIKLAT_DRIVE_CONNECTION_TESTED", "DiklatDriveFile", undefined, { connected: false });
       return fail(res, 502, "DRIVE_CONNECTION_FAILED", message);
     }
+  }));
+
+  app.post(`${API}/admin/drive/reconcile`, admin, route(async (req, res) => {
+    if (!serviceAccountCredentials()) {
+      return fail(res, 503, "DRIVE_NOT_CONFIGURED", "GOOGLE_SERVICE_ACCOUNT_JSON belum diatur di environment server.");
+    }
+    const cursor = clean(req.body?.cursor, 100);
+    const where: any = {
+      verificationStatus: { in: ["STORED", "MISSING"] },
+      ...(cursor ? { id: { gt: cursor } } : {}),
+    };
+    const files = await db.diklatDriveFile.findMany({
+      where,
+      take: 100,
+      orderBy: { id: "asc" },
+      select: { id: true, driveFileId: true, verificationStatus: true },
+    });
+    let newlyMissing = 0;
+    let restored = 0;
+    let checked = 0;
+    let skipped = 0;
+    const drive = getDriveClient();
+    for (let index = 0; index < files.length; index += 5) {
+      await Promise.all(files.slice(index, index + 5).map(async (file) => {
+        try {
+          const response = await drive.files.get({
+            fileId: file.driveFileId,
+            fields: "id,trashed",
+            supportsAllDrives: true,
+          });
+          const nextStatus = response.data.trashed ? "MISSING" : "STORED";
+          if (nextStatus !== file.verificationStatus) {
+            await db.diklatDriveFile.update({ where: { id: file.id }, data: { verificationStatus: nextStatus } });
+            if (nextStatus === "MISSING") newlyMissing += 1;
+            else restored += 1;
+          }
+          checked += 1;
+        } catch (error) {
+          const status = Number((error as any)?.code || (error as any)?.response?.status || 0);
+          if (status === 404) {
+            if (file.verificationStatus !== "MISSING") {
+              await db.diklatDriveFile.update({ where: { id: file.id }, data: { verificationStatus: "MISSING" } });
+              newlyMissing += 1;
+            }
+            checked += 1;
+          } else {
+            skipped += 1;
+          }
+        }
+      }));
+    }
+    const lastId = files.at(-1)?.id || cursor;
+    const remainingWhere = {
+      verificationStatus: { in: ["STORED", "MISSING"] },
+      ...(lastId ? { id: { gt: lastId } } : {}),
+    };
+    const [remaining, filesToVerify, missingFiles] = await Promise.all([
+      db.diklatDriveFile.count({ where: remainingWhere }),
+      db.diklatDriveFile.count({ where: { verificationStatus: "STORED" } }),
+      db.diklatDriveFile.count({ where: { verificationStatus: "MISSING" } }),
+    ]);
+    await audit("ADMIN_SESSION", "DIKLAT_DRIVE_RECONCILED", "DiklatDriveFile", undefined, {
+      checked, newlyMissing, restored, skipped, remaining,
+    });
+    return ok(res, {
+      configured: true,
+      connected: true,
+      message: skipped ? `Pemeriksaan selesai dengan ${skipped} berkas yang tidak dapat diverifikasi.` : "Pemeriksaan konsistensi Drive selesai.",
+      checked,
+      newlyMissing,
+      restored,
+      skipped,
+      remaining,
+      nextCursor: remaining && lastId ? lastId : null,
+      filesToVerify,
+      missingFiles,
+    });
   }));
 
   app.get(`${API}/admin/audit`, admin, route(async (req, res) => {

@@ -13,4 +13,5 @@
 - [cPanel npm node_modules handling](cpanel-npm-node-modules.md) — Avoid npm ci in the app directory when Node.js App Manager owns node_modules; use an isolated CLI cache.
 - [cPanel admin session compatibility](cpanel-admin-session-compatibility.md) — Keep admin login on stable Session columns when production Prisma schemas or generated clients lag.
 - [Prisma CLI config discovery](prisma-cli-config-discovery.md) — Run an offline CLI outside the app directory when the app config imports packages absent from app-managed dependencies.
+- [Vite and cPanel CLI bundles](vite-cpanel-cli-bundles.md) — Vite clears `dist`; preserve the cPanel Prisma CLI split archive stored beside deploy output before rebuilding.
 - [Pilketos simulation voter](pilketos-simulation-voter.md) — NIS 10101010 is a temporary development test identity and must stay out of production elections.

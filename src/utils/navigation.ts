@@ -42,7 +42,13 @@ export function navigate(path: string) {
 export function getAppPath(): string {
   const raw = normalizePath(window.location.pathname);
   const base = normalizePath(BASE_PATH || "/");
-  if (base === "/") return raw;
+  if (base === "/") {
+    // The cPanel deployment is mounted at /id; keep that route usable in dev
+    // previews where BASE_PATH is empty and therefore cannot be inferred from assets.
+    if (raw === "/id") return "/";
+    if (raw.startsWith("/id/")) return normalizePath(raw.slice("/id".length));
+    return raw;
+  }
   if (raw === base) return "/";
   if (raw.startsWith(base + "/")) return normalizePath(raw.slice(base.length));
   return raw;

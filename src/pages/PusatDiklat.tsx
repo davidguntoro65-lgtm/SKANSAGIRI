@@ -4,7 +4,7 @@ import {
   ChevronLeft, ClipboardList, FileText, FolderArchive, GraduationCap, Menu, Search,
   Send, ShieldCheck, Upload, X,
 } from "lucide-react";
-import { apiFetch, getAppPath, navigate } from "../utils/navigation";
+import { apiFetch, apiPath, getAppPath, navigate } from "../utils/navigation";
 
 type Status = "DRAFT" | "PUBLISHED" | "ARCHIVED";
 type DocumentType = "MATERIAL" | "LKPD";
@@ -26,10 +26,11 @@ type TaskType = {
 type SubmissionReceipt = {
   reference: string; trainingName: string; taskName: string; fullName: string; nip?: string | null;
   institution: string; fileName: string; submittedAt: string; status: string; driveUrl?: string | null;
-  fileAccess: "PRIVATE" | "LINK";
+  secureFileUrl?: string | null; fileAccess: "PRIVATE" | "LINK"; duplicate?: boolean;
 };
 type Envelope<T> = { success: boolean; data?: T; error?: { message?: string } };
 type PageData<T> = { items: T[]; pagination: { page: number; pageSize: number; total: number; totalPages: number } };
+type DocumentFilters = { trainings: Array<{ id: string; title: string }>; categories: string[] };
 
 const root = "/pusat-diklat";
 const PAGE_SIZE = 6;
@@ -121,10 +122,30 @@ function TrainingCard({ item, archive = false }: { item: Training; archive?: boo
 
 function DocumentRow({ item }: { item: DocumentItem }) {
   const [downloadError, setDownloadError] = useState("");
+  const [downloading, setDownloading] = useState(false);
   const download = async () => {
     setDownloadError("");
     if (!item.downloadUrl) { setDownloadError("Tautan unduhan belum tersedia untuk dokumen ini."); return; }
-    window.open(item.downloadUrl, "_blank", "noopener,noreferrer");
+    setDownloading(true);
+    try {
+      const response = await apiFetch(apiPath(item.downloadUrl));
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({})) as Envelope<unknown>;
+        throw new Error(payload.error?.message || "Dokumen belum dapat diunduh.");
+      }
+      const blobUrl = URL.createObjectURL(await response.blob());
+      const anchor = document.createElement("a");
+      anchor.href = blobUrl;
+      anchor.download = item.driveFileName || item.title;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    } catch (error) {
+      setDownloadError(error instanceof Error ? error.message : "Dokumen belum dapat diunduh.");
+    } finally {
+      setDownloading(false);
+    }
   };
   return <article className="flex flex-col gap-4 border-b border-[#e7ebea] py-5 first:pt-0 last:border-0 last:pb-0 sm:flex-row sm:items-center">
     <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${item.type === "LKPD" ? "bg-[#f2ecd9] text-[#856a30]" : "bg-[#e5edf1] text-[#365d78]"}`}><FileText size={19} /></span>
@@ -133,7 +154,7 @@ function DocumentRow({ item }: { item: DocumentItem }) {
       <p className="mt-1 text-xs text-[#89939a]">{[item.category, item.driveFileName, formatBytes(item.sizeBytes)].filter(Boolean).join(" · ")}</p>
       {downloadError && <p role="alert" className="mt-2 text-xs text-[#9b493d]">{downloadError}</p>}
     </div>
-    <button onClick={() => void download()} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-[#dce4e6] px-4 py-2.5 text-sm font-bold text-[#315b78] transition hover:border-[#315b78] hover:bg-[#f2f6f7]"><ArrowDownToLine size={16} /> Unduh</button>
+    <button disabled={downloading} onClick={() => void download()} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-[#dce4e6] px-4 py-2.5 text-sm font-bold text-[#315b78] transition hover:border-[#315b78] hover:bg-[#f2f6f7] disabled:cursor-wait disabled:opacity-60"><ArrowDownToLine size={16} /> {downloading ? "Menyiapkan…" : "Unduh"}</button>
   </article>;
 }
 
@@ -153,9 +174,14 @@ export default function PusatDiklat() {
   const [training, setTraining] = useState<(Training & { documents: DocumentItem[]; taskTypes: TaskType[] }) | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
+  const [detailRetryKey, setDetailRetryKey] = useState(0);
   const [search, setSearch] = useState("");
   const [year, setYear] = useState("");
   const [docQuery, setDocQuery] = useState("");
+  const [documentTrainingId, setDocumentTrainingId] = useState("");
+  const [documentCategory, setDocumentCategory] = useState("");
+  const [documentFilters, setDocumentFilters] = useState<DocumentFilters>({ trainings: [], categories: [] });
+  const [documentFiltersError, setDocumentFiltersError] = useState("");
   const [listPage, setListPage] = useState(1);
   const [docListPage, setDocListPage] = useState(1);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
@@ -201,13 +227,27 @@ export default function PusatDiklat() {
     if (!isDocumentPage) return;
     setDocsLoading(true); setDocsError("");
     const params = new URLSearchParams({ type: activeTab === "lkpd" ? "LKPD" : "MATERIAL", q: docQuery, page: String(docListPage), pageSize: "8" });
+    if (documentTrainingId) params.set("trainingId", documentTrainingId);
+    if (documentCategory) params.set("category", documentCategory);
     try {
       const data = await requestData<PageData<DocumentItem>>(`/api/v1/diklat/public/documents?${params}`);
       setDocuments(data.items || []); setDocumentPage(data.pagination);
     } catch (error) { setDocsError(error instanceof Error ? error.message : "Dokumen tidak dapat dimuat."); }
     finally { setDocsLoading(false); }
-  }, [activeTab, docListPage, docQuery, isDocumentPage]);
+  }, [activeTab, docListPage, docQuery, documentCategory, documentTrainingId, isDocumentPage]);
   useEffect(() => { void loadDocuments(); }, [loadDocuments]);
+
+  useEffect(() => {
+    if (!isDocumentPage) return;
+    let alive = true;
+    setDocumentFiltersError("");
+    requestData<DocumentFilters>("/api/v1/diklat/public/documents/filters")
+      .then(data => { if (alive) setDocumentFilters(data); })
+      .catch(error => {
+        if (alive) setDocumentFiltersError(error instanceof Error ? error.message : "Pilihan filter dokumen tidak dapat dimuat.");
+      });
+    return () => { alive = false; };
+  }, [isDocumentPage]);
 
   useEffect(() => {
     if (!detailSlug) { setTraining(null); setDetailError(""); return; }
@@ -218,7 +258,21 @@ export default function PusatDiklat() {
       .catch(error => { if (alive) setDetailError(error instanceof Error ? error.message : "Detail diklat tidak dapat dimuat."); })
       .finally(() => { if (alive) setDetailLoading(false); });
     return () => { alive = false; };
-  }, [detailSlug]);
+  }, [detailSlug, detailRetryKey]);
+
+  useEffect(() => {
+    const description = "Akses materi pembelajaran, unduh LKPD, dan kirim tugas diklat melalui Pusat Diklat SMKN 1 Wonogiri.";
+    document.title = detailSlug && training?.title
+      ? `${training.title} | Pusat Diklat SMKN 1 Wonogiri`
+      : "Pusat Diklat SMKN 1 Wonogiri";
+    let meta = document.querySelector('meta[name="description"]') as HTMLMetaElement | null;
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.name = "description";
+      document.head.appendChild(meta);
+    }
+    meta.content = description;
+  }, [detailSlug, training?.title]);
 
   useEffect(() => {
     if (training?.taskTypes?.length && !selectedTaskId) {
@@ -257,6 +311,12 @@ export default function PusatDiklat() {
   const activeTasks = training?.taskTypes?.filter(item => item.active) || [];
   const selectedTask = activeTasks.find(item => item.id === selectedTaskId);
   const formMode = showingSubmission;
+  const overviewCards: Array<{ label: string; value: number | null; Icon: typeof GraduationCap }> = [
+    { label: "Diklat terbit", value: overview?.stats.publishedTrainings ?? null, Icon: GraduationCap },
+    { label: "Dokumen materi", value: overview?.stats.materials ?? null, Icon: BookOpen },
+    { label: "LKPD tersedia", value: overview?.stats.lkpd ?? null, Icon: ClipboardList },
+    { label: "Pengumpulan", value: overview?.stats.submissions ?? null, Icon: Send },
+  ];
 
   return <div className="min-h-[100dvh] bg-[#f5f6f3] font-sans text-[#213b50]">
     <PublicHeader active={isArchive ? "archive" : isDocumentPage ? "materials" : "home"} />
@@ -265,7 +325,7 @@ export default function PusatDiklat() {
 
       {detailSlug ? <section>
         {detailLoading && <div className="mx-auto max-w-4xl animate-pulse rounded-[28px] border border-[#e1e7e8] bg-white p-8 sm:p-12" aria-busy="true"><div className="h-4 w-28 rounded bg-[#e7edef]" /><div className="mt-7 h-9 w-4/5 rounded bg-[#e7edef]" /><div className="mt-5 h-4 w-full rounded bg-[#eef1f2]" /><div className="mt-2 h-4 w-3/4 rounded bg-[#eef1f2]" /></div>}
-        {!detailLoading && detailError && <div className="mx-auto max-w-4xl"><Notice title="Detail belum tersedia" message={detailError} retry={() => { setPath => setPath; window.dispatchEvent(new Event("popstate")); }} /></div>}
+        {!detailLoading && detailError && <div className="mx-auto max-w-4xl"><Notice title="Detail belum tersedia" message={detailError} retry={() => setDetailRetryKey(value => value + 1)} /></div>}
         {!detailLoading && training && <>
           <div className="overflow-hidden rounded-[28px] bg-[#173653] text-white">
             <div className="relative px-6 py-9 sm:px-10 sm:py-12 lg:px-14">
@@ -287,16 +347,17 @@ export default function PusatDiklat() {
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#e5f1eb] text-[#31684a]"><Check size={24} /></div>
               <p className="mt-5 text-[11px] font-extrabold uppercase tracking-[.18em] text-[#668271]">Konfirmasi pengiriman</p>
               <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-[#1b3a51]">Pengiriman tugas berhasil</h2>
-              <p className="mt-2 text-sm leading-6 text-[#71808a]">Server telah mengonfirmasi pencatatan tugas Anda. Simpan nomor referensi berikut untuk keperluan pengecekan.</p>
+               <p className="mt-2 text-sm leading-6 text-[#71808a]">{receipt.duplicate ? "Pengiriman sebelumnya ditemukan dan tidak dibuat ulang. Simpan nomor referensi berikut untuk pengecekan." : "Server telah mengonfirmasi penyimpanan file dan pencatatan tugas Anda. Simpan nomor referensi berikut untuk keperluan pengecekan."}</p>
               <div className="mt-6 grid gap-3 rounded-2xl bg-[#f2f5f2] p-5 sm:grid-cols-2">
                 {[["Diklat", receipt.trainingName], ["Nama", receipt.fullName], ...(receipt.nip ? [["NIP", receipt.nip]] : []), ["Instansi", receipt.institution], ["Jenis tugas", receipt.taskName], ["Nama file", receipt.fileName], ["Waktu diterima", fmtDate(receipt.submittedAt)], ["Referensi", receipt.reference], ["Status", receipt.status]].map(([label, value]) => <div key={label}><p className="text-[10px] font-bold uppercase tracking-widest text-[#83918e]">{label}</p><p className="mt-1 break-words text-sm font-bold text-[#2b4a5b]">{value}</p></div>)}
               </div>
-              <div className="mt-5 rounded-xl border border-[#e4e8e3] px-4 py-3 text-sm text-[#667770]"><span className="font-bold">Akses file: </span>{receipt.fileAccess === "LINK" && receipt.driveUrl ? "Tautan individual tersedia sesuai kebijakan penyelenggara." : "File disimpan secara privat sesuai kebijakan akses penyelenggara."}</div>
+               <div className="mt-5 rounded-xl border border-[#e4e8e3] px-4 py-3 text-sm text-[#667770]"><span className="font-bold">Akses file: </span>{receipt.fileAccess === "LINK" && receipt.driveUrl ? "Tautan Google Drive individual aktif sesuai kebijakan penyelenggara." : receipt.secureFileUrl ? "File disimpan secara privat. Tautan ini hanya memberikan akses ke berkas pengiriman Anda." : "File disimpan secara privat. Akses file peserta belum tersedia pada konfigurasi server ini."}</div>
               {receipt.fileAccess === "LINK" && receipt.driveUrl && <a href={receipt.driveUrl} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#173653] px-5 py-3 text-sm font-bold text-white hover:bg-[#244d6b]"><ArrowDownToLine size={16} /> Lihat file di Google Drive</a>}
+               {receipt.fileAccess === "PRIVATE" && receipt.secureFileUrl && <a href={apiPath(receipt.secureFileUrl)} className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#173653] px-5 py-3 text-sm font-bold text-white hover:bg-[#244d6b]"><ArrowDownToLine size={16} /> Unduh file yang dikirim</a>}
               <button onClick={() => { setReceipt(null); setSubmissionFile(null); setSubmissionForm({ fullName: "", nip: "", institution: "" }); setIdempotencyKey(newIdempotencyKey()); navigate(`${root}/diklat/${encodeURIComponent(training.slug)}`); }} className="mt-6 block text-sm font-bold text-[#42667c] underline underline-offset-4">Kembali ke detail diklat</button>
             </div> : <div className="mx-auto max-w-3xl">
               <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end"><div><p className="text-[11px] font-extrabold uppercase tracking-[.16em] text-[#8b713e]">Pengumpulan karya</p><h2 className="mt-2 text-2xl font-extrabold text-[#1b3a51]">Kirim tugas diklat</h2><p className="mt-1 text-sm text-[#75828b]">Lengkapi data dan pilih berkas untuk diunggah.</p></div><button onClick={() => navigate(`${root}/diklat/${encodeURIComponent(training.slug)}`)} className="inline-flex items-center gap-1 text-sm font-semibold text-[#71808a] hover:text-[#244d6b]"><X size={15} /> Tutup</button></div>
-              {submissionError && <div role="alert" className="mt-5 rounded-xl border border-[#e9c7bf] bg-[#fbefec] px-4 py-3 text-sm text-[#984c3f]">{submissionError}<p className="mt-1 text-xs">Data formulir tetap tersimpan. Anda dapat mencoba kembali dengan aman.</p></div>}
+               {submissionError && <div role="alert" className="mt-5 rounded-xl border border-[#e9c7bf] bg-[#fbefec] px-4 py-3 text-sm text-[#984c3f]">{submissionError}<p className="mt-1 text-xs">Data formulir dan berkas tetap ada di perangkat ini. Pengiriman belum dikonfirmasi; Anda dapat mencoba kembali.</p></div>}
               {!training.acceptsSubmissions && <div className="mt-5 rounded-xl border border-[#e8ddc2] bg-[#faf5e9] p-4 text-sm text-[#745e34]">Pengumpulan untuk diklat ini sedang ditutup.</div>}
               {training.acceptsSubmissions && <form className="mt-6" onSubmit={submitWork}>
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -320,7 +381,7 @@ export default function PusatDiklat() {
                     <label className="mt-1.5 flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-[#bccbd0] bg-[#f8f9f6] px-5 py-7 text-center transition hover:border-[#66869a] hover:bg-[#f2f6f4]">
                       <Upload size={21} className="text-[#5b7889]" /><span className="mt-2 text-sm font-bold text-[#38576b]">{submissionFile?.name || "Pilih berkas tugas"}</span>
                       <span className="mt-1 text-xs text-[#839098]">{selectedTask?.maxFileSizeMb ? `Maksimal ${selectedTask.maxFileSizeMb} MB` : "Ukuran maksimum mengikuti ketentuan diklat"}{selectedTask?.allowedMimeTypes?.length ? ` · ${selectedTask.allowedMimeTypes.join(", ")}` : ""}</span>
-                      <input required type="file" className="sr-only" onChange={event => setSubmissionFile(event.target.files?.[0] || null)} />
+                       <input required type="file" accept={selectedTask?.allowedMimeTypes?.join(",") || undefined} className="sr-only" onChange={event => setSubmissionFile(event.target.files?.[0] || null)} />
                     </label>
                     {selectedTask?.deadline && <p className="mt-2 text-xs text-[#7b8790]">Tenggat: {fmtDate(selectedTask.deadline)}</p>}
                   </div>
@@ -354,7 +415,13 @@ export default function PusatDiklat() {
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="text-[11px] font-extrabold uppercase tracking-[.19em] text-[#8c7543]">Pustaka diklat</p><h1 className="mt-2 text-3xl font-extrabold tracking-[-.04em] text-[#183650] sm:text-4xl">{activeTab === "lkpd" ? "Lembar kerja peserta" : "Materi pembelajaran"}</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-[#72808a]">Temukan dokumen yang dipublikasikan untuk mendukung kegiatan pengembangan kompetensi.</p></div>
           <div className="flex rounded-xl border border-[#dce4e5] bg-white p-1"><button onClick={() => visit(`${root}?tab=materi`)} className={`rounded-lg px-4 py-2 text-sm font-bold ${activeTab === "materi" ? "bg-[#173653] text-white" : "text-[#657681]"}`}>Materi</button><button onClick={() => visit(`${root}?tab=lkpd`)} className={`rounded-lg px-4 py-2 text-sm font-bold ${activeTab === "lkpd" ? "bg-[#173653] text-white" : "text-[#657681]"}`}>LKPD</button></div>
         </div>
-        <div className="mt-7 flex flex-col gap-3 rounded-2xl border border-[#dfe6e7] bg-[#fffefa] p-4 sm:flex-row"><div className="relative flex-1"><Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#82909a]" /><input value={docQuery} onChange={event => { setDocQuery(event.target.value); setDocListPage(1); }} placeholder="Cari judul atau keterangan dokumen" className="w-full rounded-xl border border-[#dce4e5] bg-white py-3 pl-10 pr-4 text-sm text-[#203c53] outline-none focus:border-[#68879a]" /></div><button onClick={() => visit(`${root}?tab=jelajahi`)} className="rounded-xl border border-[#dce4e5] px-4 py-3 text-sm font-bold text-[#426175] hover:bg-[#f2f5f3]">Lihat diklat</button></div>
+         <div className="mt-7 grid gap-3 rounded-2xl border border-[#dfe6e7] bg-[#fffefa] p-4 sm:grid-cols-2 lg:grid-cols-[1fr_220px_200px_auto]">
+           <div className="relative"><Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#82909a]" /><input value={docQuery} onChange={event => { setDocQuery(event.target.value); setDocListPage(1); }} placeholder="Cari judul atau keterangan dokumen" className="w-full rounded-xl border border-[#dce4e5] bg-white py-3 pl-10 pr-4 text-sm text-[#203c53] outline-none focus:border-[#68879a]" /></div>
+           <select aria-label="Filter diklat dokumen" value={documentTrainingId} onChange={event => { setDocumentTrainingId(event.target.value); setDocListPage(1); }} className="rounded-xl border border-[#dce4e5] bg-white px-3.5 py-3 text-sm text-[#426175] outline-none focus:border-[#68879a]"><option value="">Semua diklat</option>{documentFilters.trainings.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select>
+           <select aria-label="Filter kategori dokumen" value={documentCategory} onChange={event => { setDocumentCategory(event.target.value); setDocListPage(1); }} className="rounded-xl border border-[#dce4e5] bg-white px-3.5 py-3 text-sm text-[#426175] outline-none focus:border-[#68879a]"><option value="">Semua kategori</option>{documentFilters.categories.map(item => <option key={item} value={item}>{item}</option>)}</select>
+           <button onClick={() => { setDocQuery(""); setDocumentTrainingId(""); setDocumentCategory(""); setDocListPage(1); }} className="rounded-xl border border-[#dce4e5] px-4 py-3 text-sm font-bold text-[#426175] hover:bg-[#f2f5f3]">Bersihkan</button>
+         </div>
+         {documentFiltersError && <p className="mt-2 text-xs text-[#9b493d]" role="status">{documentFiltersError}</p>}
         <div className="mt-6 rounded-[22px] border border-[#dfe6e7] bg-[#fffefa] p-5 sm:p-7">
           {docsLoading ? <div className="space-y-5" aria-busy="true">{[1, 2, 3].map(n => <div key={n} className="animate-pulse flex gap-4"><div className="h-11 w-11 rounded-xl bg-[#edf1f1]" /><div className="flex-1"><div className="h-4 w-1/3 rounded bg-[#edf1f1]" /><div className="mt-2 h-3 w-2/3 rounded bg-[#f0f2f2]" /></div></div>)}</div>
             : docsError ? <Notice title="Dokumen tidak dapat dimuat" message={docsError} retry={() => void loadDocuments()} />
@@ -375,19 +442,19 @@ export default function PusatDiklat() {
         {trainingsLoading ? <div className="mt-4"><LoadingRows /></div> : trainingsError ? <div className="mt-5"><Notice title="Daftar diklat belum dapat dimuat" message={trainingsError} retry={() => void loadTrainings()} /></div> : trainings.length ? <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{trainings.map(item => <TrainingCard key={item.id} item={item} archive={isArchive} />)}</div> : <div className="mt-5 rounded-[22px] border border-dashed border-[#cdd8db] bg-[#fbfcf9] px-6 py-14 text-center"><span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#eaf0ef] text-[#678396]"><GraduationCap size={22} /></span><h2 className="mt-4 font-bold text-[#345369]">{search ? "Tidak ada diklat yang cocok" : isArchive ? "Arsip belum tersedia" : "Belum ada diklat terbit"}</h2><p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#829098]">Coba ubah kata pencarian atau kembali lagi setelah kegiatan dipublikasikan.</p>{search && <button onClick={() => setSearch("")} className="mt-4 text-sm font-bold text-[#42667c] underline underline-offset-4">Hapus pencarian</button>}</div>}
         {trainingPage && trainingPage.totalPages > 1 && <Pagination page={trainingPage.page} totalPages={trainingPage.totalPages} onChange={setListPage} />}
       </section> : <>
-        <section className="relative overflow-hidden rounded-[28px] bg-[#173653]">
+        <section className="diklat-hero relative overflow-hidden rounded-[28px] bg-[#173653]">
           <div className="pointer-events-none absolute right-[-70px] top-[-115px] h-[430px] w-[430px] rounded-full border border-white/[.08]" />
           <div className="pointer-events-none absolute right-[35px] top-[-20px] h-[290px] w-[290px] rounded-full border border-white/[.08]" />
           <div className="pointer-events-none absolute bottom-[-145px] right-[145px] h-[240px] w-[240px] rounded-full bg-[#9e8346]/10 blur-3xl" />
           <div className="relative grid gap-10 px-6 py-10 sm:px-10 sm:py-14 lg:grid-cols-[1.15fr_.85fr] lg:items-center lg:px-14 lg:py-[76px]">
             <div><div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[.06] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[.16em] text-[#d5c28e]"><span className="h-1.5 w-1.5 rounded-full bg-[#d8bd75]" /> Portal pengembangan kompetensi</div>
               <p className="mt-7 text-xs font-bold uppercase tracking-[.2em] text-[#b5c5ce]">SMKN 1 Wonogiri</p>
-              <h1 className="mt-3 max-w-2xl text-4xl font-extrabold leading-[1.08] tracking-[-.055em] text-[#f5f5ef] sm:text-5xl lg:text-[58px]">{overview?.settings.title || "Pusat Diklat"}</h1>
+              <h1 className="diklat-hero-title mt-3 max-w-2xl text-4xl font-extrabold leading-[1.08] tracking-[-.055em] text-[#f5f5ef] sm:text-5xl lg:text-[58px]">{overview?.settings.title || "Pusat Diklat"}</h1>
               <p className="mt-5 max-w-xl text-base leading-7 text-[#c5d2d8] sm:text-lg">Satu portal untuk materi, LKPD, dan pengumpulan tugas diklat.</p>
               <p className="mt-3 max-w-xl text-sm leading-7 text-[#aebfc8]">{overview?.settings.description || "Akses bahan pembelajaran dan kirim tugas kegiatan pengembangan kompetensi melalui portal digital sekolah."}</p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <button onClick={() => visit(`${root}?tab=jelajahi`)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#e9cb83] px-5 py-3.5 text-sm font-extrabold text-[#1f3b53] transition hover:bg-[#f0d994]">Jelajahi diklat <ArrowRight size={16} /></button>
-                <button onClick={() => openSubmission()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/25 px-5 py-3.5 text-sm font-bold text-white transition hover:bg-white/10"><Send size={15} /> Kirim tugas</button>
+                <button onClick={() => openSubmission()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/25 px-5 py-3.5 text-sm font-bold text-[#e0e7eb] transition hover:bg-white/10"><Send size={15} /> Kirim tugas</button>
               </div>
             </div>
             <div className="relative mx-auto w-full max-w-[410px]">
@@ -402,7 +469,7 @@ export default function PusatDiklat() {
           </div>
         </section>
         <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {(overview ? [["Diklat terbit", overview.stats.publishedTrainings, GraduationCap], ["Dokumen materi", overview.stats.materials, BookOpen], ["LKPD tersedia", overview.stats.lkpd, ClipboardList], ["Pengumpulan", overview.stats.submissions, Send]] : [["Diklat terbit", null, GraduationCap], ["Dokumen materi", null, BookOpen], ["LKPD tersedia", null, ClipboardList], ["Pengumpulan", null, Send]]).map(([label, value, Icon]) => <div key={String(label)} className="flex items-center gap-4 rounded-2xl border border-[#e0e6e6] bg-[#fffefa] px-5 py-4">
+          {overviewCards.map(({ label, value, Icon }) => <div key={label} className="flex items-center gap-4 rounded-2xl border border-[#e0e6e6] bg-[#fffefa] px-5 py-4">
             <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#edf2f1] text-[#43667a]"><Icon size={19} /></span><div><p className="text-xs font-semibold text-[#829098]">{label}</p><p className="mt-1 text-2xl font-extrabold text-[#1d3b52]">{overviewLoading ? <span className="inline-block h-6 w-10 animate-pulse rounded bg-[#e9eeee]" /> : value ?? "—"}</p></div>
           </div>)}
         </section>
