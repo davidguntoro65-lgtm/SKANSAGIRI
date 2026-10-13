@@ -558,6 +558,128 @@ model PilketosVote {
   @@index([electionId, studentId])
 }
 
+// ── Pusat Diklat ──────────────────────────────────────────────────────────────
+model DiklatModuleSettings {
+  id                    Int      @id @default(1)
+  title                 String   @default("PUSAT DIKLAT SMKN 1 WONOGIRI")
+  description           String   @default("Satu Portal untuk Materi, LKPD, dan Pengumpulan Tugas Diklat.")
+  submissionsEnabled    Boolean  @default(true)
+  archiveVisible        Boolean  @default(true)
+  maxFileSizeMb         Int      @default(15)
+  allowedMimeTypes      String[] @default(["application/pdf", "application/zip", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "image/jpeg", "image/png"])
+  allowedExtensions     String[] @default([".pdf", ".zip", ".docx", ".pptx", ".xlsx", ".jpg", ".jpeg", ".png"])
+  submissionDriveAccess String   @default("PRIVATE")
+  rootFolderId          String   @default("")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model DiklatTraining {
+  id                  String             @id @default(uuid())
+  title               String
+  slug                String             @unique
+  summary             String             @default("")
+  description         String             @default("")
+  category            String             @default("")
+  period              String             @default("")
+  year                Int?
+  status              String             @default("DRAFT")
+  acceptsSubmissions  Boolean            @default(false)
+  archiveVisible      Boolean            @default(true)
+  sortOrder           Int                @default(0)
+  driveFolderId       String?
+  materialsFolderId   String?
+  lkpdFolderId        String?
+  submissionsFolderId String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  taskTypes           DiklatTaskType[]
+  documents           DiklatDocument[]
+  submissions         DiklatSubmission[]
+
+  @@index([status, year])
+  @@index([sortOrder, createdAt])
+}
+
+model DiklatTaskType {
+  id             String            @id @default(uuid())
+  trainingId     String
+  name           String
+  description    String            @default("")
+  sortOrder      Int               @default(0)
+  active         Boolean           @default(true)
+  deadline       DateTime?
+  maxFileSizeMb  Int?
+  allowedMimeTypes String[]        @default([])
+  driveFolderId  String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  training       DiklatTraining    @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  submissions    DiklatSubmission[]
+
+  @@index([trainingId, active, sortOrder])
+}
+
+model DiklatDriveFile {
+  id                 String             @id @default(uuid())
+  driveFileId        String             @unique
+  driveFolderId      String?
+  name               String
+  mimeType           String
+  sizeBytes          BigInt
+  kind               String
+  webUrl             String?
+  publicAccess       Boolean            @default(false)
+  verificationStatus String             @default("STORED")
+  createdAt          DateTime           @default(now())
+  document           DiklatDocument?    @relation("DiklatDocumentFile")
+  submission         DiklatSubmission?  @relation("DiklatSubmissionFile")
+
+  @@index([kind, verificationStatus])
+}
+
+model DiklatDocument {
+  id          String            @id @default(uuid())
+  trainingId  String
+  driveFileId String?           @unique
+  type        String
+  title       String
+  description String            @default("")
+  category    String            @default("")
+  sortOrder   Int               @default(0)
+  status      String            @default("DRAFT")
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  training    DiklatTraining    @relation(fields: [trainingId], references: [id], onDelete: Restrict)
+  driveFile   DiklatDriveFile?  @relation("DiklatDocumentFile", fields: [driveFileId], references: [id], onDelete: Restrict)
+
+  @@index([trainingId, type, status, sortOrder])
+}
+
+model DiklatSubmission {
+  id             String           @id @default(uuid())
+  reference      String           @unique
+  idempotencyKey String           @unique
+  trainingId     String
+  taskTypeId     String
+  taskName       String
+  fullName       String
+  nip            String?
+  institution    String
+  driveFileId    String           @unique
+  status         String           @default("STORED")
+  submittedAt    DateTime         @default(now())
+  createdAt      DateTime         @default(now())
+  training       DiklatTraining   @relation(fields: [trainingId], references: [id], onDelete: Restrict)
+  taskType       DiklatTaskType   @relation(fields: [taskTypeId], references: [id], onDelete: Restrict)
+  driveFile      DiklatDriveFile  @relation("DiklatSubmissionFile", fields: [driveFileId], references: [id], onDelete: Restrict)
+
+  @@index([trainingId, submittedAt])
+  @@index([taskTypeId, submittedAt])
+  @@index([institution, submittedAt])
+  @@index([status, submittedAt])
+}
+
 model TeacherSelectionRequest {
   id             String                 @id @default(uuid())
   teacherId      String

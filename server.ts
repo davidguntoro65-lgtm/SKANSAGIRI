@@ -13,6 +13,7 @@ import {
   INDUSTRI_PARTNERS
 } from "./src/data";
 import { registerCorePlatformRoutes } from "./src/corePlatformRoutes";
+import { registerDiklatRoutes } from "./src/diklatRoutes";
 
 const app = express();
 const PORT = parseInt(process.env.PORT || "5000", 10);
@@ -288,6 +289,7 @@ app.use((req, res, next) => {
     "/api/v1/pilketos/identify",
     "/api/v1/pilketos/status",
     "/api/v1/pilketos/vote",
+    "/api/v1/diklat/public/submissions",
   ];
   if (publicExact.includes(req.path)) return next();
   const publicPatterns = [
@@ -500,6 +502,7 @@ registerCorePlatformRoutes(app, requireAuth as any, async () => {
   const credentials = await getAdminCredentials();
   return credentials?.password || null;
 });
+registerDiklatRoutes(app, requireAuth as any);
 
 // ─── Logs Endpoint ────────────────────────────────────────────────────────────
 app.get("/api/logs", requireAuth as any, (_req, res) => {
