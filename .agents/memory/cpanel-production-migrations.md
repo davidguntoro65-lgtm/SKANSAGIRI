@@ -33,3 +33,19 @@ incompatible with production data.
 **How to apply:** Never use the baseline flag for a partially migrated or
 unknown schema. If the legacy baseline diff is non-empty, stop and create/apply
 the required non-destructive migration instead.
+
+## cPanel loopback diagnostics
+
+A TCP probe from the cPanel shell found `localhost:5432` and `127.0.0.1:5432`
+open, while `::1` was unavailable; `pg_isready` was not installed. This alone
+does not prove that the listener speaks PostgreSQL or explain a Prisma `P1001`.
+
+**Why:** The app host has no IPv6 loopback, but `localhost` still reached an
+open IPv4 TCP listener. Replacing `localhost` with `127.0.0.1` without a
+protocol-level check would be an unsupported change.
+
+**How to apply:** When diagnosing `P1001`, distinguish TCP reachability from a
+valid PostgreSQL response. Do not change the production host or use the
+baseline flag solely because of `P1001`; rerun the guarded deployment if the
+service is reachable again, and investigate the PostgreSQL listener if the
+error persists.
