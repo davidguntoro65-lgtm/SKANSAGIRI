@@ -128,6 +128,15 @@ function hashPassword(password: string, salt = crypto.randomBytes(16).toString("
   return `${salt}:${hash}`;
 }
 
+function hashPasswordAsync(password: string, salt = crypto.randomBytes(16).toString("hex")) {
+  return new Promise<string>((resolve, reject) => {
+    crypto.scrypt(password, salt, 64, (error, derivedKey) => {
+      if (error) return reject(error);
+      resolve(`${salt}:${derivedKey.toString("hex")}`);
+    });
+  });
+}
+
 function studentAccountEmail(nis: string) {
   return `siswa.${nis.toLowerCase().replace(/[^a-z0-9._-]/g, "-")}@akun.smkn1wonogiri.local`;
 }
@@ -281,9 +290,53 @@ async function audit(action: string, entity: string, entityId: string | undefine
 
 async function commitRows(type: ImportType, rows: PreviewRow[], actor: string) {
   const validRows = rows.filter((row) => row.status === "VALID" || row.status === "UNCHANGED");
+  const preparedRows = await Promise.all(validRows.map(async (row) => ({
+    ...row,
+    ...(type === "siswa" ? { passwordHash: await hashPasswordAsync(clean(row.values.password)) } : {}),
+  })));
+
   return db.$transaction(async (tx) => {
     let success = 0;
-    for (const { values } of validRows) {
+    const studentRoleAssignments: { userId: string; roleId: string }[] = [];
+    let studentRoleId: string | null = null;
+    let studentsByNisn = new Map<string, { id: string; user: { id: string; email: string } | null }>();
+    let yearsByCode = new Map<string, { id: string }>();
+    let classesByCode = new Map<string, { id: string }>();
+    let usersByEmail = new Map<string, { id: string; email: string }>();
+
+    if (type === "siswa") {
+      const nisns = [...new Set(preparedRows.map(({ values }) => clean(values.nisn)))];
+      const yearCodes = [...new Set(preparedRows.map(({ values }) => clean(values.kodeTahunAjaran)))];
+      const classCodes = [...new Set(preparedRows.map(({ values }) => clean(values.kodeKelas)))];
+      const [students, years, classes, role] = await Promise.all([
+        tx.coreStudent.findMany({
+          where: { nisn: { in: nisns } },
+          select: { id: true, nisn: true, user: { select: { id: true, email: true } } },
+        }),
+        tx.academicYear.findMany({ where: { code: { in: yearCodes } }, select: { id: true, code: true } }),
+        tx.academicClass.findMany({ where: { code: { in: classCodes } }, select: { id: true, code: true } }),
+        tx.coreRole.upsert({ where: { name: "SISWA" }, update: {}, create: { name: "SISWA" } }),
+      ]);
+      studentsByNisn = new Map(students.map((student) => [student.nisn, student]));
+      yearsByCode = new Map(years.map((year) => [year.code, year]));
+      classesByCode = new Map(classes.map((classroom) => [classroom.code, classroom]));
+      studentRoleId = role.id;
+
+      const accountEmails = [...new Set(preparedRows.map(({ values }) => {
+        const nisn = clean(values.nisn);
+        const nis = clean(values.nis);
+        return clean(values.email).toLowerCase()
+          || studentsByNisn.get(nisn)?.user?.email
+          || studentAccountEmail(nis);
+      }))];
+      const users = await tx.coreUser.findMany({
+        where: { email: { in: accountEmails } },
+        select: { id: true, email: true },
+      });
+      usersByEmail = new Map(users.map((user) => [user.email, user]));
+    }
+
+    for (const { values, passwordHash } of preparedRows) {
       const status = statusValue(values.status) as "ACTIVE" | "INACTIVE" | "ARCHIVED";
       if (type === "tahun-ajaran") {
         const code = clean(values.code);
@@ -312,24 +365,27 @@ async function commitRows(type: ImportType, rows: PreviewRow[], actor: string) {
         const nis = clean(values.nis);
         const email = clean(values.email).toLowerCase() || null;
         const phone = clean(values.noTelp || values.noHp) || null;
-        const initialPassword = clean(values.password);
-        const student = await tx.coreStudent.upsert({
-          where: { nisn },
-          update: { nis, fullName: clean(values.namaLengkap), email, phone, gender: clean(values.jenisKelamin) || null, birthPlace: clean(values.tempatLahir) || null, birthDate: parseDate(values.tanggalLahir), status },
-          create: { nisn, nis, fullName: clean(values.namaLengkap), email, phone, gender: clean(values.jenisKelamin) || null, birthPlace: clean(values.tempatLahir) || null, birthDate: parseDate(values.tanggalLahir), status },
-        });
-        const existingUser = student.userId ? await tx.coreUser.findUnique({ where: { id: student.userId } }) : null;
+        if (!passwordHash) throw new Error("Hash password awal siswa tidak berhasil disiapkan.");
+        const existingUser = studentsByNisn.get(nisn)?.user || null;
         const accountEmail = email || existingUser?.email || studentAccountEmail(nis);
-        const emailOwner = await tx.coreUser.findUnique({ where: { email: accountEmail } });
+        const emailOwner = usersByEmail.get(accountEmail);
         if (emailOwner && emailOwner.id !== existingUser?.id) throw new Error(`Email akun siswa "${accountEmail}" sudah digunakan akun lain.`);
         const coreUser = existingUser
-          ? await tx.coreUser.update({ where: { id: existingUser.id }, data: { ...(email ? { email } : {}), fullName: clean(values.namaLengkap), status: status === "ACTIVE" ? "ACTIVE" : "DISABLED", passwordHash: hashPassword(initialPassword), passwordChangeRecommended: true } })
-          : await tx.coreUser.create({ data: { email: accountEmail, fullName: clean(values.namaLengkap), status: status === "ACTIVE" ? "ACTIVE" : "DISABLED", passwordHash: hashPassword(initialPassword), passwordChangeRecommended: true } });
-        await tx.coreStudent.update({ where: { id: student.id }, data: { userId: coreUser.id } });
-        const role = await tx.coreRole.upsert({ where: { name: "SISWA" }, update: {}, create: { name: "SISWA" } });
-        await tx.coreUserRole.upsert({ where: { userId_roleId: { userId: coreUser.id, roleId: role.id } }, update: {}, create: { userId: coreUser.id, roleId: role.id } });
-        const year = await tx.academicYear.findUnique({ where: { code: clean(values.kodeTahunAjaran) } });
-        const classroom = await tx.academicClass.findUnique({ where: { code: clean(values.kodeKelas) } });
+          ? await tx.coreUser.update({ where: { id: existingUser.id }, data: { ...(email ? { email } : {}), fullName: clean(values.namaLengkap), status: status === "ACTIVE" ? "ACTIVE" : "DISABLED", passwordHash, passwordChangeRecommended: true } })
+          : await tx.coreUser.create({ data: { email: accountEmail, fullName: clean(values.namaLengkap), status: status === "ACTIVE" ? "ACTIVE" : "DISABLED", passwordHash, passwordChangeRecommended: true } });
+        if (existingUser?.email !== coreUser.email) {
+          const formerOwner = existingUser?.email ? usersByEmail.get(existingUser.email) : undefined;
+          if (formerOwner?.id === existingUser?.id) usersByEmail.delete(existingUser!.email);
+        }
+        usersByEmail.set(accountEmail, { id: coreUser.id, email: accountEmail });
+        const student = await tx.coreStudent.upsert({
+          where: { nisn },
+          update: { nis, fullName: clean(values.namaLengkap), email, phone, gender: clean(values.jenisKelamin) || null, birthPlace: clean(values.tempatLahir) || null, birthDate: parseDate(values.tanggalLahir), status, userId: coreUser.id },
+          create: { nisn, nis, fullName: clean(values.namaLengkap), email, phone, gender: clean(values.jenisKelamin) || null, birthPlace: clean(values.tempatLahir) || null, birthDate: parseDate(values.tanggalLahir), status, userId: coreUser.id },
+        });
+        if (studentRoleId) studentRoleAssignments.push({ userId: coreUser.id, roleId: studentRoleId });
+        const year = yearsByCode.get(clean(values.kodeTahunAjaran));
+        const classroom = classesByCode.get(clean(values.kodeKelas));
         if (year && classroom) await tx.studentEnrollment.upsert({ where: { studentId_academicYearId: { studentId: student.id, academicYearId: year.id } }, update: { classId: classroom.id, status }, create: { studentId: student.id, classId: classroom.id, academicYearId: year.id, status } });
       } else if (type === "assignment-guru") {
         const [teacher, subject, classroom, year] = await Promise.all([
@@ -352,9 +408,12 @@ async function commitRows(type: ImportType, rows: PreviewRow[], actor: string) {
       }
       success += 1;
     }
+    if (studentRoleAssignments.length) {
+      await tx.coreUserRole.createMany({ data: studentRoleAssignments, skipDuplicates: true });
+    }
     await tx.coreAuditLog.create({ data: { action: "IMPORT_COMMIT", entity: type, actor, metadata: { rows: success } } });
     return success;
-  });
+  }, type === "siswa" ? { maxWait: 10_000, timeout: 60_000 } : undefined);
 }
 
 type LmsActor = {
