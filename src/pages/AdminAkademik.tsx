@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
-  ArrowLeft, BookOpen, Check, CheckCircle2, ChevronDown, ClipboardList, Download,
-  FileSpreadsheet, GraduationCap, History, LayoutDashboard, Loader2, LogIn, Plus,
-  RefreshCw, Search, ShieldCheck, Sparkles, Upload, Users, X, XCircle,
+  AlertTriangle, ArrowLeft, BookOpen, Check, CheckCircle2, ChevronDown, ClipboardList, Download,
+  FileSpreadsheet, GraduationCap, History, LayoutDashboard, Loader2, LogIn, Pencil, Plus,
+  RefreshCw, Search, ShieldCheck, Sparkles, Trash2, Upload, Users, X, XCircle,
 } from "lucide-react";
 
 type Theme = "light" | "dark";
@@ -13,7 +13,7 @@ type PreviewRow = { row: number; values: Record<string, unknown>; status: string
 type Overview = { academicYear: { code: string; name: string } | null; totals: { teachers: number; students: number; subjects: number; classes: number }; pendingRequests: number; lastImport: { fileName: string; status: string; errorRows: number; successRows: number } | null };
 type MasterData = Record<MasterKey, any[]>;
 type FormState = { code: string; name: string; grade: string; academicYearId: string; departmentId: string; isActive: boolean; status: string };
-type StudentFormState = { nisn: string; nis: string; fullName: string; email: string; phone: string; gender: string; birthPlace: string; birthDate: string; classCode: string; academicYearCode: string; password: string; status: string };
+type StudentFormState = { nisn: string; nis: string; fullName: string; email: string; phone: string; gender: string; birthPlace: string; birthDate: string; classCode: string; academicYearCode: string; enrollmentId: string; password: string; status: string };
 
 const IMPORTS: { type: ImportType; label: string; description: string }[] = [
   { type: "tahun-ajaran", label: "Tahun ajaran", description: "Periode akademik dan konteks aktif" },
@@ -34,7 +34,7 @@ const MASTER_META: { key: MasterKey; label: string; code: string; icon: typeof B
   { key: "students", label: "Siswa", code: "nis", icon: Users, manual: true },
 ];
 const EMPTY_FORM: FormState = { code: "", name: "", grade: "X", academicYearId: "", departmentId: "", isActive: false, status: "ACTIVE" };
-const EMPTY_STUDENT_FORM: StudentFormState = { nisn: "", nis: "", fullName: "", email: "", phone: "", gender: "", birthPlace: "", birthDate: "", classCode: "", academicYearCode: "", password: "", status: "ACTIVE" };
+const EMPTY_STUDENT_FORM: StudentFormState = { nisn: "", nis: "", fullName: "", email: "", phone: "", gender: "", birthPlace: "", birthDate: "", classCode: "", academicYearCode: "", enrollmentId: "", password: "", status: "ACTIVE" };
 
 function token() { return localStorage.getItem("smkn1_adm_token") || ""; }
 function authHeaders(json = false) { return { Authorization: `Bearer ${token()}`, ...(json ? { "Content-Type": "application/json" } : {}) }; }
@@ -66,6 +66,11 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
   const [showForm, setShowForm] = useState(false);
   const [showStudentForm, setShowStudentForm] = useState(false);
   const [studentSaving, setStudentSaving] = useState(false);
+  const [studentAdminPassword, setStudentAdminPassword] = useState("");
+  const [studentActionError, setStudentActionError] = useState("");
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const [deleteStudentIds, setDeleteStudentIds] = useState<string[]>([]);
+  const [deletingStudents, setDeletingStudents] = useState(false);
   const [importType, setImportType] = useState<ImportType>("guru");
   const [file, setFile] = useState<{ name: string; base64: string } | null>(null);
   const [preview, setPreview] = useState<{ jobId: string; rows: PreviewRow[]; totalRows: number; validRows: number; errorRows: number } | null>(null);
@@ -177,6 +182,8 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
     setEditingId(null);
     if (masterKey === "students") {
       setStudentForm(EMPTY_STUDENT_FORM);
+      setStudentAdminPassword("");
+      setStudentActionError("");
       setShowStudentForm(true);
       return;
     }
@@ -187,6 +194,38 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
     setEditingId(item.id);
     setForm({ code: item.code || "", name: item.name || "", grade: item.grade || "X", academicYearId: item.academicYearId || "", departmentId: item.departmentId || "", isActive: Boolean(item.isActive), status: item.status || "ACTIVE" });
     setShowForm(true);
+  };
+  const openStudentEdit = (item: any) => {
+    const enrollment = item.enrollments?.[0];
+    setEditingId(item.id);
+    setStudentAdminPassword("");
+    setStudentActionError("");
+    setStudentForm({
+      nisn: item.nisn || "",
+      nis: item.nis || "",
+      fullName: item.fullName || "",
+      email: item.email || "",
+      phone: item.phone || "",
+      gender: item.gender || "",
+      birthPlace: item.birthPlace || "",
+      birthDate: item.birthDate ? new Date(item.birthDate).toISOString().slice(0, 10) : "",
+      classCode: enrollment?.academicClass?.code || "",
+      academicYearCode: enrollment?.academicYear?.code || "",
+      enrollmentId: enrollment?.id || "",
+      password: "",
+      status: item.status || "ACTIVE",
+    });
+    setShowStudentForm(true);
+  };
+  const toggleStudentSelection = (id: string) => {
+    setSelectedStudentIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
+  };
+  const toggleAllFilteredStudents = () => {
+    const visibleIds = filteredMaster.map((item: any) => item.id);
+    const allSelected = visibleIds.length > 0 && visibleIds.every((id: string) => selectedStudentIds.includes(id));
+    setSelectedStudentIds((current) => allSelected
+      ? current.filter((id) => !visibleIds.includes(id))
+      : [...new Set([...current, ...visibleIds])]);
   };
   const saveMaster = async (event: FormEvent) => {
     event.preventDefault();
@@ -205,15 +244,21 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
   };
   const saveStudent = async (event: FormEvent) => {
     event.preventDefault();
+    const isEditing = Boolean(editingId);
+    if (isEditing && !studentAdminPassword) {
+      setStudentActionError("Masukkan kata sandi admin untuk mengonfirmasi perubahan data siswa.");
+      return;
+    }
     if (Boolean(studentForm.classCode) !== Boolean(studentForm.academicYearCode)) {
-      setNotice({ type: "error", text: "Kode kelas dan tahun ajaran harus diisi bersama. Keduanya boleh dikosongkan." });
+      setStudentActionError("Kode kelas dan tahun ajaran harus diisi bersama. Keduanya boleh dikosongkan.");
       return;
     }
 
+    setStudentActionError("");
     setStudentSaving(true);
     try {
-      const created = await request("/api/v1/akademik/siswa", {
-        method: "POST",
+      const saved = await request(`/api/v1/akademik/siswa${editingId ? `/${editingId}` : ""}`, {
+        method: editingId ? "PATCH" : "POST",
         body: JSON.stringify({
           nisn: studentForm.nisn.trim(),
           nis: studentForm.nis.trim(),
@@ -225,19 +270,51 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
           birthDate: studentForm.birthDate || null,
           classCode: studentForm.classCode || null,
           academicYearCode: studentForm.academicYearCode || null,
-          password: studentForm.password || "",
+          enrollmentId: studentForm.enrollmentId || null,
+          ...(isEditing ? { adminPassword: studentAdminPassword } : { password: studentForm.password || "" }),
           status: studentForm.status || "ACTIVE",
         }),
       });
       setShowStudentForm(false);
       setStudentForm(EMPTY_STUDENT_FORM);
+      setStudentAdminPassword("");
+      setEditingId(null);
       setSearch("");
-      await load({ pinnedStudent: created, searchTerm: "" });
-      setNotice({ type: "success", text: `Data siswa ${created.fullName} berhasil disimpan.` });
+      setSelectedStudentIds([]);
+      await load({ pinnedStudent: saved, searchTerm: "" });
+      setNotice({ type: "success", text: `Data siswa ${saved.fullName} berhasil ${isEditing ? "diperbarui" : "disimpan"}.` });
     } catch (error) {
-      setNotice({ type: "error", text: error instanceof Error ? error.message : "Data siswa gagal disimpan." });
+      const message = error instanceof Error ? error.message : "Data siswa gagal disimpan.";
+      setStudentActionError(message);
+      setNotice({ type: "error", text: message });
     } finally {
       setStudentSaving(false);
+    }
+  };
+  const deleteStudents = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!studentAdminPassword) {
+      setStudentActionError("Masukkan kata sandi admin untuk mengonfirmasi penghapusan.");
+      return;
+    }
+    setStudentActionError("");
+    setDeletingStudents(true);
+    try {
+      const result = await request("/api/v1/akademik/siswa", {
+        method: "DELETE",
+        body: JSON.stringify({ ids: deleteStudentIds, adminPassword: studentAdminPassword }),
+      });
+      setDeleteStudentIds([]);
+      setSelectedStudentIds([]);
+      setStudentAdminPassword("");
+      await load();
+      setNotice({ type: "success", text: `${result.deletedCount} data siswa berhasil dihapus.` });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Data siswa gagal dihapus.";
+      setStudentActionError(message);
+      setNotice({ type: "error", text: message });
+    } finally {
+      setDeletingStudents(false);
     }
   };
   const reviewRequest = async (item: any, status: "APPROVED" | "REJECTED" | "NEEDS_REVISION") => {
@@ -290,12 +367,12 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
             <div className="mb-6 flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-black uppercase tracking-widest text-amber-600">Master data · Siswa</p>
-                <h3 id="student-form-title" className="mt-1 text-2xl font-black">Input manual data siswa</h3>
+                <h3 id="student-form-title" className="mt-1 text-2xl font-black">{editingId ? "Edit data siswa" : "Input manual data siswa"}</h3>
                 <p id="student-form-description" className="mt-2 text-sm opacity-65">
                   NISN, NIS, dan nama lengkap wajib diisi. Kolom lainnya opsional.
                 </p>
               </div>
-              <button type="button" aria-label="Tutup formulir siswa" onClick={() => setShowStudentForm(false)} className="rounded-xl p-2 hover:bg-current/5">
+              <button type="button" aria-label="Tutup formulir siswa" onClick={() => { setShowStudentForm(false); setStudentAdminPassword(""); setStudentActionError(""); }} className="rounded-xl p-2 hover:bg-current/5">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -362,8 +439,10 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
               </label>
               <label className="block text-xs font-black">
                 Password akun siswa <span className="font-normal opacity-50">(opsional)</span>
-                <input type="password" autoComplete="new-password" minLength={studentForm.password ? 8 : undefined} value={studentForm.password} onChange={(event) => updateStudentForm("password", event.target.value)} className="mt-2 w-full rounded-xl border bg-transparent px-3 py-3 text-sm" placeholder="Kosongkan jika belum membuat akun" />
-                <span className="mt-1 block font-normal opacity-50">Jika diisi, minimal 8 karakter dan akun siswa dibuat.</span>
+                {!editingId ? <>
+                  <input type="password" autoComplete="new-password" minLength={studentForm.password ? 8 : undefined} value={studentForm.password} onChange={(event) => updateStudentForm("password", event.target.value)} className="mt-2 w-full rounded-xl border bg-transparent px-3 py-3 text-sm" placeholder="Kosongkan jika belum membuat akun" />
+                  <span className="mt-1 block font-normal opacity-50">Jika diisi, minimal 8 karakter dan akun siswa dibuat.</span>
+                </> : <span className="mt-2 block font-normal opacity-50">Kata sandi akun siswa tidak berubah saat data profil diedit.</span>}
               </label>
               <label className="block text-xs font-black">
                 Status <span className="font-normal opacity-50">(opsional · default aktif)</span>
@@ -375,11 +454,60 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
               </label>
             </div>
 
+            {editingId && (
+              <label className="mt-4 block text-xs font-black">
+                Konfirmasi kata sandi admin <span className="text-rose-500">*</span>
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={studentAdminPassword}
+                  onChange={(event) => setStudentAdminPassword(event.target.value)}
+                  className="mt-2 w-full rounded-xl border bg-transparent px-3 py-3 text-sm"
+                  placeholder="Masukkan kata sandi admin"
+                />
+              </label>
+            )}
+
+            {studentActionError && <p role="alert" className="mt-4 rounded-xl border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-sm font-semibold text-rose-600">{studentActionError}</p>}
             <div className="mt-7 flex gap-3">
-              <button type="button" onClick={() => setShowStudentForm(false)} className="flex-1 rounded-xl border py-3 font-bold">Batal</button>
+              <button type="button" onClick={() => { setShowStudentForm(false); setStudentAdminPassword(""); setStudentActionError(""); }} className="flex-1 rounded-xl border py-3 font-bold">Batal</button>
               <button disabled={studentSaving} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-slate-950 py-3 font-black text-white disabled:cursor-not-allowed disabled:opacity-60 dark:bg-amber-400 dark:text-slate-950">
                 {studentSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-                {studentSaving ? "Menyimpan..." : "Simpan data siswa"}
+                {studentSaving ? "Menyimpan..." : editingId ? "Simpan perubahan" : "Simpan data siswa"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+      {deleteStudentIds.length > 0 && (
+        <div role="dialog" aria-modal="true" aria-labelledby="delete-students-title" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <form onSubmit={deleteStudents} className={`w-full max-w-lg rounded-2xl border p-5 shadow-2xl sm:p-7 ${dark ? "border-white/10 bg-[#0b1729]" : "border-slate-200 bg-white"}`}>
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-rose-500/10 text-rose-600"><AlertTriangle className="h-5 w-5" /></div>
+              <div>
+                <h3 id="delete-students-title" className="text-xl font-black">Hapus {deleteStudentIds.length} siswa?</h3>
+                <p className="mt-2 text-sm leading-relaxed opacity-70">
+                  Penghapusan permanen juga menghapus enrollment dan riwayat suara Pilketos yang terkait. Akun siswa terkait akan dinonaktifkan. Tindakan ini tidak dapat dibatalkan.
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 max-h-28 overflow-auto rounded-xl border border-current/10 p-3 text-sm">
+              {master.students.filter((item: any) => deleteStudentIds.includes(item.id)).slice(0, 6).map((item: any) => (
+                <p key={item.id} className="truncate py-0.5"><span className="font-bold">{item.fullName}</span> <span className="opacity-55">· {item.nis || item.nisn}</span></p>
+              ))}
+              {deleteStudentIds.length > 6 && <p className="mt-1 text-xs opacity-55">dan {deleteStudentIds.length - 6} siswa lainnya</p>}
+            </div>
+            <label className="mt-4 block text-xs font-black">
+              Konfirmasi kata sandi admin <span className="text-rose-500">*</span>
+              <input type="password" autoComplete="current-password" required value={studentAdminPassword} onChange={(event) => setStudentAdminPassword(event.target.value)} className="mt-2 w-full rounded-xl border bg-transparent px-3 py-3 text-sm" placeholder="Masukkan kata sandi admin" />
+            </label>
+            {studentActionError && <p role="alert" className="mt-4 rounded-xl border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-sm font-semibold text-rose-600">{studentActionError}</p>}
+            <div className="mt-6 flex gap-3">
+              <button type="button" disabled={deletingStudents} onClick={() => { setDeleteStudentIds([]); setStudentAdminPassword(""); setStudentActionError(""); }} className="flex-1 rounded-xl border py-3 font-bold disabled:opacity-50">Batal</button>
+              <button disabled={deletingStudents} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-rose-600 py-3 font-black text-white disabled:opacity-50">
+                {deletingStudents && <Loader2 className="h-4 w-4 animate-spin" />}
+                {deletingStudents ? "Menghapus..." : "Hapus permanen"}
               </button>
             </div>
           </form>
@@ -401,7 +529,69 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
           <div className="grid lg:grid-cols-[1.3fr_.7fr] gap-4 sm:gap-5 mt-5"><div className={`rounded-2xl border p-5 sm:p-6 ${card}`}><div className="flex items-start justify-between"><div><p className="text-xs uppercase tracking-widest text-amber-600 font-black">Setup terarah</p><h3 className="font-black text-lg mt-2">Urutan data yang direkomendasikan</h3><p className="text-sm opacity-60 mt-1">Import mengikuti dependency supaya setiap relasi dapat divalidasi.</p></div><ClipboardList className="text-amber-500 shrink-0" /></div><div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6">{["Tahun ajaran", "Jurusan", "Mapel", "Kelas", "Guru", "Siswa", "Assignment", "Enrollment"].map((item, index) => <div key={item} className="flex items-center gap-2 text-xs sm:text-sm"><span className="w-7 h-7 shrink-0 rounded-lg bg-amber-400/20 text-amber-700 flex items-center justify-center font-black">{index + 1}</span>{item}</div>)}</div></div><div className={`rounded-2xl border p-5 sm:p-6 ${card}`}><p className="text-xs uppercase tracking-widest text-amber-600 font-black">Kontrol akses</p><h3 className="font-black text-xl mt-2">Assignment guru</h3><p className="text-sm opacity-60 mt-2 leading-relaxed">Pilihan guru tetap menjadi pengajuan sampai operator menyetujui dan mengaktifkannya.</p><button onClick={() => setTab("requests")} className="mt-5 text-sm font-black text-amber-600 hover:underline">Tinjau {overview?.pendingRequests || 0} pengajuan →</button></div></div>
         </section>}
 
-          {tab === "master" && <section><div className={`rounded-2xl border ${card} overflow-hidden`}><div className="p-4 sm:p-6 border-b border-current/10 flex flex-col lg:flex-row lg:items-center justify-between gap-4"><div><p className="text-xs uppercase tracking-widest text-amber-600 font-black">Referensi canonical</p><h3 className="font-black text-xl mt-1">Master data sekolah</h3><p className="text-sm opacity-60 mt-1">Gunakan kode stabil untuk menjaga relasi dan idempotency.</p></div><div className="flex flex-col sm:flex-row gap-2"><label className="relative"><Search className="w-4 h-4 absolute left-3 top-3 opacity-40" /><input aria-label="Cari master data" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari kode atau nama..." className="w-full sm:w-56 rounded-xl border pl-9 pr-3 py-2.5 bg-transparent text-sm outline-none focus:ring-2 focus:ring-amber-400" /></label>{MASTER_META.find((item) => item.key === masterKey)?.manual && <button onClick={openCreate} className="rounded-xl bg-slate-950 text-white dark:bg-amber-400 dark:text-slate-950 px-4 py-2.5 text-sm font-black flex items-center justify-center gap-2"><Plus className="w-4 h-4" /> Tambah data</button>}</div></div><div className="flex overflow-x-auto gap-2 px-4 sm:px-6 py-3 border-b border-current/10">{MASTER_META.map(({ key, label }) => <button key={key} onClick={() => { setMasterKey(key); setSearch(""); }} className={`shrink-0 rounded-xl px-3 py-2 text-xs font-bold ${masterKey === key ? "bg-amber-400 text-slate-950" : "bg-current/5 opacity-70 hover:opacity-100"}`}>{label}<span className="ml-1.5 opacity-60">{master[key]?.length || 0}</span></button>)}</div><div className="overflow-x-auto"><table className="w-full min-w-[680px] text-sm"><thead><tr className="text-left text-xs uppercase tracking-wider opacity-50 border-b border-current/10"><th className="px-5 py-3">Identifier</th><th className="px-5 py-3">Nama / detail</th><th className="px-5 py-3">Konteks</th><th className="px-5 py-3">Status</th><th className="px-5 py-3 text-right">Aksi</th></tr></thead><tbody>{filteredMaster.map((item: any) => <tr key={item.id} className="border-b border-current/5 hover:bg-current/[.025]"><td className="px-5 py-3.5 font-mono text-xs">{item.code || item.nip || item.nis || item.nisn}{masterKey === "students" && <p className="mt-1 font-sans text-[10px] opacity-50">NISN: {item.nisn || "-"}</p>}</td><td className="px-5 py-3.5 font-bold">{item.name || item.fullName}<p className="text-xs opacity-50 font-normal mt-0.5">{item.email || item.grade || ""}</p>{masterKey === "students" && <p className="text-xs opacity-50 font-normal mt-0.5">No. telepon: {item.phone || "-"}</p>}</td><td className="px-5 py-3.5 text-xs opacity-65">{item.academicYear?.name || item.department?.name || (item.departmentId ? "Jurusan terhubung" : "Umum")}</td><td className="px-5 py-3.5"><span className={`rounded-lg px-2 py-1 text-[10px] font-black ${badgeClass(item.status || (item.isActive ? "ACTIVE" : "INACTIVE"))}`}>{item.isActive ? "AKTIF" : item.status || "ACTIVE"}</span></td><td className="px-5 py-3.5 text-right">{masterKey !== "students" && MASTER_META.find((meta) => meta.key === masterKey)?.manual && <button onClick={() => openEdit(item)} className="text-xs font-black text-amber-600 hover:underline">Edit</button>}</td></tr>)}</tbody></table>{!filteredMaster.length && <div className="py-16 text-center opacity-50"><BookOpen className="w-9 h-9 mx-auto mb-3" /><p className="font-bold">Belum ada data</p><p className="text-sm mt-1">{search ? "Coba kata kunci lain." : "Mulai dengan menambah atau mengimport data."}</p></div>}</div></div></section>}
+          {tab === "master" && <section>
+            <div className={`rounded-2xl border ${card} overflow-hidden`}>
+              <div className="p-4 sm:p-6 border-b border-current/10 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-widest text-amber-600 font-black">Referensi canonical</p>
+                  <h3 className="font-black text-xl mt-1">Master data sekolah</h3>
+                  <p className="text-sm opacity-60 mt-1">Gunakan kode stabil untuk menjaga relasi dan idempotency.</p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <label className="relative">
+                    <Search className="w-4 h-4 absolute left-3 top-3 opacity-40" />
+                    <input aria-label="Cari master data" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari kode atau nama..." className="w-full sm:w-56 rounded-xl border pl-9 pr-3 py-2.5 bg-transparent text-sm outline-none focus:ring-2 focus:ring-amber-400" />
+                  </label>
+                  {MASTER_META.find((item) => item.key === masterKey)?.manual && <button onClick={openCreate} className="rounded-xl bg-slate-950 text-white dark:bg-amber-400 dark:text-slate-950 px-4 py-2.5 text-sm font-black flex items-center justify-center gap-2"><Plus className="w-4 h-4" /> Tambah data</button>}
+                </div>
+              </div>
+              <div className="flex overflow-x-auto gap-2 px-4 sm:px-6 py-3 border-b border-current/10">
+                {MASTER_META.map(({ key, label }) => <button key={key} onClick={() => { setMasterKey(key); setSearch(""); setSelectedStudentIds([]); }} className={`shrink-0 rounded-xl px-3 py-2 text-xs font-bold ${masterKey === key ? "bg-amber-400 text-slate-950" : "bg-current/5 opacity-70 hover:opacity-100"}`}>{label}<span className="ml-1.5 opacity-60">{master[key]?.length || 0}</span></button>)}
+              </div>
+              {masterKey === "students" && selectedStudentIds.length > 0 && (
+                <div className="flex flex-col gap-3 border-b border-current/10 bg-rose-500/[.04] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                  <p className="text-sm font-bold">{selectedStudentIds.length} siswa dipilih</p>
+                  <button type="button" onClick={() => { setDeleteStudentIds([...selectedStudentIds]); setStudentAdminPassword(""); setStudentActionError(""); }} className="flex items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-black text-white">
+                    <Trash2 className="h-4 w-4" /> Hapus yang dipilih
+                  </button>
+                </div>
+              )}
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[780px] text-sm">
+                  <thead>
+                    <tr className="text-left text-xs uppercase tracking-wider opacity-50 border-b border-current/10">
+                      {masterKey === "students" && <th className="w-12 px-4 py-3 text-center"><input type="checkbox" aria-label="Pilih semua siswa yang tampil" checked={filteredMaster.length > 0 && filteredMaster.every((item: any) => selectedStudentIds.includes(item.id))} onChange={toggleAllFilteredStudents} className="h-4 w-4 accent-amber-500" /></th>}
+                      <th className="px-5 py-3">Identifier</th>
+                      <th className="px-5 py-3">Nama / detail</th>
+                      <th className="px-5 py-3">Konteks</th>
+                      <th className="px-5 py-3">Status</th>
+                      <th className="px-5 py-3 text-right">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredMaster.map((item: any) => (
+                      <tr key={item.id} className="border-b border-current/5 hover:bg-current/[.025]">
+                        {masterKey === "students" && <td className="px-4 py-3.5 text-center"><input type="checkbox" aria-label={`Pilih siswa ${item.fullName}`} checked={selectedStudentIds.includes(item.id)} onChange={() => toggleStudentSelection(item.id)} className="h-4 w-4 accent-amber-500" /></td>}
+                        <td className="px-5 py-3.5 font-mono text-xs">{item.code || item.nip || item.nis || item.nisn}{masterKey === "students" && <p className="mt-1 font-sans text-[10px] opacity-50">NISN: {item.nisn || "-"}</p>}</td>
+                        <td className="px-5 py-3.5 font-bold">{item.name || item.fullName}<p className="text-xs opacity-50 font-normal mt-0.5">{item.email || item.grade || ""}</p>{masterKey === "students" && <p className="text-xs opacity-50 font-normal mt-0.5">No. telepon: {item.phone || "-"}</p>}</td>
+                        <td className="px-5 py-3.5 text-xs opacity-65">{masterKey === "students" ? item.enrollments?.[0] ? `${item.enrollments[0].academicClass.name} · ${item.enrollments[0].academicYear.name}` : "Tanpa penempatan" : item.academicYear?.name || item.department?.name || (item.departmentId ? "Jurusan terhubung" : "Umum")}</td>
+                        <td className="px-5 py-3.5"><span className={`rounded-lg px-2 py-1 text-[10px] font-black ${badgeClass(item.status || (item.isActive ? "ACTIVE" : "INACTIVE"))}`}>{item.isActive ? "AKTIF" : item.status || "ACTIVE"}</span></td>
+                        <td className="px-5 py-3.5 text-right">
+                          {masterKey === "students" ? (
+                            <div className="flex items-center justify-end gap-2">
+                              <button type="button" onClick={() => openStudentEdit(item)} className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-black text-amber-600 hover:bg-amber-500/10"><Pencil className="h-3.5 w-3.5" /> Edit</button>
+                              <button type="button" onClick={() => { setDeleteStudentIds([item.id]); setStudentAdminPassword(""); setStudentActionError(""); }} className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-black text-rose-600 hover:bg-rose-500/10"><Trash2 className="h-3.5 w-3.5" /> Hapus</button>
+                            </div>
+                          ) : MASTER_META.find((meta) => meta.key === masterKey)?.manual && <button onClick={() => openEdit(item)} className="text-xs font-black text-amber-600 hover:underline">Edit</button>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {!filteredMaster.length && <div className="py-16 text-center opacity-50"><BookOpen className="w-9 h-9 mx-auto mb-3" /><p className="font-bold">Belum ada data</p><p className="text-sm mt-1">{search ? "Coba kata kunci lain." : "Mulai dengan menambah atau mengimport data."}</p></div>}
+              </div>
+            </div>
+          </section>}
 
         {tab === "import" && <section className="space-y-5"><div className="grid lg:grid-cols-[.72fr_1.28fr] gap-5"><div className={`rounded-2xl border p-5 sm:p-6 ${card}`}><div className="flex items-start justify-between"><div><p className="text-xs uppercase tracking-widest text-amber-600 font-black">Preview-first</p><h3 className="font-black text-xl mt-1">Import master data</h3><p className="text-sm opacity-60 mt-2">Upload tidak menulis database sebelum semua error diperbaiki dan Anda menekan commit.</p></div><FileSpreadsheet className="text-amber-500" /></div><label className="block text-xs font-black mt-7 mb-2">Pilih template</label><select value={importType} onChange={(event) => { setImportType(event.target.value as ImportType); setFile(null); setPreview(null); setNotice(null); }} className="w-full rounded-xl border p-3 bg-transparent text-sm">{IMPORTS.map((item) => <option value={item.type} key={item.type}>{item.label}</option>)}</select><p className="text-xs opacity-50 mt-2">{IMPORTS.find((item) => item.type === importType)?.description}</p><div className="grid sm:grid-cols-2 gap-2 mt-4"><button onClick={() => downloadTemplate(importType)} className="py-3 rounded-xl border border-amber-500/40 text-amber-600 font-black flex items-center justify-center gap-2 text-sm"><Download className="w-4 h-4" /> Template ini</button><button onClick={() => downloadTemplate("bank")} className="py-3 rounded-xl bg-amber-400 text-slate-950 font-black flex items-center justify-center gap-2 text-sm"><Download className="w-4 h-4" /> Semua template</button></div><p className="text-[11px] opacity-50 mt-2">“Semua template” berisi bank data dalam satu file Excel dengan sheet terpisah dan petunjuk pengisian.</p><label className={`mt-4 rounded-2xl border-2 border-dashed p-6 flex flex-col items-center text-center cursor-pointer transition ${dark ? "border-white/15 hover:border-amber-400" : "border-slate-300 hover:border-amber-500"}`}><Upload className="w-7 h-7 text-amber-500 mb-2" /><span className="font-bold text-sm break-all">{file?.name || "Pilih file .xlsx atau .xls"}</span><span className="text-xs opacity-50 mt-1">Maksimal 10 MB · sheet pertama digunakan</span><input type="file" accept=".xlsx,.xls" className="hidden" onChange={(event) => readFile(event.target.files?.[0])} /></label><button disabled={!file || importBusy} onClick={previewImport} className="w-full mt-4 py-3.5 rounded-xl bg-slate-950 text-white dark:bg-amber-400 dark:text-slate-950 font-black disabled:opacity-40 flex items-center justify-center gap-2">{importBusy && <Loader2 className="w-4 h-4 animate-spin" />} Validasi & preview</button></div><div className={`rounded-2xl border ${card} overflow-hidden`}><div className="p-5 sm:p-6 border-b border-current/10 flex items-center justify-between gap-3"><div><p className="text-xs uppercase tracking-widest text-amber-600 font-black">Hasil validasi</p><h3 className="font-black text-xl mt-1">{preview ? `${preview.totalRows} baris diperiksa` : "Belum ada preview"}</h3></div>{preview && <div className="text-right text-xs"><span className="text-emerald-600 font-black">{preview.validRows} valid</span><span className="mx-1 opacity-30">·</span><span className={preview.errorRows ? "text-rose-600 font-black" : "opacity-60"}>{preview.errorRows} error</span></div>}</div>{preview ? <div className="overflow-auto max-h-[520px]"><table className="w-full min-w-[600px] text-sm"><thead className="sticky top-0 bg-inherit"><tr className="text-left opacity-50 border-b border-current/10 text-xs"><th className="px-5 py-3">Baris</th><th className="px-5 py-3">Identifier</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Keterangan</th></tr></thead><tbody>{preview.rows.map((row) => <tr key={row.row} className="border-b border-current/5 align-top"><td className="px-5 py-3">{row.row}</td><td className="px-5 py-3 font-medium max-w-[220px] truncate">{String(row.values.nip || row.values.nisn || row.values.code || row.values.name || "-")}</td><td className="px-5 py-3"><span className={`text-[10px] font-black px-2 py-1 rounded-lg ${badgeClass(row.status)}`}>{row.status}</span></td><td className="px-5 py-3 text-xs text-rose-600">{row.errors.join(" ") || <span className="text-emerald-600">Siap disimpan</span>}</td></tr>)}</tbody></table></div> : <div className="min-h-[360px] flex flex-col items-center justify-center text-center opacity-50 p-6"><FileSpreadsheet className="w-12 h-12 mb-3" /><p className="font-bold">Preview akan muncul di sini</p><p className="text-sm mt-1 max-w-xs">Periksa nomor baris dan referensi sebelum commit.</p></div>}{preview && <div className="p-4 border-t border-current/10 flex justify-end"><button disabled={importBusy || preview.errorRows > 0} onClick={commitImport} className="px-5 py-3 rounded-xl bg-emerald-500 text-white font-black text-sm disabled:opacity-40 flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> Commit transaksi</button></div>}</div></div><div className={`rounded-2xl border ${card} overflow-hidden`}><div className="p-5 border-b border-current/10 flex items-center justify-between"><div><p className="text-xs uppercase tracking-widest text-amber-600 font-black">Riwayat</p><h3 className="font-black text-lg mt-1">Import terbaru</h3></div><History className="w-5 h-5 opacity-40" /></div><div className="divide-y divide-current/10">{jobs.length ? jobs.map((job) => <div key={job.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div className="min-w-0"><p className="font-bold truncate">{job.fileName}</p><p className="text-xs opacity-50 mt-1">{dateLabel(job.createdAt)} · {job.successRows} berhasil · {job.errorRows} error</p></div><div className="flex items-center gap-2"><span className={`rounded-lg px-2 py-1 text-[10px] font-black ${badgeClass(job.status)}`}>{job.status}</span>{job.errorRows > 0 && <button onClick={async () => setExpandedJob(await request(`/api/v1/akademik/import/jobs/${job.id}/errors`))} className="text-xs font-black text-amber-600">Lihat error</button>}</div></div>) : <p className="p-8 text-sm opacity-50 text-center">Belum ada riwayat import.</p>}</div></div></section>}
 

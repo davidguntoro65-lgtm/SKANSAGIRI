@@ -843145,6 +843145,52 @@ function moduleScope(actor) {
   return canManageAllLms(actor.roles) ? {} : { ownerTeacherId: actor.teacher?.id || "__missing_teacher__" };
 }
 function registerCorePlatformRoutes(app2, requireAuth2, getAdminPassword) {
+  const adminPasswordAttempts = /* @__PURE__ */ new Map();
+  const confirmAdminPassword = async (req, res) => {
+    const suppliedPassword = typeof req.body?.adminPassword === "string" ? req.body.adminPassword : "";
+    if (!suppliedPassword) {
+      fail(res, 400, "ADMIN_PASSWORD_REQUIRED", "Kata sandi admin wajib diisi untuk mengubah data siswa.");
+      return false;
+    }
+    const source = req.socket.remoteAddress || "unknown";
+    const now = Date.now();
+    const attempt = adminPasswordAttempts.get(source);
+    if (attempt && attempt.blockedUntil > now) {
+      const secondsLeft = Math.ceil((attempt.blockedUntil - now) / 1e3);
+      res.setHeader("Retry-After", String(secondsLeft));
+      fail(res, 429, "ADMIN_PASSWORD_RATE_LIMITED", `Terlalu banyak percobaan. Coba lagi dalam ${secondsLeft} detik.`);
+      return false;
+    }
+    let currentPassword;
+    try {
+      currentPassword = await getAdminPassword();
+    } catch {
+      fail(res, 503, "ADMIN_CREDENTIALS_UNAVAILABLE", "Kata sandi admin tidak dapat diverifikasi saat ini.");
+      return false;
+    }
+    if (!currentPassword) {
+      fail(res, 503, "ADMIN_CREDENTIALS_UNAVAILABLE", "Akun admin belum dikonfigurasi.");
+      return false;
+    }
+    if (!safeTextEqual(suppliedPassword, currentPassword)) {
+      const current = attempt && attempt.windowEndsAt > now ? attempt : { count: 0, windowEndsAt: now + 6e4, blockedUntil: 0 };
+      current.count += 1;
+      if (current.count >= 5) {
+        current.count = 0;
+        current.blockedUntil = now + 6e4;
+      }
+      adminPasswordAttempts.set(source, current);
+      while (adminPasswordAttempts.size > 1e4) {
+        const oldest = adminPasswordAttempts.keys().next().value;
+        if (!oldest) break;
+        adminPasswordAttempts.delete(oldest);
+      }
+      fail(res, 403, "INVALID_ADMIN_PASSWORD", "Kata sandi admin salah. Tidak ada data yang diubah.");
+      return false;
+    }
+    adminPasswordAttempts.delete(source);
+    return true;
+  };
   app2.get("/api/v1/pilketos/active", async (req, res) => {
     const election = await db.pilketosElection.findFirst({
       where: { status: "OPEN" },
@@ -843618,7 +843664,20 @@ function registerCorePlatformRoutes(app2, requireAuth2, getAdminPassword) {
       db.subject.findMany({ where: contains ? { OR: [{ code: contains }, { name: contains }] } : void 0, include: { department: true }, orderBy: { code: "asc" } }),
       db.academicClass.findMany({ where: contains ? { OR: [{ code: contains }, { name: contains }] } : void 0, include: { academicYear: true, department: true }, orderBy: { code: "asc" } }),
       db.coreTeacher.findMany({ where: contains ? { OR: [{ nip: contains }, { fullName: contains }] } : void 0, orderBy: { nip: "asc" }, skip: (page - 1) * pageSize, take: pageSize }),
-      db.coreStudent.findMany({ where: contains ? { OR: [{ nisn: contains }, { nis: contains }, { fullName: contains }] } : void 0, orderBy: { nisn: "asc" }, skip: (page - 1) * pageSize, take: pageSize })
+      db.coreStudent.findMany({
+        where: contains ? { OR: [{ nisn: contains }, { nis: contains }, { fullName: contains }] } : void 0,
+        include: {
+          enrollments: {
+            where: { status: "ACTIVE" },
+            include: { academicClass: true, academicYear: true },
+            orderBy: { updatedAt: "desc" },
+            take: 1
+          }
+        },
+        orderBy: { nisn: "asc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize
+      })
     ]);
     return ok(res, { academicYears, departments, subjects, classes, teachers, students, page, pageSize, search });
   });
@@ -843699,11 +843758,177 @@ function registerCorePlatformRoutes(app2, requireAuth2, getAdminPassword) {
         });
         return saved;
       });
-      return res.status(201).json({ success: true, data: student });
+      const studentWithEnrollment = await db.coreStudent.findUnique({
+        where: { id: student.id },
+        include: {
+          enrollments: {
+            where: { status: "ACTIVE" },
+            include: { academicClass: true, academicYear: true },
+            orderBy: { updatedAt: "desc" },
+            take: 1
+          }
+        }
+      });
+      return res.status(201).json({ success: true, data: studentWithEnrollment || student });
     } catch (error) {
       if (error?.code === "P2002" || error?.code === "DUPLICATE_ACCOUNT_EMAIL") {
         return fail(res, 409, "DUPLICATE_STUDENT_DATA", error?.code === "DUPLICATE_ACCOUNT_EMAIL" ? "Email akun sudah digunakan." : "NIS, NISN, atau email akun sudah digunakan.");
       }
+      throw error;
+    }
+  });
+  app2.patch("/api/v1/akademik/siswa/:id", requireAuth2, async (req, res) => {
+    if (!await confirmAdminPassword(req, res)) return;
+    const id = clean(req.params.id);
+    const nisn = clean(req.body.nisn);
+    const nis = clean(req.body.nis);
+    const fullName = clean(req.body.fullName || req.body.namaLengkap);
+    const email = clean(req.body.email).toLowerCase() || null;
+    const phone = clean(req.body.phone || req.body.noTelp) || null;
+    const birthPlace = clean(req.body.birthPlace || req.body.tempatLahir) || null;
+    const birthDateInput = clean(req.body.birthDate || req.body.tanggalLahir);
+    const birthDate = parseDate(birthDateInput);
+    const gender = clean(req.body.gender || req.body.jenisKelamin) || null;
+    const status = clean(req.body.status).toUpperCase() || "ACTIVE";
+    const enrollmentId = clean(req.body.enrollmentId) || null;
+    const classCode = clean(req.body.classCode || req.body.kodeKelas);
+    const academicYearCode = clean(req.body.academicYearCode || req.body.kodeTahunAjaran);
+    if (!nisn || !nis || !fullName) return fail(res, 400, "REQUIRED_FIELD", "NISN, NIS, dan nama lengkap wajib diisi.");
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail(res, 400, "INVALID_EMAIL", "Format email tidak valid.");
+    if (birthDateInput && !birthDate) return fail(res, 400, "INVALID_BIRTH_DATE", "Tanggal lahir tidak valid.");
+    if (!VALID_STATUSES.has(status)) return fail(res, 400, "INVALID_STATUS", "Status harus ACTIVE, INACTIVE, atau ARCHIVED.");
+    if (Boolean(classCode) !== Boolean(academicYearCode)) return fail(res, 400, "INCOMPLETE_ENROLLMENT", "Kode kelas dan tahun ajaran harus diisi bersama-sama.");
+    const [student, duplicate, currentEnrollment] = await Promise.all([
+      db.coreStudent.findUnique({ where: { id }, select: { id: true, userId: true } }),
+      db.coreStudent.findFirst({
+        where: { id: { not: id }, OR: [{ nisn }, { nis }] },
+        select: { nisn: true, nis: true }
+      }),
+      enrollmentId ? db.studentEnrollment.findFirst({ where: { id: enrollmentId, studentId: id }, select: { id: true } }) : Promise.resolve(null)
+    ]);
+    if (!student) return fail(res, 404, "STUDENT_NOT_FOUND", "Data siswa tidak ditemukan.");
+    if (duplicate) {
+      const field = duplicate.nisn === nisn ? "NISN" : "NIS";
+      return fail(res, 409, "DUPLICATE_STUDENT_IDENTIFIER", `${field} sudah digunakan siswa lain.`);
+    }
+    if (enrollmentId && !currentEnrollment) {
+      return fail(res, 409, "ENROLLMENT_CHANGED", "Penempatan siswa berubah. Muat ulang data sebelum menyimpan.");
+    }
+    let targetEnrollment = null;
+    if (classCode && academicYearCode) {
+      const [classroom, academicYear] = await Promise.all([
+        db.academicClass.findUnique({ where: { code: classCode } }),
+        db.academicYear.findUnique({ where: { code: academicYearCode } })
+      ]);
+      if (!classroom || !academicYear) return fail(res, 422, "REFERENCE_NOT_FOUND", "Kode kelas atau tahun ajaran tidak ditemukan.");
+      if (classroom.academicYearId !== academicYear.id) {
+        return fail(res, 422, "ENROLLMENT_YEAR_MISMATCH", "Tahun ajaran tidak sesuai dengan kelas yang dipilih.");
+      }
+      targetEnrollment = { classId: classroom.id, academicYearId: academicYear.id };
+    }
+    try {
+      const updated = await db.$transaction(async (tx) => {
+        const saved = await tx.coreStudent.update({
+          where: { id },
+          data: { nisn, nis, fullName, email, phone, gender, birthPlace, birthDate, status }
+        });
+        if (student.userId) {
+          await tx.coreUser.update({
+            where: { id: student.userId },
+            data: {
+              email: email || studentAccountEmail(nis),
+              fullName,
+              ...status !== "ACTIVE" ? { status: "DISABLED" } : {}
+            }
+          });
+        }
+        if (enrollmentId && (!targetEnrollment || (await tx.studentEnrollment.findUnique({ where: { id: enrollmentId }, select: { academicYearId: true } }))?.academicYearId !== targetEnrollment.academicYearId)) {
+          await tx.studentEnrollment.update({
+            where: { id: enrollmentId },
+            data: { status: status === "ARCHIVED" ? "ARCHIVED" : "INACTIVE" }
+          });
+        }
+        if (targetEnrollment) {
+          await tx.studentEnrollment.upsert({
+            where: { studentId_academicYearId: { studentId: id, academicYearId: targetEnrollment.academicYearId } },
+            update: { classId: targetEnrollment.classId, status },
+            create: { studentId: id, ...targetEnrollment, status }
+          });
+        }
+        await tx.coreAuditLog.create({
+          data: {
+            action: "MASTER_UPDATE",
+            entity: "CoreStudent",
+            entityId: id,
+            actor: "ADMIN_SESSION",
+            metadata: { nis: saved.nis, nisn: saved.nisn, fullName: saved.fullName }
+          }
+        });
+        return saved;
+      });
+      const studentWithEnrollment = await db.coreStudent.findUnique({
+        where: { id: updated.id },
+        include: {
+          enrollments: {
+            where: { status: "ACTIVE" },
+            include: { academicClass: true, academicYear: true },
+            orderBy: { updatedAt: "desc" },
+            take: 1
+          }
+        }
+      });
+      return ok(res, studentWithEnrollment || updated);
+    } catch (error) {
+      if (error?.code === "P2002") return fail(res, 409, "DUPLICATE_STUDENT_DATA", "NIS, NISN, atau email akun sudah digunakan.");
+      if (error?.code === "P2025") return fail(res, 404, "STUDENT_NOT_FOUND", "Data siswa tidak ditemukan.");
+      throw error;
+    }
+  });
+  app2.delete("/api/v1/akademik/siswa", requireAuth2, async (req, res) => {
+    if (!await confirmAdminPassword(req, res)) return;
+    const ids = Array.isArray(req.body?.ids) ? [...new Set(req.body.ids.filter((value) => typeof value === "string").map((value) => clean(value)).filter(Boolean))] : [];
+    if (!ids.length || ids.length > 100) {
+      return fail(res, 400, "INVALID_STUDENT_SELECTION", "Pilih antara 1 sampai 100 siswa untuk dihapus.");
+    }
+    try {
+      const deletedCount = await db.$transaction(async (tx) => {
+        const students = await tx.coreStudent.findMany({
+          where: { id: { in: ids } },
+          include: {
+            enrollments: { select: { id: true } },
+            pilketosVotes: { select: { id: true } }
+          }
+        });
+        if (students.length !== ids.length) {
+          throw Object.assign(new Error("Sebagian data siswa tidak ditemukan. Tidak ada data yang dihapus."), { code: "STUDENT_NOT_FOUND" });
+        }
+        const linkedUserIds = students.map((item) => item.userId).filter((value) => Boolean(value));
+        if (linkedUserIds.length) {
+          await tx.coreUser.updateMany({ where: { id: { in: linkedUserIds } }, data: { status: "DISABLED" } });
+        }
+        for (const item of students) {
+          await tx.coreAuditLog.create({
+            data: {
+              action: "MASTER_DELETE",
+              entity: "CoreStudent",
+              entityId: item.id,
+              actor: "ADMIN_SESSION",
+              metadata: {
+                nis: item.nis,
+                nisn: item.nisn,
+                fullName: item.fullName,
+                deletedEnrollments: item.enrollments.length,
+                deletedPilketosVotes: item.pilketosVotes.length
+              }
+            }
+          });
+        }
+        await tx.coreStudent.deleteMany({ where: { id: { in: ids } } });
+        return students.length;
+      });
+      return ok(res, { deletedCount });
+    } catch (error) {
+      if (error?.code === "STUDENT_NOT_FOUND") return fail(res, 404, "STUDENT_NOT_FOUND", error.message);
       throw error;
     }
   });
@@ -844612,6 +844837,22 @@ async function loadSubmissions(req, limit = PAGE_SIZE_MAX) {
 function route(handler) {
   return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 }
+function uploadSingle(fieldName) {
+  const parseFile = upload.single(fieldName);
+  return (req, res, next) => {
+    parseFile(req, res, (error) => {
+      if (!error) return next();
+      if (error instanceof import_multer.default.MulterError) {
+        if (error.code === "LIMIT_FILE_SIZE") {
+          const maxFileSizeMb = HARD_MAX_FILE_BYTES / (1024 * 1024);
+          return fail2(res, 413, "FILE_TOO_LARGE", `Ukuran file melebihi batas teknis maksimal ${maxFileSizeMb} MB per berkas.`);
+        }
+        return fail2(res, 400, "INVALID_UPLOAD", "Permintaan unggah tidak valid. Pastikan satu berkas dikirim untuk setiap permintaan.");
+      }
+      return next(error);
+    });
+  };
+}
 function registerDiklatRoutes(app2, requireAuth2) {
   const admin = requireAuth2;
   app2.get(`${API}/public/overview`, route(async (_req, res) => {
@@ -844777,7 +845018,7 @@ function registerDiklatRoutes(app2, requireAuth2) {
     if (!submission) return fail2(res, 404, "SUBMISSION_NOT_FOUND", "File pengumpulan tidak ditemukan.");
     return streamDriveFile(res, submission.driveFile);
   }));
-  app2.post(`${API}/public/submissions`, submissionRateLimit, upload.single("file"), route(async (req, res) => {
+  app2.post(`${API}/public/submissions`, submissionRateLimit, uploadSingle("file"), route(async (req, res) => {
     const settings = await ensureSettings();
     if (!settings.submissionsEnabled) return fail2(res, 403, "SUBMISSIONS_CLOSED", "Pengumpulan tugas sedang ditutup.");
     const trainingId = clean2(req.body?.trainingId, 100);
@@ -845029,7 +845270,7 @@ function registerDiklatRoutes(app2, requireAuth2) {
     await audit2("ADMIN_SESSION", "DIKLAT_TASK_TYPE_DELETED", "DiklatTaskType", id);
     return ok2(res, { deleted: true });
   }));
-  app2.post(`${API}/admin/trainings/:id/documents`, admin, upload.single("file"), route(async (req, res) => {
+  app2.post(`${API}/admin/trainings/:id/documents`, admin, uploadSingle("file"), route(async (req, res) => {
     const training = await db.diklatTraining.findUnique({ where: { id: clean2(req.params.id, 100) } });
     const type = clean2(req.body?.type, 20).toUpperCase();
     const title = clean2(req.body?.title, 160);

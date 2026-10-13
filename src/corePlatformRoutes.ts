@@ -85,7 +85,10 @@ function pilketosRateLimit(scope: "identify" | "status" | "vote", perIdentifierL
 
     const identifier = clean(req.body?.identifier).toUpperCase();
     const identifierHash = crypto.createHash("sha256").update(identifier || "__missing__").digest("hex");
-    const source = req.socket.remoteAddress || "unknown";
+    const sessionToken = (req.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
+    const source = sessionToken
+      ? crypto.createHash("sha256").update(sessionToken).digest("hex")
+      : req.socket.remoteAddress || "unknown";
     const keys = [
       { key: `source:${source}`, limit: PILKETOS_RATE_PER_SOURCE },
       { key: `${scope}:${identifierHash}`, limit: perIdentifierLimit },
@@ -598,6 +601,56 @@ function moduleScope(actor: LmsActor) {
 }
 
 export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddleware, getAdminPassword: AdminPasswordProvider) {
+  const adminPasswordAttempts = new Map<string, { count: number; windowEndsAt: number; blockedUntil: number }>();
+  const confirmAdminPassword = async (req: Request, res: Response) => {
+    const suppliedPassword = typeof req.body?.adminPassword === "string" ? req.body.adminPassword : "";
+    if (!suppliedPassword) {
+      fail(res, 400, "ADMIN_PASSWORD_REQUIRED", "Kata sandi admin wajib diisi untuk mengubah data siswa.");
+      return false;
+    }
+    const source = req.socket.remoteAddress || "unknown";
+    const now = Date.now();
+    const attempt = adminPasswordAttempts.get(source);
+    if (attempt && attempt.blockedUntil > now) {
+      const secondsLeft = Math.ceil((attempt.blockedUntil - now) / 1000);
+      res.setHeader("Retry-After", String(secondsLeft));
+      fail(res, 429, "ADMIN_PASSWORD_RATE_LIMITED", `Terlalu banyak percobaan. Coba lagi dalam ${secondsLeft} detik.`);
+      return false;
+    }
+
+    let currentPassword: string | null;
+    try {
+      currentPassword = await getAdminPassword();
+    } catch {
+      fail(res, 503, "ADMIN_CREDENTIALS_UNAVAILABLE", "Kata sandi admin tidak dapat diverifikasi saat ini.");
+      return false;
+    }
+    if (!currentPassword) {
+      fail(res, 503, "ADMIN_CREDENTIALS_UNAVAILABLE", "Akun admin belum dikonfigurasi.");
+      return false;
+    }
+    if (!safeTextEqual(suppliedPassword, currentPassword)) {
+      const current = attempt && attempt.windowEndsAt > now
+        ? attempt
+        : { count: 0, windowEndsAt: now + 60_000, blockedUntil: 0 };
+      current.count += 1;
+      if (current.count >= 5) {
+        current.count = 0;
+        current.blockedUntil = now + 60_000;
+      }
+      adminPasswordAttempts.set(source, current);
+      while (adminPasswordAttempts.size > 10_000) {
+        const oldest = adminPasswordAttempts.keys().next().value;
+        if (!oldest) break;
+        adminPasswordAttempts.delete(oldest);
+      }
+      fail(res, 403, "INVALID_ADMIN_PASSWORD", "Kata sandi admin salah. Tidak ada data yang diubah.");
+      return false;
+    }
+    adminPasswordAttempts.delete(source);
+    return true;
+  };
+
   app.get("/api/v1/pilketos/active", async (req, res) => {
     // The public landing page also needs to preview candidates while the
     // committee is still preparing a draft. Prefer the live election, then
@@ -1123,7 +1176,20 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
       db.subject.findMany({ where: contains ? { OR: [{ code: contains }, { name: contains }] } : undefined, include: { department: true }, orderBy: { code: "asc" } }),
       db.academicClass.findMany({ where: contains ? { OR: [{ code: contains }, { name: contains }] } : undefined, include: { academicYear: true, department: true }, orderBy: { code: "asc" } }),
       db.coreTeacher.findMany({ where: contains ? { OR: [{ nip: contains }, { fullName: contains }] } : undefined, orderBy: { nip: "asc" }, skip: (page - 1) * pageSize, take: pageSize }),
-      db.coreStudent.findMany({ where: contains ? { OR: [{ nisn: contains }, { nis: contains }, { fullName: contains }] } : undefined, orderBy: { nisn: "asc" }, skip: (page - 1) * pageSize, take: pageSize }),
+      db.coreStudent.findMany({
+        where: contains ? { OR: [{ nisn: contains }, { nis: contains }, { fullName: contains }] } : undefined,
+        include: {
+          enrollments: {
+            where: { status: "ACTIVE" },
+            include: { academicClass: true, academicYear: true },
+            orderBy: { updatedAt: "desc" },
+            take: 1,
+          },
+        },
+        orderBy: { nisn: "asc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
     ]);
     return ok(res, { academicYears, departments, subjects, classes, teachers, students, page, pageSize, search });
   });
@@ -1212,11 +1278,192 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
         });
         return saved;
       });
-      return res.status(201).json({ success: true, data: student });
+      const studentWithEnrollment = await db.coreStudent.findUnique({
+        where: { id: student.id },
+        include: {
+          enrollments: {
+            where: { status: "ACTIVE" },
+            include: { academicClass: true, academicYear: true },
+            orderBy: { updatedAt: "desc" },
+            take: 1,
+          },
+        },
+      });
+      return res.status(201).json({ success: true, data: studentWithEnrollment || student });
     } catch (error: any) {
       if (error?.code === "P2002" || error?.code === "DUPLICATE_ACCOUNT_EMAIL") {
         return fail(res, 409, "DUPLICATE_STUDENT_DATA", error?.code === "DUPLICATE_ACCOUNT_EMAIL" ? "Email akun sudah digunakan." : "NIS, NISN, atau email akun sudah digunakan.");
       }
+      throw error;
+    }
+  });
+
+  app.patch("/api/v1/akademik/siswa/:id", requireAuth, async (req, res) => {
+    if (!(await confirmAdminPassword(req, res))) return;
+
+    const id = clean(req.params.id);
+    const nisn = clean(req.body.nisn);
+    const nis = clean(req.body.nis);
+    const fullName = clean(req.body.fullName || req.body.namaLengkap);
+    const email = clean(req.body.email).toLowerCase() || null;
+    const phone = clean(req.body.phone || req.body.noTelp) || null;
+    const birthPlace = clean(req.body.birthPlace || req.body.tempatLahir) || null;
+    const birthDateInput = clean(req.body.birthDate || req.body.tanggalLahir);
+    const birthDate = parseDate(birthDateInput);
+    const gender = clean(req.body.gender || req.body.jenisKelamin) || null;
+    const status = clean(req.body.status).toUpperCase() || "ACTIVE";
+    const enrollmentId = clean(req.body.enrollmentId) || null;
+    const classCode = clean(req.body.classCode || req.body.kodeKelas);
+    const academicYearCode = clean(req.body.academicYearCode || req.body.kodeTahunAjaran);
+
+    if (!nisn || !nis || !fullName) return fail(res, 400, "REQUIRED_FIELD", "NISN, NIS, dan nama lengkap wajib diisi.");
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail(res, 400, "INVALID_EMAIL", "Format email tidak valid.");
+    if (birthDateInput && !birthDate) return fail(res, 400, "INVALID_BIRTH_DATE", "Tanggal lahir tidak valid.");
+    if (!VALID_STATUSES.has(status)) return fail(res, 400, "INVALID_STATUS", "Status harus ACTIVE, INACTIVE, atau ARCHIVED.");
+    if (Boolean(classCode) !== Boolean(academicYearCode)) return fail(res, 400, "INCOMPLETE_ENROLLMENT", "Kode kelas dan tahun ajaran harus diisi bersama-sama.");
+
+    const [student, duplicate, currentEnrollment] = await Promise.all([
+      db.coreStudent.findUnique({ where: { id }, select: { id: true, userId: true } }),
+      db.coreStudent.findFirst({
+        where: { id: { not: id }, OR: [{ nisn }, { nis }] },
+        select: { nisn: true, nis: true },
+      }),
+      enrollmentId ? db.studentEnrollment.findFirst({ where: { id: enrollmentId, studentId: id }, select: { id: true } }) : Promise.resolve(null),
+    ]);
+    if (!student) return fail(res, 404, "STUDENT_NOT_FOUND", "Data siswa tidak ditemukan.");
+    if (duplicate) {
+      const field = duplicate.nisn === nisn ? "NISN" : "NIS";
+      return fail(res, 409, "DUPLICATE_STUDENT_IDENTIFIER", `${field} sudah digunakan siswa lain.`);
+    }
+    if (enrollmentId && !currentEnrollment) {
+      return fail(res, 409, "ENROLLMENT_CHANGED", "Penempatan siswa berubah. Muat ulang data sebelum menyimpan.");
+    }
+
+    let targetEnrollment: { classId: string; academicYearId: string } | null = null;
+    if (classCode && academicYearCode) {
+      const [classroom, academicYear] = await Promise.all([
+        db.academicClass.findUnique({ where: { code: classCode } }),
+        db.academicYear.findUnique({ where: { code: academicYearCode } }),
+      ]);
+      if (!classroom || !academicYear) return fail(res, 422, "REFERENCE_NOT_FOUND", "Kode kelas atau tahun ajaran tidak ditemukan.");
+      if (classroom.academicYearId !== academicYear.id) {
+        return fail(res, 422, "ENROLLMENT_YEAR_MISMATCH", "Tahun ajaran tidak sesuai dengan kelas yang dipilih.");
+      }
+      targetEnrollment = { classId: classroom.id, academicYearId: academicYear.id };
+    }
+
+    try {
+      const updated = await db.$transaction(async (tx) => {
+        const saved = await tx.coreStudent.update({
+          where: { id },
+          data: { nisn, nis, fullName, email, phone, gender, birthPlace, birthDate, status: status as "ACTIVE" | "INACTIVE" | "ARCHIVED" },
+        });
+
+        if (student.userId) {
+          await tx.coreUser.update({
+            where: { id: student.userId },
+            data: {
+              email: email || studentAccountEmail(nis),
+              fullName,
+              ...(status !== "ACTIVE" ? { status: "DISABLED" as const } : {}),
+            },
+          });
+        }
+
+        if (enrollmentId && (!targetEnrollment || (await tx.studentEnrollment.findUnique({ where: { id: enrollmentId }, select: { academicYearId: true } }))?.academicYearId !== targetEnrollment.academicYearId)) {
+          await tx.studentEnrollment.update({
+            where: { id: enrollmentId },
+            data: { status: status === "ARCHIVED" ? "ARCHIVED" : "INACTIVE" },
+          });
+        }
+        if (targetEnrollment) {
+          await tx.studentEnrollment.upsert({
+            where: { studentId_academicYearId: { studentId: id, academicYearId: targetEnrollment.academicYearId } },
+            update: { classId: targetEnrollment.classId, status: status as "ACTIVE" | "INACTIVE" | "ARCHIVED" },
+            create: { studentId: id, ...targetEnrollment, status: status as "ACTIVE" | "INACTIVE" | "ARCHIVED" },
+          });
+        }
+
+        await tx.coreAuditLog.create({
+          data: {
+            action: "MASTER_UPDATE",
+            entity: "CoreStudent",
+            entityId: id,
+            actor: "ADMIN_SESSION",
+            metadata: { nis: saved.nis, nisn: saved.nisn, fullName: saved.fullName },
+          },
+        });
+        return saved;
+      });
+      const studentWithEnrollment = await db.coreStudent.findUnique({
+        where: { id: updated.id },
+        include: {
+          enrollments: {
+            where: { status: "ACTIVE" },
+            include: { academicClass: true, academicYear: true },
+            orderBy: { updatedAt: "desc" },
+            take: 1,
+          },
+        },
+      });
+      return ok(res, studentWithEnrollment || updated);
+    } catch (error: any) {
+      if (error?.code === "P2002") return fail(res, 409, "DUPLICATE_STUDENT_DATA", "NIS, NISN, atau email akun sudah digunakan.");
+      if (error?.code === "P2025") return fail(res, 404, "STUDENT_NOT_FOUND", "Data siswa tidak ditemukan.");
+      throw error;
+    }
+  });
+
+  app.delete("/api/v1/akademik/siswa", requireAuth, async (req, res) => {
+    if (!(await confirmAdminPassword(req, res))) return;
+
+    const ids: string[] = Array.isArray(req.body?.ids)
+      ? [...new Set((req.body.ids as unknown[]).filter((value): value is string => typeof value === "string").map((value) => clean(value)).filter(Boolean))]
+      : [];
+    if (!ids.length || ids.length > 100) {
+      return fail(res, 400, "INVALID_STUDENT_SELECTION", "Pilih antara 1 sampai 100 siswa untuk dihapus.");
+    }
+
+    try {
+      const deletedCount = await db.$transaction(async (tx) => {
+        const students = await tx.coreStudent.findMany({
+          where: { id: { in: ids } },
+          include: {
+            enrollments: { select: { id: true } },
+            pilketosVotes: { select: { id: true } },
+          },
+        });
+        if (students.length !== ids.length) {
+          throw Object.assign(new Error("Sebagian data siswa tidak ditemukan. Tidak ada data yang dihapus."), { code: "STUDENT_NOT_FOUND" });
+        }
+
+        const linkedUserIds = students.map((item) => item.userId).filter((value): value is string => Boolean(value));
+        if (linkedUserIds.length) {
+          await tx.coreUser.updateMany({ where: { id: { in: linkedUserIds } }, data: { status: "DISABLED" } });
+        }
+        for (const item of students) {
+          await tx.coreAuditLog.create({
+            data: {
+              action: "MASTER_DELETE",
+              entity: "CoreStudent",
+              entityId: item.id,
+              actor: "ADMIN_SESSION",
+              metadata: {
+                nis: item.nis,
+                nisn: item.nisn,
+                fullName: item.fullName,
+                deletedEnrollments: item.enrollments.length,
+                deletedPilketosVotes: item.pilketosVotes.length,
+              },
+            },
+          });
+        }
+        await tx.coreStudent.deleteMany({ where: { id: { in: ids } } });
+        return students.length;
+      });
+      return ok(res, { deletedCount });
+    } catch (error: any) {
+      if (error?.code === "STUDENT_NOT_FOUND") return fail(res, 404, "STUDENT_NOT_FOUND", error.message);
       throw error;
     }
   });
