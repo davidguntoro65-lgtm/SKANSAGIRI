@@ -86236,7 +86236,7 @@ var init_referrer = __esm({
 });
 
 // node_modules/node-fetch/src/request.js
-var import_node_url, import_node_util3, INTERNALS3, isRequest, doBadDataWarn, Request, getNodeRequestOptions;
+var import_node_url, import_node_util3, INTERNALS3, isRequest, doBadDataWarn, Request2, getNodeRequestOptions;
 var init_request = __esm({
   "node_modules/node-fetch/src/request.js"() {
     import_node_url = require("node:url");
@@ -86256,7 +86256,7 @@ var init_request = __esm({
       ".data is not a valid RequestInit property, use .body instead",
       "https://github.com/node-fetch/node-fetch/issues/1000 (request)"
     );
-    Request = class _Request extends Body {
+    Request2 = class _Request extends Body {
       constructor(input, init2 = {}) {
         let parsedURL;
         if (isRequest(input)) {
@@ -86371,7 +86371,7 @@ var init_request = __esm({
         return "Request";
       }
     };
-    Object.defineProperties(Request.prototype, {
+    Object.defineProperties(Request2.prototype, {
       method: { enumerable: true },
       url: { enumerable: true },
       headers: { enumerable: true },
@@ -86462,18 +86462,18 @@ __export(src_exports, {
   File: () => file_default,
   FormData: () => FormData2,
   Headers: () => Headers2,
-  Request: () => Request,
+  Request: () => Request2,
   Response: () => Response2,
   blobFrom: () => blobFrom,
   blobFromSync: () => blobFromSync,
-  default: () => fetch,
+  default: () => fetch2,
   fileFrom: () => fileFrom,
   fileFromSync: () => fileFromSync,
   isRedirect: () => isRedirect
 });
-async function fetch(url, options_) {
+async function fetch2(url, options_) {
   return new Promise((resolve, reject) => {
-    const request = new Request(url, options_);
+    const request = new Request2(url, options_);
     const { parsedURL, options } = getNodeRequestOptions(request);
     if (!supportedSchemas.has(parsedURL.protocol)) {
       throw new TypeError(`node-fetch cannot load ${url}. URL scheme "${parsedURL.protocol.replace(/:$/, "")}" is not supported.`);
@@ -86603,7 +86603,7 @@ async function fetch(url, options_) {
             if (responseReferrerPolicy) {
               requestOptions.referrerPolicy = responseReferrerPolicy;
             }
-            resolve(fetch(new Request(locationURL, requestOptions)));
+            resolve(fetch2(new Request2(locationURL, requestOptions)));
             finalize();
             return;
           }
@@ -840973,6 +840973,369 @@ var require_src14 = __commonJS({
   }
 });
 
+// node_modules/@replit/connectors-sdk/identity.js
+var require_identity = __commonJS({
+  "node_modules/@replit/connectors-sdk/identity.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.resolveAudience = resolveAudience;
+    exports2.createIdentityToken = createIdentityToken;
+    exports2.resolveIdentityToken = resolveIdentityToken;
+    exports2.resolveBaseUrl = resolveBaseUrl;
+    exports2.buildHeaders = buildHeaders;
+    var node_child_process_1 = require("node:child_process");
+    var promises_1 = require("node:timers/promises");
+    var node_util_1 = require("node:util");
+    var execFileAsync = (0, node_util_1.promisify)(node_child_process_1.execFile);
+    var DEFAULT_CONNECTORS_HOST = "connectors.replit.com";
+    var DEPLOYMENT_IDENTITY_ENDPOINT = "http://127.0.0.1:1105/getIdentityToken";
+    var IDENTITY_MINT_TIMEOUT_MS = 5e3;
+    var IDENTITY_MINT_RETRY_DELAY_MS = 250;
+    var TransientLocalIdentityError = class extends Error {
+    };
+    function isDeploymentEnvironment() {
+      if (process.env["REPLIT_CONRUN"])
+        return false;
+      return [
+        "REPLIT_DEPLOYMENT_ID",
+        "REPLIT_DEPLOYMENT_ENVIRONMENT",
+        "WEB_REPL_RENEWAL"
+      ].some((name2) => Boolean(process.env[name2]));
+    }
+    function resolveAudience() {
+      const audience = process.env["REPLIT_CONNECTORS_AUDIENCE"];
+      if (audience) {
+        if (audience.startsWith("http://") || audience.startsWith("https://")) {
+          return audience;
+        }
+        return `https://${audience}`;
+      }
+      return `https://${DEFAULT_CONNECTORS_HOST}`;
+    }
+    async function createIdentityToken() {
+      const replitBinary = process.env["REPLIT_CLI"] || "replit";
+      const audience = resolveAudience();
+      const { stdout } = await execFileAsync(replitBinary, ["identity", "create", "--audience", audience], {
+        encoding: "utf8",
+        timeout: IDENTITY_MINT_TIMEOUT_MS,
+        windowsHide: true
+      });
+      const token = stdout.trim();
+      if (!token) {
+        throw new Error(`replit identity create returned an empty token (audience: ${audience})`);
+      }
+      return token;
+    }
+    async function createIdentityTokenFromLocalEndpoint(timeoutMs) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        let response;
+        try {
+          response = await fetch(DEPLOYMENT_IDENTITY_ENDPOINT, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ audience: resolveAudience() }),
+            signal: controller.signal
+          });
+        } catch (cause) {
+          if (cause instanceof TypeError) {
+            throw new TransientLocalIdentityError("local identity endpoint is not accepting connections");
+          }
+          throw cause;
+        }
+        if (!response.ok) {
+          const message = `local identity endpoint returned HTTP ${response.status}`;
+          if (response.status >= 500) {
+            throw new TransientLocalIdentityError(message);
+          }
+          throw new Error(message);
+        }
+        const payload = await response.json();
+        if (typeof payload.identityToken !== "string") {
+          throw new Error("local identity endpoint returned an invalid response");
+        }
+        const token = payload.identityToken.trim();
+        if (!token) {
+          throw new Error("local identity endpoint returned an empty token");
+        }
+        return token;
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+    async function createDeploymentIdentityToken() {
+      const deadline = Date.now() + IDENTITY_MINT_TIMEOUT_MS;
+      try {
+        return await createIdentityToken();
+      } catch {
+      }
+      do {
+        const remainingMs = Math.max(1, deadline - Date.now());
+        try {
+          return await createIdentityTokenFromLocalEndpoint(remainingMs);
+        } catch (cause) {
+          if (!(cause instanceof TransientLocalIdentityError))
+            break;
+        }
+        const retryBudgetMs = deadline - Date.now();
+        if (retryBudgetMs <= 0)
+          break;
+        await (0, promises_1.setTimeout)(Math.min(IDENTITY_MINT_RETRY_DELAY_MS, retryBudgetMs));
+      } while (Date.now() < deadline);
+      throw new Error("Could not mint an audience-scoped deployment identity. Neither `replit identity create` nor the local hostingpid1 identity endpoint is available. Raw WEB_REPL_RENEWAL credentials are not accepted.");
+    }
+    async function resolveIdentityToken() {
+      if (isDeploymentEnvironment()) {
+        return `depl ${await createDeploymentIdentityToken()}`;
+      }
+      try {
+        const token = await createIdentityToken();
+        return token;
+      } catch {
+      }
+      const replIdentity = process.env["REPL_IDENTITY"];
+      if (replIdentity) {
+        return `repl ${replIdentity}`;
+      }
+      throw new Error("Replit identity token not found. Could not run `replit identity create` and REPL_IDENTITY is not set in the environment. Are you running this inside a Repl?");
+    }
+    function resolveBaseUrl() {
+      const hostname = process.env["REPLIT_CONNECTORS_HOSTNAME"];
+      if (hostname) {
+        if (hostname.startsWith("http://") || hostname.startsWith("https://")) {
+          return hostname;
+        }
+        return `https://${hostname}`;
+      }
+      return `https://${DEFAULT_CONNECTORS_HOST}`;
+    }
+    async function buildHeaders() {
+      const token = await resolveIdentityToken();
+      const headers = {
+        Accept: "application/json"
+      };
+      if (token.startsWith("repl ") || token.startsWith("depl ")) {
+        headers["X-Replit-Token"] = token;
+      } else {
+        headers["Replit-Authentication"] = `Bearer ${token}`;
+      }
+      return headers;
+    }
+  }
+});
+
+// node_modules/@replit/connectors-sdk/client.js
+var require_client6 = __commonJS({
+  "node_modules/@replit/connectors-sdk/client.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.ReplitConnectors = void 0;
+    var identity_1 = require_identity();
+    function resolveProxyTarget(url, proxyBase) {
+      if (url.startsWith(proxyBase)) {
+        return url;
+      }
+      if (url.startsWith("http://") || url.startsWith("https://")) {
+        const parsed = new URL(url);
+        return `${proxyBase}${parsed.pathname}${parsed.search}`;
+      }
+      return `${proxyBase}${url.startsWith("/") ? "" : "/"}${url}`;
+    }
+    function flattenHeaders(headers) {
+      if (!headers) {
+        return {};
+      }
+      const result = {};
+      if (headers instanceof Headers) {
+        headers.forEach((value, key) => {
+          result[key] = value;
+        });
+      } else if (Array.isArray(headers)) {
+        for (const pair of headers) {
+          result[pair[0]] = pair[1];
+        }
+      } else {
+        Object.assign(result, headers);
+      }
+      return result;
+    }
+    var dbxCompoundTokenStrategy = ({ baseUrl, connectorName, connectionId, rawIdentityToken }) => ({
+      host: baseUrl,
+      token: `${rawIdentityToken} dbx:${connectionId}`,
+      connectorName
+    });
+    var pathRouteStrategy = ({ baseUrl, connectorName, connectionId, rawIdentityToken }) => ({
+      host: `${baseUrl}/api/v2/cli-proxy/${connectorName}/${connectionId}`,
+      token: rawIdentityToken,
+      connectorName
+    });
+    var CLI_CONFIG_STRATEGIES = {
+      databricks: dbxCompoundTokenStrategy,
+      "databricks-m2m": dbxCompoundTokenStrategy,
+      "microsoft-fabric": pathRouteStrategy,
+      datadog: pathRouteStrategy
+    };
+    var ReplitConnectors2 = class {
+      constructor(options) {
+        this.baseUrl = options?.baseUrl ?? (0, identity_1.resolveBaseUrl)();
+      }
+      async proxy(connectorName, path3, options) {
+        const method = options?.method ?? "GET";
+        const normalizedPath = path3.startsWith("/") ? path3 : `/${path3}`;
+        const url = `${this.getProxyUrl()}${normalizedPath}`;
+        const headers = {
+          ...await (0, identity_1.buildHeaders)(),
+          "Connector-Name": connectorName,
+          ...options?.headers ?? {}
+        };
+        const init2 = { method, headers };
+        if (options?.body !== void 0 && options.body !== null) {
+          if (typeof options.body === "string" || typeof Buffer !== "undefined" && options.body instanceof Buffer || options.body instanceof ArrayBuffer || options.body instanceof FormData || options.body instanceof URLSearchParams || options.body instanceof Blob || options.body instanceof ReadableStream) {
+            init2.body = options.body;
+          } else {
+            init2.body = JSON.stringify(options.body);
+            if (!headers["Content-Type"]) {
+              headers["Content-Type"] = "application/json";
+            }
+          }
+        }
+        const response = await fetch(url, init2);
+        if (response.status === 401) {
+          const freshAuth = await (0, identity_1.buildHeaders)();
+          const retryResponse = await fetch(url, {
+            ...init2,
+            headers: { ...headers, ...freshAuth }
+          });
+          return retryResponse;
+        }
+        return response;
+      }
+      async listConnections(options) {
+        const params = new URLSearchParams();
+        if (options?.connector_names) {
+          params.set("connector_names", options.connector_names);
+        }
+        for (const val of options?.expand ?? ["connector"]) {
+          params.append("expand", val);
+        }
+        params.set("refresh_policy", options?.refresh_policy ?? "none");
+        const qs = params.toString();
+        const url = `${this.baseUrl}/api/v2/connection${qs ? `?${qs}` : ""}`;
+        const headers = await (0, identity_1.buildHeaders)();
+        const response = await fetch(url, { method: "GET", headers });
+        if (response.status === 401) {
+          const freshHeaders = await (0, identity_1.buildHeaders)();
+          const retryResponse = await fetch(url, {
+            method: "GET",
+            headers: freshHeaders
+          });
+          if (!retryResponse.ok) {
+            throw new Error(`Failed to list connections: ${retryResponse.status} ${retryResponse.statusText}`);
+          }
+          const data2 = await retryResponse.json();
+          return data2.items ?? [];
+        }
+        if (!response.ok) {
+          throw new Error(`Failed to list connections: ${response.status} ${response.statusText}`);
+        }
+        const data = await response.json();
+        return data.items ?? [];
+      }
+      getProxyUrl() {
+        return `${this.baseUrl}/api/v2/proxy`;
+      }
+      async getProxyHeaders(connectorName) {
+        const headers = await (0, identity_1.buildHeaders)();
+        return { ...headers, "Connector-Name": connectorName };
+      }
+      async getCliConfig(connectorName) {
+        const strategy = CLI_CONFIG_STRATEGIES[connectorName];
+        if (!strategy) {
+          const supported = Object.keys(CLI_CONFIG_STRATEGIES).join(", ");
+          throw new Error(`getCliConfig() is only supported for ${supported}, got: ${connectorName}`);
+        }
+        const connections = await this.listConnections({
+          connector_names: connectorName
+        });
+        const connection = connections[0];
+        if (!connection) {
+          throw new Error(`No ${connectorName} connection found`);
+        }
+        const headers = await (0, identity_1.buildHeaders)();
+        const identityToken = headers["X-Replit-Token"] ?? headers["Replit-Authentication"];
+        if (!identityToken) {
+          throw new Error("Replit identity token not found");
+        }
+        const rawToken = identityToken.replace(/^Bearer\s+/i, "");
+        return strategy({
+          baseUrl: this.baseUrl,
+          connectorName,
+          connectionId: connection.id,
+          rawIdentityToken: rawToken
+        });
+      }
+      createProxyFetch(connectorName) {
+        const proxyBase = this.getProxyUrl();
+        return async (input, init2) => {
+          const rawUrl = input instanceof Request ? input.url : String(input);
+          const targetUrl = resolveProxyTarget(rawUrl, proxyBase);
+          const authHeaders = await (0, identity_1.buildHeaders)();
+          const userHeaders = flattenHeaders(init2?.headers ?? (input instanceof Request ? input.headers : void 0));
+          const headers = {
+            ...authHeaders,
+            "Connector-Name": connectorName,
+            ...userHeaders
+          };
+          const requestDefaults = input instanceof Request ? {
+            method: input.method,
+            body: input.body,
+            cache: input.cache,
+            credentials: input.credentials,
+            integrity: input.integrity,
+            keepalive: input.keepalive,
+            mode: input.mode,
+            redirect: input.redirect,
+            referrer: input.referrer,
+            referrerPolicy: input.referrerPolicy,
+            signal: input.signal,
+            // @ts-expect-error duplex is required for streaming bodies but missing from RequestInit
+            duplex: input.body ? "half" : void 0
+          } : {};
+          const fetchInit = { ...requestDefaults, ...init2, headers };
+          const response = await fetch(targetUrl, fetchInit);
+          if (response.status === 401) {
+            const freshAuth = await (0, identity_1.buildHeaders)();
+            return fetch(targetUrl, {
+              ...fetchInit,
+              headers: {
+                ...freshAuth,
+                "Connector-Name": connectorName,
+                ...userHeaders
+              }
+            });
+          }
+          return response;
+        };
+      }
+    };
+    exports2.ReplitConnectors = ReplitConnectors2;
+  }
+});
+
+// node_modules/@replit/connectors-sdk/index.js
+var require_connectors_sdk = __commonJS({
+  "node_modules/@replit/connectors-sdk/index.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.ReplitConnectors = void 0;
+    var client_1 = require_client6();
+    Object.defineProperty(exports2, "ReplitConnectors", { enumerable: true, get: function() {
+      return client_1.ReplitConnectors;
+    } });
+  }
+});
+
 // node_modules/dotenv/config.js
 (function() {
   require_main().config(
@@ -843624,6 +843987,7 @@ var import_path = __toESM(require("path"), 1);
 var import_stream = require("stream");
 var import_multer = __toESM(require_multer(), 1);
 var import_googleapis = __toESM(require_src14(), 1);
+var import_connectors_sdk = __toESM(require_connectors_sdk(), 1);
 var XLSX2 = __toESM(require_xlsx(), 1);
 var API = "/api/v1/diklat";
 var HARD_MAX_FILE_BYTES = 20 * 1024 * 1024;
@@ -843719,9 +844083,125 @@ function serviceAccountCredentials() {
   }
   return null;
 }
+function isReplitRuntime() {
+  return Boolean(
+    process.env.REPL_ID || process.env.REPL_SLUG || process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DEPLOYMENT_ID || process.env.REPLIT_DEPLOYMENT_ENVIRONMENT || process.env.REPLIT_CONNECTORS_HOSTNAME || process.env.REPL_IDENTITY || process.env.WEB_REPL_RENEWAL
+  );
+}
+function driveConfigured() {
+  return Boolean(serviceAccountCredentials()) || isReplitRuntime();
+}
+function driveQueryPath(pathname, parameters) {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(parameters)) {
+    if (value !== void 0 && value !== null && value !== "") query.set(key, String(value));
+  }
+  const queryString = query.toString();
+  return queryString ? `${pathname}?${queryString}` : pathname;
+}
+async function connectorDriveRequest(pathname, options = {}) {
+  const headers = {};
+  if (options.contentType) headers["Content-Type"] = options.contentType;
+  if (options.download) headers.Accept = "application/octet-stream";
+  const response = await new import_connectors_sdk.ReplitConnectors().proxy("google-drive", pathname, {
+    method: options.method || "GET",
+    headers,
+    body: options.body
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    const error = new Error(payload?.error?.message || `Google Drive returned HTTP ${response.status}.`);
+    error.code = response.status;
+    error.response = { status: response.status, data: payload };
+    throw error;
+  }
+  if (options.download) {
+    return { data: response.body ? import_stream.Readable.fromWeb(response.body) : import_stream.Readable.from([]) };
+  }
+  if (response.status === 204 || options.method === "DELETE") return { data: {} };
+  return { data: await response.json() };
+}
+async function collectMediaBody(body) {
+  if (Buffer.isBuffer(body)) return body;
+  if (body instanceof Uint8Array) return Buffer.from(body);
+  const chunks = [];
+  for await (const chunk of body) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+function getConnectorDriveClient() {
+  const files = {
+    list: (parameters) => connectorDriveRequest(driveQueryPath("/drive/v3/files", parameters)),
+    create: async (parameters) => {
+      const pathname = driveQueryPath("/drive/v3/files", {
+        fields: parameters.fields,
+        supportsAllDrives: parameters.supportsAllDrives
+      });
+      if (!parameters.media?.body) {
+        return connectorDriveRequest(pathname, { method: "POST", body: parameters.requestBody || {} });
+      }
+      const mimeType = parameters.media.mimeType || "application/octet-stream";
+      const boundary = `diklat-${import_crypto2.default.randomBytes(18).toString("hex")}`;
+      const metadata = Buffer.from(
+        `--${boundary}\r
+Content-Type: application/json; charset=UTF-8\r
+\r
+${JSON.stringify(parameters.requestBody || {})}\r
+--${boundary}\r
+Content-Type: ${mimeType}\r
+\r
+`
+      );
+      const media = await collectMediaBody(parameters.media.body);
+      const closingBoundary = Buffer.from(`\r
+--${boundary}--`);
+      return connectorDriveRequest(
+        driveQueryPath("/upload/drive/v3/files", {
+          uploadType: "multipart",
+          fields: parameters.fields,
+          supportsAllDrives: parameters.supportsAllDrives
+        }),
+        {
+          method: "POST",
+          body: Buffer.concat([metadata, media, closingBoundary]),
+          contentType: `multipart/related; boundary=${boundary}`
+        }
+      );
+    },
+    get: (parameters) => {
+      const fileId = encodeURIComponent(String(parameters.fileId || ""));
+      const pathname = driveQueryPath(`/drive/v3/files/${fileId}`, {
+        fields: parameters.fields,
+        alt: parameters.alt,
+        supportsAllDrives: parameters.supportsAllDrives
+      });
+      return connectorDriveRequest(pathname, { download: parameters.alt === "media" });
+    },
+    delete: (parameters) => connectorDriveRequest(
+      driveQueryPath(`/drive/v3/files/${encodeURIComponent(String(parameters.fileId || ""))}`, {
+        supportsAllDrives: parameters.supportsAllDrives
+      }),
+      { method: "DELETE" }
+    )
+  };
+  const permissions = {
+    create: (parameters) => connectorDriveRequest(
+      driveQueryPath(`/drive/v3/files/${encodeURIComponent(String(parameters.fileId || ""))}/permissions`, {
+        fields: parameters.fields,
+        supportsAllDrives: parameters.supportsAllDrives
+      }),
+      { method: "POST", body: parameters.requestBody || {} }
+    )
+  };
+  return { files, permissions };
+}
 function getDriveClient() {
   const credentials = serviceAccountCredentials();
-  if (!credentials) throw new Error("GOOGLE_DRIVE_NOT_CONFIGURED");
+  if (!credentials) {
+    if (isReplitRuntime()) return getConnectorDriveClient();
+    throw new Error("GOOGLE_DRIVE_NOT_CONFIGURED");
+  }
   const auth = new import_googleapis.google.auth.GoogleAuth({
     credentials,
     scopes: ["https://www.googleapis.com/auth/drive"]
@@ -843730,9 +844210,9 @@ function getDriveClient() {
 }
 function driveErrorMessage(error) {
   const code = Number(error?.code || error?.response?.status || 0);
-  if (code === 401) return "Kredensial akun layanan Google Drive tidak valid.";
-  if (code === 403) return "Akses Google Drive ditolak. Pastikan Drive API aktif dan folder dibagikan ke akun layanan.";
-  if (error?.message === "GOOGLE_DRIVE_NOT_CONFIGURED") return "Kredensial Google Drive belum dikonfigurasi di environment server.";
+  if (code === 401) return "Otorisasi Google Drive ditolak. Periksa koneksi Drive Replit atau akun layanan.";
+  if (code === 403) return "Akses Google Drive ditolak. Periksa izin folder, cakupan koneksi, dan kebijakan Drive.";
+  if (error?.message === "GOOGLE_DRIVE_NOT_CONFIGURED") return "Koneksi Google Drive belum tersedia di environment server.";
   return "Google Drive belum dapat dihubungi. Periksa konfigurasi dan coba kembali.";
 }
 async function ensureSettings() {
@@ -843743,7 +844223,12 @@ async function ensureSettings() {
   });
 }
 function publicSettings(settings) {
-  return { title: settings.title, description: settings.description, archiveVisible: settings.archiveVisible };
+  return {
+    title: settings.title,
+    description: settings.description,
+    archiveVisible: settings.archiveVisible,
+    submissionsEnabled: settings.submissionsEnabled
+  };
 }
 function adminSettings(settings) {
   return {
@@ -843754,9 +844239,9 @@ function adminSettings(settings) {
     allowedExtensions: settings.allowedExtensions,
     submissionDriveAccess: settings.submissionDriveAccess,
     rootFolderId: settings.rootFolderId,
-    driveConfigured: !!serviceAccountCredentials(),
+    driveConfigured: driveConfigured(),
     driveConnected: false,
-    driveMessage: serviceAccountCredentials() ? "Koneksi Drive belum diuji." : "GOOGLE_SERVICE_ACCOUNT_JSON belum diatur di environment server."
+    driveMessage: driveConfigured() ? "Koneksi Drive belum diuji." : "Koneksi Google Drive belum tersedia di environment server."
   };
 }
 async function audit2(actor, action, entity, entityId, metadata = {}) {
@@ -844043,13 +844528,12 @@ function submissionWhere(query) {
   const from = clean2(query.dateFrom, 40);
   const to = clean2(query.dateTo, 40);
   if (from) {
-    const parsed = new Date(from);
+    const parsed = /^\d{4}-\d{2}-\d{2}$/.test(from) ? /* @__PURE__ */ new Date(`${from}T00:00:00.000+07:00`) : new Date(from);
     if (!Number.isNaN(parsed.getTime())) range.gte = parsed;
   }
   if (to) {
-    const parsed = new Date(to);
+    const parsed = /^\d{4}-\d{2}-\d{2}$/.test(to) ? /* @__PURE__ */ new Date(`${to}T23:59:59.999+07:00`) : new Date(to);
     if (!Number.isNaN(parsed.getTime())) {
-      parsed.setUTCHours(23, 59, 59, 999);
       range.lte = parsed;
     }
   }
@@ -844095,7 +844579,10 @@ function registerDiklatRoutes(app2, requireAuth2) {
     return ok2(res, {
       settings: publicSettings(settings),
       stats: { publishedTrainings, materials, lkpd, submissions },
-      featured
+      featured: featured.map((item) => ({
+        ...item,
+        acceptsSubmissions: item.acceptsSubmissions && settings.submissionsEnabled
+      }))
     });
   }));
   app2.get(`${API}/public/trainings`, route(async (req, res) => {
@@ -844118,7 +844605,14 @@ function registerDiklatRoutes(app2, requireAuth2) {
       db.diklatTraining.findMany({ where, skip: skip2, take: pageSize, orderBy: [{ sortOrder: "asc" }, { updatedAt: "desc" }] }),
       db.diklatTraining.count({ where })
     ]);
-    return ok2(res, { items: await trainingSummaries(items, true), pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } });
+    const summaries = await trainingSummaries(items, true);
+    return ok2(res, {
+      items: summaries.map((item) => ({
+        ...item,
+        acceptsSubmissions: item.acceptsSubmissions && settings.submissionsEnabled
+      })),
+      pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) }
+    });
   }));
   app2.get(`${API}/public/trainings/:slug`, route(async (req, res) => {
     const settings = await ensureSettings();
@@ -844141,6 +844635,7 @@ function registerDiklatRoutes(app2, requireAuth2) {
     return ok2(res, {
       training: {
         ...summary,
+        acceptsSubmissions: summary.acceptsSubmissions && settings.submissionsEnabled,
         documents: training.documents.map(publicDocumentShape),
         taskTypes: training.taskTypes.map(taskTypeShape)
       }
@@ -844327,8 +844822,8 @@ function registerDiklatRoutes(app2, requireAuth2) {
       db.diklatSubmission.count(),
       db.diklatSubmission.findMany({ take: 8, orderBy: { submittedAt: "desc" }, include: { training: { select: { title: true } }, driveFile: true } })
     ]);
-    let drive = { configured: !!serviceAccountCredentials(), connected: false, message: "" };
-    if (!drive.configured) drive.message = "GOOGLE_SERVICE_ACCOUNT_JSON belum diatur di environment server.";
+    let drive = { configured: driveConfigured(), connected: false, message: "" };
+    if (!drive.configured) drive.message = "Koneksi Google Drive belum tersedia di environment server.";
     else drive.message = "Koneksi Drive belum diuji.";
     return ok2(res, { stats: { trainings, activeTrainings, materials, lkpd, submissions }, recentSubmissions: recent.map(submissionShape), drive });
   }));
@@ -844667,9 +845162,9 @@ function registerDiklatRoutes(app2, requireAuth2) {
       db.diklatDriveFile.count({ where: { verificationStatus: "STORED" } }),
       db.diklatDriveFile.count({ where: { verificationStatus: "MISSING" } })
     ]);
-    const configured = !!serviceAccountCredentials();
+    const configured = driveConfigured();
     let connected = false;
-    let message = configured ? "Koneksi Drive belum diuji." : "GOOGLE_SERVICE_ACCOUNT_JSON belum diatur di environment server.";
+    let message = configured ? "Koneksi Drive belum diuji." : "Koneksi Google Drive belum tersedia di environment server.";
     if (configured) {
       try {
         await getDriveClient().files.list({ pageSize: 1, fields: "files(id)", supportsAllDrives: true, includeItemsFromAllDrives: true });
@@ -844687,7 +845182,7 @@ function registerDiklatRoutes(app2, requireAuth2) {
       db.diklatDriveFile.count({ where: { verificationStatus: "STORED" } }),
       db.diklatDriveFile.count({ where: { verificationStatus: "MISSING" } })
     ]);
-    if (!serviceAccountCredentials()) return fail2(res, 503, "DRIVE_NOT_CONFIGURED", "GOOGLE_SERVICE_ACCOUNT_JSON belum diatur di environment server.");
+    if (!driveConfigured()) return fail2(res, 503, "DRIVE_NOT_CONFIGURED", "Koneksi Google Drive belum tersedia di environment server.");
     try {
       await getDriveClient().files.list({ pageSize: 1, fields: "files(id)", supportsAllDrives: true, includeItemsFromAllDrives: true });
       await audit2("ADMIN_SESSION", "DIKLAT_DRIVE_CONNECTION_TESTED", "DiklatDriveFile", void 0, { connected: true });
@@ -844699,8 +845194,8 @@ function registerDiklatRoutes(app2, requireAuth2) {
     }
   }));
   app2.post(`${API}/admin/drive/reconcile`, admin, route(async (req, res) => {
-    if (!serviceAccountCredentials()) {
-      return fail2(res, 503, "DRIVE_NOT_CONFIGURED", "GOOGLE_SERVICE_ACCOUNT_JSON belum diatur di environment server.");
+    if (!driveConfigured()) {
+      return fail2(res, 503, "DRIVE_NOT_CONFIGURED", "Koneksi Google Drive belum tersedia di environment server.");
     }
     const cursor = clean2(req.body?.cursor, 100);
     const where = {

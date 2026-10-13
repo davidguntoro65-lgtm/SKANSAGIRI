@@ -160,7 +160,7 @@ function DocumentRow({ item }: { item: DocumentItem }) {
 
 export default function PusatDiklat() {
   const path = useLocation();
-  const [overview, setOverview] = useState<{ settings: { title: string; description: string; archiveVisible: boolean }; stats: { publishedTrainings: number; materials: number; lkpd: number; submissions: number }; featured: Training[] } | null>(null);
+  const [overview, setOverview] = useState<{ settings: { title: string; description: string; archiveVisible: boolean; submissionsEnabled: boolean }; stats: { publishedTrainings: number; materials: number; lkpd: number; submissions: number }; featured: Training[] } | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(true);
   const [overviewError, setOverviewError] = useState("");
   const [trainings, setTrainings] = useState<Training[]>([]);
@@ -454,7 +454,7 @@ export default function PusatDiklat() {
               <p className="mt-3 max-w-xl text-sm leading-7 text-[#aebfc8]">{overview?.settings.description || "Akses bahan pembelajaran dan kirim tugas kegiatan pengembangan kompetensi melalui portal digital sekolah."}</p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <button onClick={() => visit(`${root}?tab=jelajahi`)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#e9cb83] px-5 py-3.5 text-sm font-extrabold text-[#1f3b53] transition hover:bg-[#f0d994]">Jelajahi diklat <ArrowRight size={16} /></button>
-                <button onClick={() => openSubmission()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/25 px-5 py-3.5 text-sm font-bold text-[#e0e7eb] transition hover:bg-white/10"><Send size={15} /> Kirim tugas</button>
+                 {overview?.settings.submissionsEnabled && <button onClick={() => openSubmission()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/25 px-5 py-3.5 text-sm font-bold text-[#e0e7eb] transition hover:bg-white/10"><Send size={15} /> Kirim tugas</button>}
               </div>
             </div>
             <div className="relative mx-auto w-full max-w-[410px]">

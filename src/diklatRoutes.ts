@@ -4,6 +4,7 @@ import { Readable } from "stream";
 import type { Express, NextFunction, Request, Response } from "express";
 import multer from "multer";
 import { google } from "googleapis";
+import { ReplitConnectors } from "@replit/connectors-sdk";
 import * as XLSX from "xlsx";
 import { db } from "./db";
 
@@ -139,9 +140,134 @@ function serviceAccountCredentials(): Record<string, unknown> | null {
   return null;
 }
 
-function getDriveClient() {
+function isReplitRuntime() {
+  return Boolean(
+    process.env.REPL_ID || process.env.REPL_SLUG || process.env.REPLIT_DEV_DOMAIN ||
+    process.env.REPLIT_DEPLOYMENT_ID || process.env.REPLIT_DEPLOYMENT_ENVIRONMENT ||
+    process.env.REPLIT_CONNECTORS_HOSTNAME || process.env.REPL_IDENTITY ||
+    process.env.WEB_REPL_RENEWAL,
+  );
+}
+
+function driveConfigured() {
+  return Boolean(serviceAccountCredentials()) || isReplitRuntime();
+}
+
+function driveQueryPath(pathname: string, parameters: Record<string, unknown>) {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(parameters)) {
+    if (value !== undefined && value !== null && value !== "") query.set(key, String(value));
+  }
+  const queryString = query.toString();
+  return queryString ? `${pathname}?${queryString}` : pathname;
+}
+
+async function connectorDriveRequest(
+  pathname: string,
+  options: { method?: string; body?: unknown; contentType?: string; download?: boolean } = {},
+) {
+  const headers: Record<string, string> = {};
+  if (options.contentType) headers["Content-Type"] = options.contentType;
+  if (options.download) headers.Accept = "application/octet-stream";
+  const response = await new ReplitConnectors().proxy("google-drive", pathname, {
+    method: options.method || "GET",
+    headers,
+    body: options.body,
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({})) as any;
+    const error = new Error(payload?.error?.message || `Google Drive returned HTTP ${response.status}.`) as any;
+    error.code = response.status;
+    error.response = { status: response.status, data: payload };
+    throw error;
+  }
+  if (options.download) {
+    return { data: response.body ? Readable.fromWeb(response.body as any) : Readable.from([]) };
+  }
+  if (response.status === 204 || options.method === "DELETE") return { data: {} };
+  return { data: await response.json() };
+}
+
+async function collectMediaBody(body: unknown): Promise<Buffer> {
+  if (Buffer.isBuffer(body)) return body;
+  if (body instanceof Uint8Array) return Buffer.from(body);
+  const chunks: Buffer[] = [];
+  for await (const chunk of body as AsyncIterable<Buffer | Uint8Array | string>) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+
+function getConnectorDriveClient() {
+  const files = {
+    list: (parameters: Record<string, unknown>) =>
+      connectorDriveRequest(driveQueryPath("/drive/v3/files", parameters)),
+    create: async (parameters: any) => {
+      const pathname = driveQueryPath("/drive/v3/files", {
+        fields: parameters.fields,
+        supportsAllDrives: parameters.supportsAllDrives,
+      });
+      if (!parameters.media?.body) {
+        return connectorDriveRequest(pathname, { method: "POST", body: parameters.requestBody || {} });
+      }
+
+      const mimeType = parameters.media.mimeType || "application/octet-stream";
+      const boundary = `diklat-${crypto.randomBytes(18).toString("hex")}`;
+      const metadata = Buffer.from(
+        `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(parameters.requestBody || {})}\r\n` +
+        `--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`,
+      );
+      const media = await collectMediaBody(parameters.media.body);
+      const closingBoundary = Buffer.from(`\r\n--${boundary}--`);
+      return connectorDriveRequest(
+        driveQueryPath("/upload/drive/v3/files", {
+          uploadType: "multipart",
+          fields: parameters.fields,
+          supportsAllDrives: parameters.supportsAllDrives,
+        }),
+        {
+          method: "POST",
+          body: Buffer.concat([metadata, media, closingBoundary]),
+          contentType: `multipart/related; boundary=${boundary}`,
+        },
+      );
+    },
+    get: (parameters: Record<string, unknown>) => {
+      const fileId = encodeURIComponent(String(parameters.fileId || ""));
+      const pathname = driveQueryPath(`/drive/v3/files/${fileId}`, {
+        fields: parameters.fields,
+        alt: parameters.alt,
+        supportsAllDrives: parameters.supportsAllDrives,
+      });
+      return connectorDriveRequest(pathname, { download: parameters.alt === "media" });
+    },
+    delete: (parameters: Record<string, unknown>) =>
+      connectorDriveRequest(
+        driveQueryPath(`/drive/v3/files/${encodeURIComponent(String(parameters.fileId || ""))}`, {
+          supportsAllDrives: parameters.supportsAllDrives,
+        }),
+        { method: "DELETE" },
+      ),
+  };
+  const permissions = {
+    create: (parameters: any) =>
+      connectorDriveRequest(
+        driveQueryPath(`/drive/v3/files/${encodeURIComponent(String(parameters.fileId || ""))}/permissions`, {
+          fields: parameters.fields,
+          supportsAllDrives: parameters.supportsAllDrives,
+        }),
+        { method: "POST", body: parameters.requestBody || {} },
+      ),
+  };
+  return { files, permissions };
+}
+
+function getDriveClient(): any {
   const credentials = serviceAccountCredentials();
-  if (!credentials) throw new Error("GOOGLE_DRIVE_NOT_CONFIGURED");
+  if (!credentials) {
+    if (isReplitRuntime()) return getConnectorDriveClient();
+    throw new Error("GOOGLE_DRIVE_NOT_CONFIGURED");
+  }
   const auth = new google.auth.GoogleAuth({
     credentials: credentials as any,
     scopes: ["https://www.googleapis.com/auth/drive"],
@@ -151,9 +277,9 @@ function getDriveClient() {
 
 function driveErrorMessage(error: unknown) {
   const code = Number((error as any)?.code || (error as any)?.response?.status || 0);
-  if (code === 401) return "Kredensial akun layanan Google Drive tidak valid.";
-  if (code === 403) return "Akses Google Drive ditolak. Pastikan Drive API aktif dan folder dibagikan ke akun layanan.";
-  if ((error as any)?.message === "GOOGLE_DRIVE_NOT_CONFIGURED") return "Kredensial Google Drive belum dikonfigurasi di environment server.";
+  if (code === 401) return "Otorisasi Google Drive ditolak. Periksa koneksi Drive Replit atau akun layanan.";
+  if (code === 403) return "Akses Google Drive ditolak. Periksa izin folder, cakupan koneksi, dan kebijakan Drive.";
+  if ((error as any)?.message === "GOOGLE_DRIVE_NOT_CONFIGURED") return "Koneksi Google Drive belum tersedia di environment server.";
   return "Google Drive belum dapat dihubungi. Periksa konfigurasi dan coba kembali.";
 }
 
@@ -166,7 +292,12 @@ async function ensureSettings(): Promise<ModuleSettings> {
 }
 
 function publicSettings(settings: ModuleSettings) {
-  return { title: settings.title, description: settings.description, archiveVisible: settings.archiveVisible };
+  return {
+    title: settings.title,
+    description: settings.description,
+    archiveVisible: settings.archiveVisible,
+    submissionsEnabled: settings.submissionsEnabled,
+  };
 }
 
 function adminSettings(settings: ModuleSettings) {
@@ -178,9 +309,11 @@ function adminSettings(settings: ModuleSettings) {
     allowedExtensions: settings.allowedExtensions,
     submissionDriveAccess: settings.submissionDriveAccess,
     rootFolderId: settings.rootFolderId,
-    driveConfigured: !!serviceAccountCredentials(),
+    driveConfigured: driveConfigured(),
     driveConnected: false,
-    driveMessage: serviceAccountCredentials() ? "Koneksi Drive belum diuji." : "GOOGLE_SERVICE_ACCOUNT_JSON belum diatur di environment server.",
+    driveMessage: driveConfigured()
+      ? "Koneksi Drive belum diuji."
+      : "Koneksi Google Drive belum tersedia di environment server.",
   };
 }
 
@@ -484,13 +617,12 @@ function submissionWhere(query: Request["query"]) {
   const from = clean(query.dateFrom, 40);
   const to = clean(query.dateTo, 40);
   if (from) {
-    const parsed = new Date(from);
+    const parsed = /^\d{4}-\d{2}-\d{2}$/.test(from) ? new Date(`${from}T00:00:00.000+07:00`) : new Date(from);
     if (!Number.isNaN(parsed.getTime())) range.gte = parsed;
   }
   if (to) {
-    const parsed = new Date(to);
+    const parsed = /^\d{4}-\d{2}-\d{2}$/.test(to) ? new Date(`${to}T23:59:59.999+07:00`) : new Date(to);
     if (!Number.isNaN(parsed.getTime())) {
-      parsed.setUTCHours(23, 59, 59, 999);
       range.lte = parsed;
     }
   }
@@ -542,7 +674,10 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
     return ok(res, {
       settings: publicSettings(settings),
       stats: { publishedTrainings, materials, lkpd, submissions },
-      featured,
+      featured: featured.map((item) => ({
+        ...item,
+        acceptsSubmissions: item.acceptsSubmissions && settings.submissionsEnabled,
+      })),
     });
   }));
 
@@ -566,7 +701,14 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
       db.diklatTraining.findMany({ where, skip, take: pageSize, orderBy: [{ sortOrder: "asc" }, { updatedAt: "desc" }] }),
       db.diklatTraining.count({ where }),
     ]);
-    return ok(res, { items: await trainingSummaries(items, true), pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } });
+    const summaries = await trainingSummaries(items, true);
+    return ok(res, {
+      items: summaries.map((item) => ({
+        ...item,
+        acceptsSubmissions: item.acceptsSubmissions && settings.submissionsEnabled,
+      })),
+      pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
+    });
   }));
 
   app.get(`${API}/public/trainings/:slug`, route(async (req, res) => {
@@ -591,6 +733,7 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
     return ok(res, {
       training: {
         ...summary,
+        acceptsSubmissions: summary.acceptsSubmissions && settings.submissionsEnabled,
         documents: training.documents.map(publicDocumentShape),
         taskTypes: training.taskTypes.map(taskTypeShape),
       },
@@ -783,8 +926,8 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
       db.diklatSubmission.count(),
       db.diklatSubmission.findMany({ take: 8, orderBy: { submittedAt: "desc" }, include: { training: { select: { title: true } }, driveFile: true } }),
     ]);
-    let drive = { configured: !!serviceAccountCredentials(), connected: false, message: "" };
-    if (!drive.configured) drive.message = "GOOGLE_SERVICE_ACCOUNT_JSON belum diatur di environment server.";
+    let drive = { configured: driveConfigured(), connected: false, message: "" };
+    if (!drive.configured) drive.message = "Koneksi Google Drive belum tersedia di environment server.";
     else drive.message = "Koneksi Drive belum diuji.";
     return ok(res, { stats: { trainings, activeTrainings, materials, lkpd, submissions }, recentSubmissions: recent.map(submissionShape), drive });
   }));
@@ -1141,9 +1284,9 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
       db.diklatDriveFile.count({ where: { verificationStatus: "STORED" } }),
       db.diklatDriveFile.count({ where: { verificationStatus: "MISSING" } }),
     ]);
-    const configured = !!serviceAccountCredentials();
+    const configured = driveConfigured();
     let connected = false;
-    let message = configured ? "Koneksi Drive belum diuji." : "GOOGLE_SERVICE_ACCOUNT_JSON belum diatur di environment server.";
+    let message = configured ? "Koneksi Drive belum diuji." : "Koneksi Google Drive belum tersedia di environment server.";
     if (configured) {
       try {
         await getDriveClient().files.list({ pageSize: 1, fields: "files(id)", supportsAllDrives: true, includeItemsFromAllDrives: true });
@@ -1160,7 +1303,7 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
       db.diklatDriveFile.count({ where: { verificationStatus: "STORED" } }),
       db.diklatDriveFile.count({ where: { verificationStatus: "MISSING" } }),
     ]);
-    if (!serviceAccountCredentials()) return fail(res, 503, "DRIVE_NOT_CONFIGURED", "GOOGLE_SERVICE_ACCOUNT_JSON belum diatur di environment server.");
+    if (!driveConfigured()) return fail(res, 503, "DRIVE_NOT_CONFIGURED", "Koneksi Google Drive belum tersedia di environment server.");
     try {
       await getDriveClient().files.list({ pageSize: 1, fields: "files(id)", supportsAllDrives: true, includeItemsFromAllDrives: true });
       await audit("ADMIN_SESSION", "DIKLAT_DRIVE_CONNECTION_TESTED", "DiklatDriveFile", undefined, { connected: true });
@@ -1173,8 +1316,8 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
   }));
 
   app.post(`${API}/admin/drive/reconcile`, admin, route(async (req, res) => {
-    if (!serviceAccountCredentials()) {
-      return fail(res, 503, "DRIVE_NOT_CONFIGURED", "GOOGLE_SERVICE_ACCOUNT_JSON belum diatur di environment server.");
+    if (!driveConfigured()) {
+      return fail(res, 503, "DRIVE_NOT_CONFIGURED", "Koneksi Google Drive belum tersedia di environment server.");
     }
     const cursor = clean(req.body?.cursor, 100);
     const where: any = {
