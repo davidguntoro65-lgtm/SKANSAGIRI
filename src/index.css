@@ -503,6 +503,7 @@ html .diklat-hero h1.diklat-hero-title {
 
 /* Pusat Diklat public landing page */
 .diklat-portal {
+  color-scheme: light;
   background-color: #f7fbff;
   background-image:
     radial-gradient(ellipse at 10% 13%, rgba(190, 220, 250, .34), transparent 34%),
@@ -521,7 +522,7 @@ html .diklat-hero h1.diklat-hero-title {
   background: rgba(235, 245, 255, .72);
 }
 
-.diklat-home-hero {
+.diklat-blue-surface {
   background:
     radial-gradient(ellipse at 78% 5%, rgba(255, 255, 255, .75), transparent 38%),
     linear-gradient(125deg, rgba(221, 239, 255, .94) 0%, rgba(202, 227, 250, .9) 55%, rgba(230, 243, 255, .96) 100%);
@@ -547,6 +548,14 @@ html .diklat-hero h1.diklat-hero-title {
 .diklat-hero-title {
   color: #153651;
   text-wrap: balance;
+}
+
+.diklat-portal h1.diklat-detail-title {
+  color: #153651 !important;
+}
+
+.diklat-portal .diklat-on-blue {
+  color: #fff !important;
 }
 
 .diklat-primary-link,

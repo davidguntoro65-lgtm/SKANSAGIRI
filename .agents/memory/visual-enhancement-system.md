@@ -19,10 +19,10 @@ description: How the 5 enterprise visual features are implemented in the SMKN 1 
 - About → GradientMesh variant="warm" + FloatingShapes + BusinessIllustration
 
 ## Logo Management (Feature 1)
-- Storage: base64 strings in `data/branding.json` (no multer needed)
+- Storage: branding data is stored in the database `Setting` record named `branding`
 - Fields: schoolLogo, schoolLogoDark, schoolLogoLight, schoolFavicon, schoolAppIcon
-- API: GET /api/branding, POST /api/branding (25mb body limit already set)
-- Hook: `src/hooks/useBranding.ts` → useBranding() returns { branding, saveBranding, getLogo(theme) }
+- API: GET /api/branding, POST /api/branding
+- Hook: `src/hooks/useBranding.ts` → useBranding() returns { branding, loading, saveBranding, fetchBranding, getLogo(theme) }
 - getLogo(theme) returns dark-specific or light-specific logo, falling back to schoolLogo
 - Navbar: shows `<img h-10 md:h-12>` if logoUrl exists, else original Landmark icon fallback
 - Footer: shows `<img h-16>` if logoUrl exists, else original layout fallback
@@ -35,4 +35,9 @@ description: How the 5 enterprise visual features are implemented in the SMKN 1 
 - Branding panel uses IIFE pattern: `{activeTab === "branding" && (() => { ... })()}`
 - brandingDraft state holds pending changes; null = no unsaved changes
 
-**Why base64 storage:** Avoids multer/multipart complexity, simpler than file uploads, works with existing 25mb JSON body limit.
+## Pusat Diklat theme
+- Keep the public module on one fixed light theme, independent of the site's global theme. Use the light school-logo variant and pale-blue surfaces with dark text.
+
+**Why:** The user explicitly asked for one consistent theme in Pusat Diklat; global theme text overrides previously made dark text unreadable on its dark detail hero.
+
+**How to apply:** When editing any Pusat Diklat route, do not derive its palette or logo variant from the app-wide theme. Preserve readable contrast on detail pages, forms, and action buttons.

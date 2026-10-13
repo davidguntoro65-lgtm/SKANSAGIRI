@@ -188,7 +188,7 @@ export default function App() {
   }
 
   if (currentPath === "/pusat-diklat") {
-    return <PusatDiklat theme={theme} />;
+    return <PusatDiklat />;
   }
 
   const containerClass = `relative min-h-screen ${theme === "dark" ? "bg-slate-950 text-slate-100" : "bg-white text-slate-900"} font-sans antialiased overflow-x-hidden selection:bg-amber-500 selection:text-slate-950 transition-colors duration-500`;

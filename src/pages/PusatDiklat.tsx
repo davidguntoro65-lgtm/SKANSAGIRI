@@ -69,10 +69,10 @@ function Pill({ children, tint = "slate" }: { children: React.ReactNode; tint?: 
   return <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold tracking-wide ${colors[tint]}`}>{children}</span>;
 }
 
-function PublicHeader({ active, theme }: { active: string; theme: "light" | "dark" }) {
+function PublicHeader({ active }: { active: string }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const { getLogo } = useBranding();
-  const logoUrl = getLogo(theme);
+  const logoUrl = getLogo("light");
   const links = [
     { label: "Beranda", href: root, id: "home" },
     { label: "Materi & LKPD", href: `${root}?tab=materi`, id: "materials" },
@@ -180,7 +180,7 @@ function DocumentRow({ item }: { item: DocumentItem }) {
   </article>;
 }
 
-export default function PusatDiklat({ theme }: { theme: "light" | "dark" }) {
+export default function PusatDiklat() {
   const path = useLocation();
   const [overview, setOverview] = useState<{ settings: { title: string; description: string; archiveVisible: boolean; submissionsEnabled: boolean }; stats: { publishedTrainings: number; materials: number; lkpd: number; submissions: number }; featured: Training[] } | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(true);
@@ -341,7 +341,7 @@ export default function PusatDiklat({ theme }: { theme: "light" | "dark" }) {
   ];
 
   return <div className="diklat-portal relative z-10 min-h-[100dvh] font-sans text-[#183650]">
-    <PublicHeader active={isArchive ? "archive" : isDocumentPage ? "materials" : "home"} theme={theme} />
+    <PublicHeader active={isArchive ? "archive" : isDocumentPage ? "materials" : "home"} />
     <main className="mx-auto max-w-7xl px-5 pb-20 pt-7 sm:px-8 lg:pt-10">
       <div className="mb-7 flex items-center gap-2 text-xs font-medium text-[#82909a]"><button onClick={() => visit(root)} className="hover:text-[#294d69]">Pusat Diklat</button><span>/</span><span>{detailSlug ? (training?.title || "Detail diklat") : isArchive ? "Arsip" : isDocumentPage ? (activeTab === "lkpd" ? "LKPD" : "Materi") : showTrainingList ? "Jelajahi diklat" : "Beranda"}</span></div>
 
@@ -349,17 +349,17 @@ export default function PusatDiklat({ theme }: { theme: "light" | "dark" }) {
         {detailLoading && <div className="mx-auto max-w-4xl animate-pulse rounded-[28px] border border-[#e1e7e8] bg-white p-8 sm:p-12" aria-busy="true"><div className="h-4 w-28 rounded bg-[#e7edef]" /><div className="mt-7 h-9 w-4/5 rounded bg-[#e7edef]" /><div className="mt-5 h-4 w-full rounded bg-[#eef1f2]" /><div className="mt-2 h-4 w-3/4 rounded bg-[#eef1f2]" /></div>}
         {!detailLoading && detailError && <div className="mx-auto max-w-4xl"><Notice title="Detail belum tersedia" message={detailError} retry={() => setDetailRetryKey(value => value + 1)} /></div>}
         {!detailLoading && training && <>
-          <div className="overflow-hidden rounded-[28px] bg-[#173653] text-white">
+          <div className="diklat-blue-surface relative overflow-hidden rounded-[28px] border border-[#b8d5f1]/80">
             <div className="relative px-6 py-9 sm:px-10 sm:py-12 lg:px-14">
-              <div className="pointer-events-none absolute right-[-40px] top-[-100px] h-[360px] w-[360px] rounded-full border border-white/10" />
-              <div className="pointer-events-none absolute right-[30px] top-[-28px] h-[260px] w-[260px] rounded-full border border-white/10" />
-              <div className="relative max-w-3xl"><button onClick={() => visit(root)} className="mb-7 inline-flex items-center gap-2 text-xs font-semibold text-[#c5d3db] hover:text-white"><ArrowLeft size={15} /> Kembali ke daftar</button>
-                <div className="flex flex-wrap items-center gap-2"><Pill tint="gold">{training.category || "Diklat"}</Pill>{training.period && <span className="text-xs text-[#bdcbd3]">{training.period}</span>}</div>
-                <h1 className="mt-5 text-3xl font-extrabold leading-tight tracking-[-.04em] sm:text-5xl">{training.title}</h1>
-                <p className="mt-5 max-w-2xl text-sm leading-7 text-[#c7d4dc] sm:text-base">{training.description || training.summary}</p>
+              <div className="diklat-hero-orbit diklat-hero-orbit--large pointer-events-none absolute right-[-40px] top-[-100px] h-[360px] w-[360px] rounded-full border" />
+              <div className="diklat-hero-orbit diklat-hero-orbit--small pointer-events-none absolute right-[30px] top-[-28px] h-[260px] w-[260px] rounded-full border" />
+              <div className="relative max-w-3xl"><button onClick={() => visit(root)} className="mb-7 inline-flex items-center gap-2 text-xs font-semibold text-[#315b78] hover:text-[#173653]"><ArrowLeft size={15} /> Kembali ke daftar</button>
+                <div className="flex flex-wrap items-center gap-2"><Pill tint="gold">{training.category || "Diklat"}</Pill>{training.period && <span className="text-xs text-[#526f89]">{training.period}</span>}</div>
+                <h1 className="diklat-detail-title mt-5 text-3xl font-extrabold leading-tight tracking-[-.04em] sm:text-5xl">{training.title}</h1>
+                <p className="mt-5 max-w-2xl text-sm leading-7 text-[#49657d] sm:text-base">{training.description || training.summary}</p>
                 <div className="mt-8 flex flex-wrap gap-3">
                   {training.acceptsSubmissions && <button onClick={() => openSubmission(training.slug)} className="inline-flex items-center gap-2 rounded-xl bg-[#e9cb83] px-5 py-3 text-sm font-extrabold text-[#203b52] transition hover:bg-[#f1d997]"><Send size={16} /> Kirim tugas</button>}
-                  <button onClick={() => visit(`${root}?tab=materi`)} className="inline-flex items-center gap-2 rounded-xl border border-white/25 px-5 py-3 text-sm font-bold text-white transition hover:bg-white/10"><BookOpen size={16} /> Jelajahi dokumen</button>
+                  <button onClick={() => visit(`${root}?tab=materi`)} className="inline-flex items-center gap-2 rounded-xl border border-[#8eb6dc] bg-white/50 px-5 py-3 text-sm font-bold text-[#24577f] transition hover:bg-white/85"><BookOpen size={16} /> Jelajahi dokumen</button>
                 </div>
               </div>
             </div>
@@ -374,8 +374,8 @@ export default function PusatDiklat({ theme }: { theme: "light" | "dark" }) {
                 {[["Diklat", receipt.trainingName], ["Nama", receipt.fullName], ...(receipt.nip ? [["NIP", receipt.nip]] : []), ["Instansi", receipt.institution], ["Jenis tugas", receipt.taskName], ["Nama file", receipt.fileName], ["Waktu diterima", fmtDate(receipt.submittedAt)], ["Referensi", receipt.reference], ["Status", receipt.status]].map(([label, value]) => <div key={label}><p className="text-[10px] font-bold uppercase tracking-widest text-[#83918e]">{label}</p><p className="mt-1 break-words text-sm font-bold text-[#2b4a5b]">{value}</p></div>)}
               </div>
                <div className="mt-5 rounded-xl border border-[#e4e8e3] px-4 py-3 text-sm text-[#667770]"><span className="font-bold">Akses file: </span>{receipt.fileAccess === "LINK" && receipt.driveUrl ? "Tautan Google Drive individual aktif sesuai kebijakan penyelenggara." : receipt.secureFileUrl ? "File disimpan secara privat. Tautan ini hanya memberikan akses ke berkas pengiriman Anda." : "File disimpan secara privat. Akses file peserta belum tersedia pada konfigurasi server ini."}</div>
-              {receipt.fileAccess === "LINK" && receipt.driveUrl && <a href={receipt.driveUrl} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#173653] px-5 py-3 text-sm font-bold text-white hover:bg-[#244d6b]"><ArrowDownToLine size={16} /> Lihat file di Google Drive</a>}
-               {receipt.fileAccess === "PRIVATE" && receipt.secureFileUrl && <a href={apiPath(receipt.secureFileUrl)} className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#173653] px-5 py-3 text-sm font-bold text-white hover:bg-[#244d6b]"><ArrowDownToLine size={16} /> Unduh file yang dikirim</a>}
+              {receipt.fileAccess === "LINK" && receipt.driveUrl && <a href={receipt.driveUrl} target="_blank" rel="noreferrer" className="diklat-on-blue mt-5 inline-flex items-center gap-2 rounded-xl bg-[#173653] px-5 py-3 text-sm font-bold text-white hover:bg-[#244d6b]"><ArrowDownToLine size={16} /> Lihat file di Google Drive</a>}
+               {receipt.fileAccess === "PRIVATE" && receipt.secureFileUrl && <a href={apiPath(receipt.secureFileUrl)} className="diklat-on-blue mt-5 inline-flex items-center gap-2 rounded-xl bg-[#173653] px-5 py-3 text-sm font-bold text-white hover:bg-[#244d6b]"><ArrowDownToLine size={16} /> Unduh file yang dikirim</a>}
               <button onClick={() => { setReceipt(null); setSubmissionFile(null); setSubmissionForm({ fullName: "", nip: "", institution: "" }); setIdempotencyKey(newIdempotencyKey()); navigate(`${root}/diklat/${encodeURIComponent(training.slug)}`); }} className="mt-6 block text-sm font-bold text-[#42667c] underline underline-offset-4">Kembali ke detail diklat</button>
             </div> : <div className="mx-auto max-w-3xl">
               <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end"><div><p className="text-[11px] font-extrabold uppercase tracking-[.16em] text-[#8b713e]">Pengumpulan karya</p><h2 className="mt-2 text-2xl font-extrabold text-[#1b3a51]">Kirim tugas diklat</h2><p className="mt-1 text-sm text-[#75828b]">Lengkapi data dan pilih berkas untuk diunggah.</p></div><button onClick={() => navigate(`${root}/diklat/${encodeURIComponent(training.slug)}`)} className="inline-flex items-center gap-1 text-sm font-semibold text-[#71808a] hover:text-[#244d6b]"><X size={15} /> Tutup</button></div>
@@ -409,7 +409,7 @@ export default function PusatDiklat({ theme }: { theme: "light" | "dark" }) {
                   </div>
                 </div>
                 {!activeTasks.length && <div role="status" className="mt-4 rounded-xl border border-[#e8ddc2] bg-[#faf5e9] px-4 py-3 text-sm text-[#745e34]">Belum ada jenis tugas aktif untuk diklat ini. Pengumpulan belum tersedia.</div>}
-                <button disabled={submitting || !activeTasks.length} className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#173653] px-5 py-3.5 text-sm font-extrabold text-white transition hover:bg-[#244d6b] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">{submitting ? "Mengirim berkas…" : <><Send size={16} /> Kirim tugas</>}</button>
+                <button disabled={submitting || !activeTasks.length} className="diklat-on-blue mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#173653] px-5 py-3.5 text-sm font-extrabold text-white transition hover:bg-[#244d6b] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">{submitting ? "Mengirim berkas…" : <><Send size={16} /> Kirim tugas</>}</button>
                 <p className="mt-3 max-w-xl text-xs leading-5 text-[#89949a]"><ShieldCheck size={13} className="mr-1 inline" />Berkas hanya diproses melalui portal dan kebijakan akses ditentukan oleh penyelenggara diklat.</p>
               </form>}
             </div>}
@@ -435,7 +435,7 @@ export default function PusatDiklat({ theme }: { theme: "light" | "dark" }) {
         </>}
       </section> : isDocumentPage ? <section>
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="text-[11px] font-extrabold uppercase tracking-[.19em] text-[#8c7543]">Pustaka diklat</p><h1 className="mt-2 text-3xl font-extrabold tracking-[-.04em] text-[#183650] sm:text-4xl">{activeTab === "lkpd" ? "Lembar kerja peserta" : "Materi pembelajaran"}</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-[#72808a]">Temukan dokumen yang dipublikasikan untuk mendukung kegiatan pengembangan kompetensi.</p></div>
-          <div className="flex rounded-xl border border-[#dce4e5] bg-white p-1"><button onClick={() => visit(`${root}?tab=materi`)} className={`rounded-lg px-4 py-2 text-sm font-bold ${activeTab === "materi" ? "bg-[#173653] text-white" : "text-[#657681]"}`}>Materi</button><button onClick={() => visit(`${root}?tab=lkpd`)} className={`rounded-lg px-4 py-2 text-sm font-bold ${activeTab === "lkpd" ? "bg-[#173653] text-white" : "text-[#657681]"}`}>LKPD</button></div>
+          <div className="flex rounded-xl border border-[#dce4e5] bg-white p-1"><button onClick={() => visit(`${root}?tab=materi`)} className={`rounded-lg px-4 py-2 text-sm font-bold ${activeTab === "materi" ? "diklat-on-blue bg-[#173653] text-white" : "text-[#657681]"}`}>Materi</button><button onClick={() => visit(`${root}?tab=lkpd`)} className={`rounded-lg px-4 py-2 text-sm font-bold ${activeTab === "lkpd" ? "diklat-on-blue bg-[#173653] text-white" : "text-[#657681]"}`}>LKPD</button></div>
         </div>
          <div className="mt-7 grid gap-3 rounded-2xl border border-[#dfe6e7] bg-[#fffefa] p-4 sm:grid-cols-2 lg:grid-cols-[1fr_220px_200px_auto]">
            <div className="relative"><Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#82909a]" /><input value={docQuery} onChange={event => { setDocQuery(event.target.value); setDocListPage(1); }} placeholder="Cari judul atau keterangan dokumen" className="w-full rounded-xl border border-[#dce4e5] bg-white py-3 pl-10 pr-4 text-sm text-[#203c53] outline-none focus:border-[#68879a]" /></div>
@@ -464,7 +464,7 @@ export default function PusatDiklat({ theme }: { theme: "light" | "dark" }) {
         {trainingsLoading ? <div className="mt-4"><LoadingRows /></div> : trainingsError ? <div className="mt-5"><Notice title="Daftar diklat belum dapat dimuat" message={trainingsError} retry={() => void loadTrainings()} /></div> : trainings.length ? <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{trainings.map(item => <TrainingCard key={item.id} item={item} archive={isArchive} />)}</div> : <div className="mt-5 rounded-[22px] border border-dashed border-[#cdd8db] bg-[#fbfcf9] px-6 py-14 text-center"><span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#eaf0ef] text-[#678396]"><GraduationCap size={22} /></span><h2 className="mt-4 font-bold text-[#345369]">{search ? "Tidak ada diklat yang cocok" : isArchive ? "Arsip belum tersedia" : "Belum ada diklat terbit"}</h2><p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#829098]">Coba ubah kata pencarian atau kembali lagi setelah kegiatan dipublikasikan.</p>{search && <button onClick={() => setSearch("")} className="mt-4 text-sm font-bold text-[#42667c] underline underline-offset-4">Hapus pencarian</button>}</div>}
         {trainingPage && trainingPage.totalPages > 1 && <Pagination page={trainingPage.page} totalPages={trainingPage.totalPages} onChange={setListPage} />}
       </section> : <>
-        <section className="diklat-home-hero relative isolate overflow-hidden rounded-[28px] border border-[#b8d5f1]/80">
+        <section className="diklat-blue-surface relative isolate overflow-hidden rounded-[28px] border border-[#b8d5f1]/80">
           <div className="diklat-hero-orbit diklat-hero-orbit--large pointer-events-none absolute right-[-70px] top-[-115px] h-[430px] w-[430px] rounded-full border" />
           <div className="diklat-hero-orbit diklat-hero-orbit--small pointer-events-none absolute right-[35px] top-[-20px] h-[290px] w-[290px] rounded-full border" />
           <div className="diklat-hero-glow pointer-events-none absolute bottom-[-145px] right-[145px] h-[240px] w-[240px] rounded-full blur-3xl" />
