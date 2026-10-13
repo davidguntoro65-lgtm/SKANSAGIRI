@@ -842724,6 +842724,14 @@ function hashPassword(password, salt = import_crypto.default.randomBytes(16).toS
   const hash = import_crypto.default.scryptSync(password, salt, 64).toString("hex");
   return `${salt}:${hash}`;
 }
+function hashPasswordAsync(password, salt = import_crypto.default.randomBytes(16).toString("hex")) {
+  return new Promise((resolve, reject) => {
+    import_crypto.default.scrypt(password, salt, 64, (error, derivedKey) => {
+      if (error) return reject(error);
+      resolve(`${salt}:${derivedKey.toString("hex")}`);
+    });
+  });
+}
 function studentAccountEmail(nis) {
   return `siswa.${nis.toLowerCase().replace(/[^a-z0-9._-]/g, "-")}@akun.smkn1wonogiri.local`;
 }
@@ -842874,9 +842882,47 @@ async function audit(action, entity, entityId, metadata = {}) {
 }
 async function commitRows(type, rows, actor) {
   const validRows = rows.filter((row) => row.status === "VALID" || row.status === "UNCHANGED");
+  const preparedRows = await Promise.all(validRows.map(async (row) => ({
+    ...row,
+    ...type === "siswa" ? { passwordHash: await hashPasswordAsync(clean(row.values.password)) } : {}
+  })));
   return db.$transaction(async (tx) => {
     let success = 0;
-    for (const { values } of validRows) {
+    const studentRoleAssignments = [];
+    let studentRoleId = null;
+    let studentsByNisn = /* @__PURE__ */ new Map();
+    let yearsByCode = /* @__PURE__ */ new Map();
+    let classesByCode = /* @__PURE__ */ new Map();
+    let usersByEmail = /* @__PURE__ */ new Map();
+    if (type === "siswa") {
+      const nisns = [...new Set(preparedRows.map(({ values }) => clean(values.nisn)))];
+      const yearCodes = [...new Set(preparedRows.map(({ values }) => clean(values.kodeTahunAjaran)))];
+      const classCodes = [...new Set(preparedRows.map(({ values }) => clean(values.kodeKelas)))];
+      const [students, years, classes, role] = await Promise.all([
+        tx.coreStudent.findMany({
+          where: { nisn: { in: nisns } },
+          select: { id: true, nisn: true, user: { select: { id: true, email: true } } }
+        }),
+        tx.academicYear.findMany({ where: { code: { in: yearCodes } }, select: { id: true, code: true } }),
+        tx.academicClass.findMany({ where: { code: { in: classCodes } }, select: { id: true, code: true } }),
+        tx.coreRole.upsert({ where: { name: "SISWA" }, update: {}, create: { name: "SISWA" } })
+      ]);
+      studentsByNisn = new Map(students.map((student) => [student.nisn, student]));
+      yearsByCode = new Map(years.map((year) => [year.code, year]));
+      classesByCode = new Map(classes.map((classroom) => [classroom.code, classroom]));
+      studentRoleId = role.id;
+      const accountEmails = [...new Set(preparedRows.map(({ values }) => {
+        const nisn = clean(values.nisn);
+        const nis = clean(values.nis);
+        return clean(values.email).toLowerCase() || studentsByNisn.get(nisn)?.user?.email || studentAccountEmail(nis);
+      }))];
+      const users = await tx.coreUser.findMany({
+        where: { email: { in: accountEmails } },
+        select: { id: true, email: true }
+      });
+      usersByEmail = new Map(users.map((user) => [user.email, user]));
+    }
+    for (const { values, passwordHash } of preparedRows) {
       const status = statusValue(values.status);
       if (type === "tahun-ajaran") {
         const code = clean(values.code);
@@ -842905,22 +842951,25 @@ async function commitRows(type, rows, actor) {
         const nis = clean(values.nis);
         const email = clean(values.email).toLowerCase() || null;
         const phone = clean(values.noTelp || values.noHp) || null;
-        const initialPassword = clean(values.password);
+        if (!passwordHash) throw new Error("Hash password awal siswa tidak berhasil disiapkan.");
+        const existingUser = studentsByNisn.get(nisn)?.user || null;
+        const accountEmail = email || existingUser?.email || studentAccountEmail(nis);
+        const emailOwner = usersByEmail.get(accountEmail);
+        if (emailOwner && emailOwner.id !== existingUser?.id) throw new Error(`Email akun siswa "${accountEmail}" sudah digunakan akun lain.`);
+        const coreUser = existingUser ? await tx.coreUser.update({ where: { id: existingUser.id }, data: { ...email ? { email } : {}, fullName: clean(values.namaLengkap), status: status === "ACTIVE" ? "ACTIVE" : "DISABLED", passwordHash, passwordChangeRecommended: true } }) : await tx.coreUser.create({ data: { email: accountEmail, fullName: clean(values.namaLengkap), status: status === "ACTIVE" ? "ACTIVE" : "DISABLED", passwordHash, passwordChangeRecommended: true } });
+        if (existingUser?.email !== coreUser.email) {
+          const formerOwner = existingUser?.email ? usersByEmail.get(existingUser.email) : void 0;
+          if (formerOwner?.id === existingUser?.id) usersByEmail.delete(existingUser.email);
+        }
+        usersByEmail.set(accountEmail, { id: coreUser.id, email: accountEmail });
         const student = await tx.coreStudent.upsert({
           where: { nisn },
-          update: { nis, fullName: clean(values.namaLengkap), email, phone, gender: clean(values.jenisKelamin) || null, birthPlace: clean(values.tempatLahir) || null, birthDate: parseDate(values.tanggalLahir), status },
-          create: { nisn, nis, fullName: clean(values.namaLengkap), email, phone, gender: clean(values.jenisKelamin) || null, birthPlace: clean(values.tempatLahir) || null, birthDate: parseDate(values.tanggalLahir), status }
+          update: { nis, fullName: clean(values.namaLengkap), email, phone, gender: clean(values.jenisKelamin) || null, birthPlace: clean(values.tempatLahir) || null, birthDate: parseDate(values.tanggalLahir), status, userId: coreUser.id },
+          create: { nisn, nis, fullName: clean(values.namaLengkap), email, phone, gender: clean(values.jenisKelamin) || null, birthPlace: clean(values.tempatLahir) || null, birthDate: parseDate(values.tanggalLahir), status, userId: coreUser.id }
         });
-        const existingUser = student.userId ? await tx.coreUser.findUnique({ where: { id: student.userId } }) : null;
-        const accountEmail = email || existingUser?.email || studentAccountEmail(nis);
-        const emailOwner = await tx.coreUser.findUnique({ where: { email: accountEmail } });
-        if (emailOwner && emailOwner.id !== existingUser?.id) throw new Error(`Email akun siswa "${accountEmail}" sudah digunakan akun lain.`);
-        const coreUser = existingUser ? await tx.coreUser.update({ where: { id: existingUser.id }, data: { ...email ? { email } : {}, fullName: clean(values.namaLengkap), status: status === "ACTIVE" ? "ACTIVE" : "DISABLED", passwordHash: hashPassword(initialPassword), passwordChangeRecommended: true } }) : await tx.coreUser.create({ data: { email: accountEmail, fullName: clean(values.namaLengkap), status: status === "ACTIVE" ? "ACTIVE" : "DISABLED", passwordHash: hashPassword(initialPassword), passwordChangeRecommended: true } });
-        await tx.coreStudent.update({ where: { id: student.id }, data: { userId: coreUser.id } });
-        const role = await tx.coreRole.upsert({ where: { name: "SISWA" }, update: {}, create: { name: "SISWA" } });
-        await tx.coreUserRole.upsert({ where: { userId_roleId: { userId: coreUser.id, roleId: role.id } }, update: {}, create: { userId: coreUser.id, roleId: role.id } });
-        const year = await tx.academicYear.findUnique({ where: { code: clean(values.kodeTahunAjaran) } });
-        const classroom = await tx.academicClass.findUnique({ where: { code: clean(values.kodeKelas) } });
+        if (studentRoleId) studentRoleAssignments.push({ userId: coreUser.id, roleId: studentRoleId });
+        const year = yearsByCode.get(clean(values.kodeTahunAjaran));
+        const classroom = classesByCode.get(clean(values.kodeKelas));
         if (year && classroom) await tx.studentEnrollment.upsert({ where: { studentId_academicYearId: { studentId: student.id, academicYearId: year.id } }, update: { classId: classroom.id, status }, create: { studentId: student.id, classId: classroom.id, academicYearId: year.id, status } });
       } else if (type === "assignment-guru") {
         const [teacher, subject, classroom, year] = await Promise.all([
@@ -842943,9 +842992,12 @@ async function commitRows(type, rows, actor) {
       }
       success += 1;
     }
+    if (studentRoleAssignments.length) {
+      await tx.coreUserRole.createMany({ data: studentRoleAssignments, skipDuplicates: true });
+    }
     await tx.coreAuditLog.create({ data: { action: "IMPORT_COMMIT", entity: type, actor, metadata: { rows: success } } });
     return success;
-  });
+  }, type === "siswa" ? { maxWait: 1e4, timeout: 6e4 } : void 0);
 }
 async function getLmsActor(req) {
   const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
