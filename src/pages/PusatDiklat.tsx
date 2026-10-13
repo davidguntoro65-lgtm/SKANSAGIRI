@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   ArrowDownToLine, ArrowLeft, ArrowRight, BookOpen, CalendarDays, Check, ChevronDown,
-  ChevronLeft, ClipboardList, FileText, FolderArchive, GraduationCap, Menu, Search,
+  ChevronLeft, ClipboardList, FileText, FolderArchive, GraduationCap, Landmark, Menu, Search,
   Send, ShieldCheck, Upload, X,
 } from "lucide-react";
 import { apiFetch, apiPath, getAppPath, navigate } from "../utils/navigation";
+import { useBranding } from "../hooks/useBranding";
 
 type Status = "DRAFT" | "PUBLISHED" | "ARCHIVED";
 type DocumentType = "MATERIAL" | "LKPD";
@@ -68,8 +69,10 @@ function Pill({ children, tint = "slate" }: { children: React.ReactNode; tint?: 
   return <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold tracking-wide ${colors[tint]}`}>{children}</span>;
 }
 
-function PublicHeader({ active }: { active: string }) {
+function PublicHeader({ active, theme }: { active: string; theme: "light" | "dark" }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { getLogo } = useBranding();
+  const logoUrl = getLogo(theme);
   const links = [
     { label: "Beranda", href: root, id: "home" },
     { label: "Materi & LKPD", href: `${root}?tab=materi`, id: "materials" },
@@ -78,8 +81,27 @@ function PublicHeader({ active }: { active: string }) {
   return <header className="relative z-20 border-b border-[#d7e6f4]/80 bg-white/80 backdrop-blur-xl">
     <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 lg:px-8">
       <button onClick={() => navigate(root)} className="group flex items-center gap-3 text-left" aria-label="Kembali ke beranda Pusat Diklat">
-        <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#dceeff] text-[#245b91] ring-1 ring-inset ring-[#c3dcf5]"><GraduationCap size={22} /></span>
-        <span><span className="block text-[10px] font-bold uppercase tracking-[.19em] text-[#59758f]">SMKN 1 Wonogiri</span><span className="mt-0.5 block text-sm font-extrabold tracking-tight text-[#153651]">Pusat Diklat</span></span>
+        {logoUrl ? (
+          <>
+            <img
+              src={logoUrl}
+              alt="SMKN 1 Wonogiri"
+              className="h-10 w-auto object-contain transition-transform duration-300 group-hover:scale-105 md:h-12"
+            />
+            <span className="text-sm font-extrabold tracking-tight text-[#153651]">Pusat Diklat</span>
+          </>
+        ) : (
+          <>
+            <span className="relative flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-tr from-amber-500 to-yellow-600 shadow-lg shadow-amber-500/10 transition-transform duration-300 group-hover:scale-105">
+              <Landmark className="h-5.5 w-5.5 text-slate-950" strokeWidth={2} />
+              <span className="absolute inset-0 rounded-lg border border-white/30" />
+            </span>
+            <span className="flex flex-col">
+              <span className="text-[10px] font-bold uppercase tracking-[.19em] text-[#59758f]">SMKN 1 Wonogiri</span>
+              <span className="mt-0.5 text-sm font-extrabold tracking-tight text-[#153651]">Pusat Diklat</span>
+            </span>
+          </>
+        )}
       </button>
       <button className="inline-flex items-center justify-center rounded-xl p-2 text-[#24445e] md:hidden" onClick={() => setMenuOpen(!menuOpen)} aria-expanded={menuOpen} aria-label={menuOpen ? "Tutup menu" : "Buka menu"}>
         {menuOpen ? <X size={21} /> : <Menu size={21} />}
@@ -158,7 +180,7 @@ function DocumentRow({ item }: { item: DocumentItem }) {
   </article>;
 }
 
-export default function PusatDiklat() {
+export default function PusatDiklat({ theme }: { theme: "light" | "dark" }) {
   const path = useLocation();
   const [overview, setOverview] = useState<{ settings: { title: string; description: string; archiveVisible: boolean; submissionsEnabled: boolean }; stats: { publishedTrainings: number; materials: number; lkpd: number; submissions: number }; featured: Training[] } | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(true);
@@ -319,7 +341,7 @@ export default function PusatDiklat() {
   ];
 
   return <div className="diklat-portal relative z-10 min-h-[100dvh] font-sans text-[#183650]">
-    <PublicHeader active={isArchive ? "archive" : isDocumentPage ? "materials" : "home"} />
+    <PublicHeader active={isArchive ? "archive" : isDocumentPage ? "materials" : "home"} theme={theme} />
     <main className="mx-auto max-w-7xl px-5 pb-20 pt-7 sm:px-8 lg:pt-10">
       <div className="mb-7 flex items-center gap-2 text-xs font-medium text-[#82909a]"><button onClick={() => visit(root)} className="hover:text-[#294d69]">Pusat Diklat</button><span>/</span><span>{detailSlug ? (training?.title || "Detail diklat") : isArchive ? "Arsip" : isDocumentPage ? (activeTab === "lkpd" ? "LKPD" : "Materi") : showTrainingList ? "Jelajahi diklat" : "Beranda"}</span></div>
 
