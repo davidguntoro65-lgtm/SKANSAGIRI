@@ -55,6 +55,7 @@ type TaskDraft = {
   maxFileSizeMb: string; allowedMimeTypes: string;
 };
 type DocumentDraft = { type: "MATERIAL" | "LKPD"; title: string; description: string; category: string; sortOrder: string; status: Status };
+type DocumentFileInput = { id: number; files: File[] };
 
 const TOKEN_KEY = "smkn1_adm_token";
 const PAGE_SIZE = 10;
@@ -136,7 +137,9 @@ export default function AdminDiklat({ theme = "light" }: Props) {
   const [taskDraft, setTaskDraft] = useState<TaskDraft>(emptyTask);
   const [editingTask, setEditingTask] = useState<TaskType | null>(null);
   const [documentDraft, setDocumentDraft] = useState<DocumentDraft>(emptyDoc);
-  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [documentFileInputs, setDocumentFileInputs] = useState<DocumentFileInput[]>([{ id: 0, files: [] }]);
+  const [nextDocumentFileInputId, setNextDocumentFileInputId] = useState(1);
+  const [documentFileInputVersion, setDocumentFileInputVersion] = useState(0);
   const [editingDocument, setEditingDocument] = useState<DocumentItem | null>(null);
   const [submissionItems, setSubmissionItems] = useState<Submission[]>([]);
   const [submissionTaskTypes, setSubmissionTaskTypes] = useState<TaskType[]>([]);
@@ -155,6 +158,7 @@ export default function AdminDiklat({ theme = "light" }: Props) {
   const [driveTesting, setDriveTesting] = useState(false);
   const [driveReconciling, setDriveReconciling] = useState(false);
   const [driveCursor, setDriveCursor] = useState("");
+  const selectedDocumentFiles = documentFileInputs.flatMap(row => row.files.map((file, index) => ({ rowId: row.id, index, file })));
 
   const success = (text: string) => setNotice({ type: "success", text });
   const failure = (error: unknown, fallback: string) => setNotice({ type: "error", text: error instanceof Error ? error.message : fallback });
@@ -300,20 +304,75 @@ export default function AdminDiklat({ theme = "light" }: Props) {
     try { await adminData(`/api/v1/diklat/admin/task-types/${item.id}`, { method: "DELETE", headers: authHeaders() }); success("Jenis tugas dihapus atau dinonaktifkan sesuai riwayatnya."); await loadOverview(); if (selectedTraining) setSelectedTrainingId(selectedTraining.id); }
     catch (error) { failure(error, "Jenis tugas belum dapat dihapus."); }
   };
+  const addDocumentFileInput = () => {
+    setDocumentFileInputs(current => [...current, { id: nextDocumentFileInputId, files: [] }]);
+    setNextDocumentFileInputId(current => current + 1);
+  };
   const uploadDocument = async (event: FormEvent) => {
     event.preventDefault();
-    if (!selectedTraining || !documentFile) return;
+    if (!selectedTraining || !selectedDocumentFiles.length) return;
+    const baseTitle = documentDraft.title.trim();
+    if (!baseTitle) return;
+
     setSaving(true);
-    const body = new FormData();
-    body.append("type", documentDraft.type); body.append("title", documentDraft.title.trim()); body.append("description", documentDraft.description.trim());
-    body.append("category", documentDraft.category.trim()); body.append("sortOrder", String(Number(documentDraft.sortOrder) || 0));
-    body.append("status", documentDraft.status); body.append("file", documentFile);
+    setNotice(null);
+    const failedFiles: Array<{ rowId: number; index: number; file: File; error: unknown }> = [];
+    let refreshError: unknown = null;
     try {
-      await adminData(`/api/v1/diklat/admin/trainings/${selectedTraining.id}/documents`, { method: "POST", headers: authHeaders(), body });
-      setDocumentDraft(emptyDoc); setDocumentFile(null); success(`${documentDraft.type === "LKPD" ? "LKPD" : "Materi"} berhasil diunggah.`);
-      await loadOverview(); setSelectedTrainingId(selectedTraining.id);
-    } catch (error) { failure(error, "Dokumen belum berhasil diunggah."); }
-    finally { setSaving(false); }
+      for (const [order, selected] of selectedDocumentFiles.entries()) {
+        const body = new FormData();
+        const fileTitle = selectedDocumentFiles.length > 1
+          ? `${baseTitle} — ${selected.file.name.replace(/\.[^.]+$/, "")}`.slice(0, 160)
+          : baseTitle;
+        body.append("type", documentDraft.type);
+        body.append("title", fileTitle);
+        body.append("description", documentDraft.description.trim());
+        body.append("category", documentDraft.category.trim());
+        body.append("sortOrder", String((Number(documentDraft.sortOrder) || 0) + order));
+        body.append("status", documentDraft.status);
+        body.append("file", selected.file);
+        try {
+          await adminData(`/api/v1/diklat/admin/trainings/${selectedTraining.id}/documents`, { method: "POST", headers: authHeaders(), body });
+        } catch (error) {
+          failedFiles.push({ ...selected, error });
+        }
+      }
+
+      const uploadedCount = selectedDocumentFiles.length - failedFiles.length;
+      if (uploadedCount) {
+        try {
+          await loadOverview();
+          setSelectedTrainingId(selectedTraining.id);
+        } catch (error) {
+          refreshError = error;
+        }
+      }
+
+      setDocumentFileInputVersion(version => version + 1);
+      if (failedFiles.length) {
+        const failedKeys = new Set(failedFiles.map(item => `${item.rowId}:${item.index}`));
+        setDocumentFileInputs(current => {
+          const remaining = current
+            .map(row => ({ ...row, files: row.files.filter((_, index) => failedKeys.has(`${row.id}:${index}`)) }))
+            .filter(row => row.files.length);
+          return remaining.length ? remaining : [{ id: 0, files: [] }];
+        });
+        const failedNames = failedFiles.slice(0, 3).map(item => item.file.name).join(", ");
+        const more = failedFiles.length > 3 ? `, dan ${failedFiles.length - 3} lainnya` : "";
+        const firstReason = failedFiles[0].error instanceof Error ? ` Alasan: ${failedFiles[0].error.message}` : "";
+        const refreshNote = refreshError ? " Daftar dokumen belum dapat diperbarui." : "";
+        failure(new Error(`${uploadedCount} berhasil; gagal: ${failedNames}${more}.${firstReason} Berkas gagal tetap dipilih untuk dicoba lagi.${refreshNote}`), "Sebagian berkas belum berhasil diunggah.");
+      } else {
+        setDocumentDraft(emptyDoc);
+        setDocumentFileInputs([{ id: 0, files: [] }]);
+        if (refreshError) failure(refreshError, "Dokumen berhasil diunggah, tetapi daftar belum dapat diperbarui.");
+        else success(`${documentDraft.type === "LKPD" ? "LKPD" : "Materi"}: ${uploadedCount} berkas berhasil diunggah.`);
+      }
+    } catch (error) {
+      failure(error, "Dokumen belum berhasil diunggah.");
+    } finally {
+      setSaving(false);
+    }
   };
   const saveDocumentMetadata = async (event: FormEvent) => {
     event.preventDefault(); if (!editingDocument) return;
@@ -490,13 +549,31 @@ export default function AdminDiklat({ theme = "light" }: Props) {
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className={`text-xs font-semibold ${palette.muted}`}>Jenis dokumen<select value={documentDraft.type} onChange={e => setDocumentDraft({ ...documentDraft, type: e.target.value as DocumentDraft["type"] })} className={`${palette.input} mt-1.5`}><option value="MATERIAL">Materi</option><option value="LKPD">LKPD</option></select></label>
                       <label className={`text-xs font-semibold ${palette.muted}`}>Status publikasi<select value={documentDraft.status} onChange={e => setDocumentDraft({ ...documentDraft, status: e.target.value as Status })} className={`${palette.input} mt-1.5`}><option value="DRAFT">Draft</option><option value="PUBLISHED">Terbit</option></select></label>
-                      <label className={`text-xs font-semibold sm:col-span-2 ${palette.muted}`}>Judul<input required value={documentDraft.title} onChange={e => setDocumentDraft({ ...documentDraft, title: e.target.value })} className={`${palette.input} mt-1.5`} /></label>
+                      <label className={`text-xs font-semibold sm:col-span-2 ${palette.muted}`}>Judul<input required value={documentDraft.title} onChange={e => setDocumentDraft({ ...documentDraft, title: e.target.value })} className={`${palette.input} mt-1.5`} />{selectedDocumentFiles.length > 1 && <span className="mt-1 block text-[10px] font-normal">Nama berkas otomatis ditambahkan pada judul setiap dokumen.</span>}</label>
                       <label className={`text-xs font-semibold ${palette.muted}`}>Kategori<input value={documentDraft.category} onChange={e => setDocumentDraft({ ...documentDraft, category: e.target.value })} className={`${palette.input} mt-1.5`} /></label>
                       <label className={`text-xs font-semibold ${palette.muted}`}>Urutan<input type="number" value={documentDraft.sortOrder} onChange={e => setDocumentDraft({ ...documentDraft, sortOrder: e.target.value })} className={`${palette.input} mt-1.5`} /></label>
                       <label className={`text-xs font-semibold sm:col-span-2 ${palette.muted}`}>Deskripsi<textarea rows={2} value={documentDraft.description} onChange={e => setDocumentDraft({ ...documentDraft, description: e.target.value })} className={`${palette.input} mt-1.5 resize-y`} /></label>
-                      <label className={`text-xs font-semibold sm:col-span-2 ${palette.muted}`}>Pilih berkas<input required type="file" onChange={e => setDocumentFile(e.target.files?.[0] || null)} className={`${palette.input} mt-1.5 file:mr-3 file:rounded-lg file:border-0 file:bg-[#edf2f1] file:px-3 file:py-1.5 file:text-xs file:font-bold`} /></label>
+                      <div className={`sm:col-span-2 text-xs font-semibold ${palette.muted}`}>
+                        <p className="mb-1.5">Pilih berkas</p>
+                        <div className="space-y-2">
+                          {documentFileInputs.map((row, index) => <div key={`${row.id}-${documentFileInputVersion}`} className="flex items-start gap-2">
+                            <div className="min-w-0 flex-1">
+                              <input aria-label={`Pilih berkas ${index + 1}`} type="file" multiple disabled={saving} onChange={event => {
+                                const files = Array.from(event.currentTarget.files || []);
+                                setDocumentFileInputs(current => current.map(item => item.id === row.id ? { ...item, files } : item));
+                              }} className={`${palette.input} file:mr-3 file:rounded-lg file:border-0 file:bg-[#edf2f1] file:px-3 file:py-1.5 file:text-xs file:font-bold`} />
+                              {row.files.length > 0 && <ul className="mt-1 space-y-1 pl-1 text-[10px] font-normal">
+                                {row.files.map((file, fileIndex) => <li key={`${file.name}-${file.size}-${fileIndex}`} className="truncate">{file.name} · {sizeText(file.size)}</li>)}
+                              </ul>}
+                            </div>
+                            {documentFileInputs.length > 1 && <button type="button" disabled={saving} onClick={() => setDocumentFileInputs(current => current.length > 1 ? current.filter(item => item.id !== row.id) : current)} aria-label={`Hapus pilihan berkas ${index + 1}`} className={`rounded-lg border p-2.5 disabled:opacity-50 ${palette.button}`}><X size={15} /></button>}
+                          </div>)}
+                        </div>
+                        <button type="button" disabled={saving} onClick={addDocumentFileInput} className={`mt-2 inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-50 ${palette.button}`}><Plus size={14} /> Tambah berkas</button>
+                        <p className="mt-1 text-[10px] font-normal">Pilih beberapa file sekaligus atau tambah kolom dengan tombol +.</p>
+                      </div>
                     </div>
-                    <button disabled={saving || !documentFile} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-[#173653] px-3.5 py-2.5 text-xs font-extrabold text-white disabled:opacity-50">{saving ? <LoaderCircle className="animate-spin" size={14} /> : <Upload size={14} />} Unggah dokumen</button>
+                    <button disabled={saving || selectedDocumentFiles.length === 0} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-[#173653] px-3.5 py-2.5 text-xs font-extrabold text-white disabled:opacity-50">{saving ? <LoaderCircle className="animate-spin" size={14} /> : <Upload size={14} />} {saving ? "Mengunggah berkas…" : selectedDocumentFiles.length > 1 ? `Unggah ${selectedDocumentFiles.length} dokumen` : "Unggah dokumen"}</button>
                   </form>
                   {trainingDetail?.documents?.length ? <div className="space-y-2">{trainingDetail.documents.map(item => <div key={item.id} className={`flex items-center gap-3 rounded-xl border px-3.5 py-3 ${dark ? "border-white/10" : "border-[#e2e8e8]"}`}><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${dark ? "bg-white/[.05] text-[#d1b66f]" : "bg-[#edf2f1] text-[#557589]"}`}><File size={16} /></span><div className="min-w-0 flex-1"><p className={`truncate text-sm font-bold ${palette.text}`}>{item.title}</p><p className={`mt-0.5 text-[10px] ${palette.muted}`}>{item.type === "LKPD" ? "LKPD" : "Materi"} · {item.driveFileName}</p></div><StatusBadge dark={dark} status={item.status} /><button aria-label={`Edit ${item.title}`} onClick={() => { setEditingDocument(item); setDocumentDraft({ type: item.type, title: item.title, description: item.description || "", category: item.category || "", sortOrder: String(item.sortOrder), status: item.status }); }} className={`rounded-lg p-2 ${palette.muted} hover:text-[#bd9852]`}><Pencil size={15} /></button><button aria-label={`Arsipkan ${item.title}`} onClick={() => void archiveDocument(item)} className="rounded-lg p-2 text-rose-500 hover:bg-rose-500/10"><Archive size={15} /></button></div>)}</div> : <p className={`rounded-xl border border-dashed p-4 text-xs ${dark ? "border-white/10 text-slate-400" : "border-[#dce4e5] text-[#7b8990]"}`}>Daftar dokumen belum tersedia melalui endpoint detail untuk kegiatan ini.</p>}
                 </div>
