@@ -500,3 +500,181 @@ html .diklat-hero h1.diklat-hero-title {
 .admin-osis-clean .bg-slate-800 {
   box-shadow: inset 0 0 0 1px #e2e8f0;
 }
+
+/* Pusat Diklat public landing page */
+.diklat-portal {
+  background-color: #f7fbff;
+  background-image:
+    radial-gradient(ellipse at 10% 13%, rgba(190, 220, 250, .34), transparent 34%),
+    radial-gradient(ellipse at 92% 34%, rgba(215, 235, 255, .4), transparent 32%),
+    linear-gradient(180deg, #f8fbff 0%, #f5faff 52%, #f9fbfd 100%);
+}
+
+.diklat-portal > main,
+.diklat-portal > footer {
+  position: relative;
+  z-index: 1;
+}
+
+.diklat-portal > footer {
+  border-color: #d8e7f5;
+  background: rgba(235, 245, 255, .72);
+}
+
+.diklat-home-hero {
+  background:
+    radial-gradient(ellipse at 78% 5%, rgba(255, 255, 255, .75), transparent 38%),
+    linear-gradient(125deg, rgba(221, 239, 255, .94) 0%, rgba(202, 227, 250, .9) 55%, rgba(230, 243, 255, .96) 100%);
+  box-shadow: 0 24px 60px -42px rgba(38, 89, 137, .5);
+}
+
+.diklat-hero-orbit--large {
+  border-color: rgba(62, 119, 169, .13);
+}
+
+.diklat-hero-orbit--small {
+  border-color: rgba(62, 119, 169, .12);
+}
+
+.diklat-hero-glow {
+  background: rgba(119, 177, 229, .24);
+}
+
+.diklat-hero-copy {
+  animation: diklat-rise-in .7s cubic-bezier(.2, .7, .2, 1) both;
+}
+
+.diklat-hero-title {
+  color: #153651;
+  text-wrap: balance;
+}
+
+.diklat-primary-link,
+.diklat-secondary-link {
+  min-height: 48px;
+  transition: transform .2s ease, box-shadow .2s ease, background-color .2s ease, border-color .2s ease;
+}
+
+.diklat-primary-link {
+  color: #fff;
+  background: #2868a3;
+  box-shadow: 0 8px 18px -10px rgba(21, 73, 120, .65);
+}
+
+html.light .diklat-portal .diklat-primary-link,
+html.light .diklat-portal .diklat-nav-cta {
+  color: #fff !important;
+}
+
+.diklat-primary-link:hover {
+  transform: translateY(-2px);
+  background: #1d568b;
+  box-shadow: 0 12px 22px -12px rgba(21, 73, 120, .8);
+}
+
+.diklat-secondary-link {
+  color: #24577f;
+  border: 1px solid rgba(60, 112, 158, .38);
+  background: rgba(255, 255, 255, .46);
+}
+
+.diklat-secondary-link:hover {
+  transform: translateY(-2px);
+  border-color: rgba(40, 104, 163, .65);
+  background: rgba(255, 255, 255, .76);
+}
+
+.diklat-primary-link:focus-visible,
+.diklat-secondary-link:focus-visible,
+.diklat-link-card:focus-visible {
+  outline: 3px solid #397fba;
+  outline-offset: 3px;
+}
+
+.diklat-feature-wrap {
+  animation: diklat-rise-in .75s .12s cubic-bezier(.2, .7, .2, 1) both;
+}
+
+.diklat-feature-panel {
+  border: 1px solid rgba(107, 154, 197, .32);
+  background: rgba(255, 255, 255, .62);
+  box-shadow: 0 24px 55px -32px rgba(35, 78, 117, .36);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.diklat-feature-row {
+  border: 1px solid rgba(171, 203, 231, .42);
+  background: rgba(228, 241, 253, .72);
+  transition: transform .2s ease, background-color .2s ease, box-shadow .2s ease;
+}
+
+.diklat-feature-row:hover {
+  transform: translateX(3px);
+  background: rgba(239, 247, 255, .95);
+  box-shadow: 0 8px 18px -16px rgba(25, 75, 121, .7);
+}
+
+.diklat-feature-icon {
+  color: #2d6fa8;
+  background: rgba(255, 255, 255, .76);
+}
+
+.diklat-stat-card {
+  border: 1px solid rgba(184, 210, 234, .72);
+  background: rgba(255, 255, 255, .65);
+  box-shadow: 0 12px 32px -28px rgba(37, 82, 124, .4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.diklat-link-card {
+  border: 1px solid rgba(184, 210, 234, .76);
+  background: rgba(255, 255, 255, .68);
+  box-shadow: 0 14px 36px -30px rgba(37, 82, 124, .5);
+  transition: transform .22s ease, background-color .22s ease, border-color .22s ease, box-shadow .22s ease;
+}
+
+.diklat-link-card--archive {
+  background: rgba(225, 239, 253, .72);
+}
+
+.diklat-link-card:not(:disabled):hover {
+  transform: translateY(-3px);
+  border-color: rgba(92, 148, 197, .62);
+  background: rgba(255, 255, 255, .9);
+  box-shadow: 0 22px 42px -30px rgba(37, 82, 124, .52);
+}
+
+.diklat-link-card--archive:not(:disabled):hover {
+  background: rgba(232, 244, 255, .96);
+}
+
+.diklat-link-card:disabled {
+  cursor: not-allowed;
+}
+
+@keyframes diklat-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .diklat-hero-copy,
+  .diklat-feature-wrap {
+    animation: none;
+  }
+
+  .diklat-primary-link,
+  .diklat-secondary-link,
+  .diklat-feature-row,
+  .diklat-link-card {
+    transition: none;
+  }
+}

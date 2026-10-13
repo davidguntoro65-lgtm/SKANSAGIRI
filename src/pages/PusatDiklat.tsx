@@ -75,18 +75,18 @@ function PublicHeader({ active }: { active: string }) {
     { label: "Materi & LKPD", href: `${root}?tab=materi`, id: "materials" },
     { label: "Arsip diklat", href: `${root}/arsip`, id: "archive" },
   ];
-  return <header className="relative z-20 border-b border-[#dce3e9] bg-[#f7f8f6]/95 backdrop-blur">
+  return <header className="relative z-20 border-b border-[#d7e6f4]/80 bg-white/80 backdrop-blur-xl">
     <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 lg:px-8">
       <button onClick={() => navigate(root)} className="group flex items-center gap-3 text-left" aria-label="Kembali ke beranda Pusat Diklat">
-        <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#173653] text-[#e8c982]"><GraduationCap size={22} /></span>
-        <span><span className="block text-[10px] font-bold uppercase tracking-[.19em] text-[#607487]">SMKN 1 Wonogiri</span><span className="mt-0.5 block text-sm font-extrabold tracking-tight text-[#183650]">Pusat Diklat</span></span>
+        <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#dceeff] text-[#245b91] ring-1 ring-inset ring-[#c3dcf5]"><GraduationCap size={22} /></span>
+        <span><span className="block text-[10px] font-bold uppercase tracking-[.19em] text-[#59758f]">SMKN 1 Wonogiri</span><span className="mt-0.5 block text-sm font-extrabold tracking-tight text-[#153651]">Pusat Diklat</span></span>
       </button>
       <button className="inline-flex items-center justify-center rounded-xl p-2 text-[#24445e] md:hidden" onClick={() => setMenuOpen(!menuOpen)} aria-expanded={menuOpen} aria-label={menuOpen ? "Tutup menu" : "Buka menu"}>
         {menuOpen ? <X size={21} /> : <Menu size={21} />}
       </button>
-      <nav className={`${menuOpen ? "absolute left-0 right-0 top-full flex flex-col border-b border-[#dce3e9] bg-[#f7f8f6] p-4 shadow-lg" : "hidden"} gap-1 md:static md:flex md:flex-row md:items-center md:gap-2 md:border-0 md:bg-transparent md:p-0 md:shadow-none`} aria-label="Navigasi utama">
-        {links.map(link => <button key={link.id} onClick={() => { navigate(link.href); setMenuOpen(false); }} className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition ${active === link.id ? "bg-[#e6edf2] text-[#173653]" : "text-[#647486] hover:bg-[#edf1f3] hover:text-[#173653]"}`}>{link.label}</button>)}
-        <button onClick={() => { navigate(`${root}?tab=jelajahi`); setMenuOpen(false); }} className="ml-1 inline-flex items-center justify-center gap-2 rounded-xl bg-[#173653] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#224867] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#a98238]">Jelajahi diklat <ArrowRight size={15} /></button>
+      <nav className={`${menuOpen ? "absolute left-0 right-0 top-full flex flex-col border-b border-[#d7e6f4] bg-white/95 p-4 shadow-lg backdrop-blur-xl" : "hidden"} gap-1 md:static md:flex md:flex-row md:items-center md:gap-2 md:border-0 md:bg-transparent md:p-0 md:shadow-none`} aria-label="Navigasi utama">
+        {links.map(link => <button key={link.id} onClick={() => { navigate(link.href); setMenuOpen(false); }} className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition ${active === link.id ? "bg-[#e1efff] text-[#194f80]" : "text-[#526b82] hover:bg-[#edf6ff] hover:text-[#194f80]"}`}>{link.label}</button>)}
+        <button onClick={() => { navigate(`${root}?tab=jelajahi`); setMenuOpen(false); }} className="diklat-nav-cta ml-1 inline-flex items-center justify-center gap-2 rounded-xl bg-[#2868a3] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#1d568b] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2868a3]">Jelajahi diklat <ArrowRight size={15} /></button>
       </nav>
     </div>
   </header>;
@@ -318,7 +318,7 @@ export default function PusatDiklat() {
     { label: "Pengumpulan", value: overview?.stats.submissions ?? null, Icon: Send },
   ];
 
-  return <div className="min-h-[100dvh] bg-[#f5f6f3] font-sans text-[#213b50]">
+  return <div className="diklat-portal relative z-10 min-h-[100dvh] font-sans text-[#183650]">
     <PublicHeader active={isArchive ? "archive" : isDocumentPage ? "materials" : "home"} />
     <main className="mx-auto max-w-7xl px-5 pb-20 pt-7 sm:px-8 lg:pt-10">
       <div className="mb-7 flex items-center gap-2 text-xs font-medium text-[#82909a]"><button onClick={() => visit(root)} className="hover:text-[#294d69]">Pusat Diklat</button><span>/</span><span>{detailSlug ? (training?.title || "Detail diklat") : isArchive ? "Arsip" : isDocumentPage ? (activeTab === "lkpd" ? "LKPD" : "Materi") : showTrainingList ? "Jelajahi diklat" : "Beranda"}</span></div>
@@ -442,35 +442,35 @@ export default function PusatDiklat() {
         {trainingsLoading ? <div className="mt-4"><LoadingRows /></div> : trainingsError ? <div className="mt-5"><Notice title="Daftar diklat belum dapat dimuat" message={trainingsError} retry={() => void loadTrainings()} /></div> : trainings.length ? <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{trainings.map(item => <TrainingCard key={item.id} item={item} archive={isArchive} />)}</div> : <div className="mt-5 rounded-[22px] border border-dashed border-[#cdd8db] bg-[#fbfcf9] px-6 py-14 text-center"><span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#eaf0ef] text-[#678396]"><GraduationCap size={22} /></span><h2 className="mt-4 font-bold text-[#345369]">{search ? "Tidak ada diklat yang cocok" : isArchive ? "Arsip belum tersedia" : "Belum ada diklat terbit"}</h2><p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#829098]">Coba ubah kata pencarian atau kembali lagi setelah kegiatan dipublikasikan.</p>{search && <button onClick={() => setSearch("")} className="mt-4 text-sm font-bold text-[#42667c] underline underline-offset-4">Hapus pencarian</button>}</div>}
         {trainingPage && trainingPage.totalPages > 1 && <Pagination page={trainingPage.page} totalPages={trainingPage.totalPages} onChange={setListPage} />}
       </section> : <>
-        <section className="diklat-hero relative overflow-hidden rounded-[28px] bg-[#173653]">
-          <div className="pointer-events-none absolute right-[-70px] top-[-115px] h-[430px] w-[430px] rounded-full border border-white/[.08]" />
-          <div className="pointer-events-none absolute right-[35px] top-[-20px] h-[290px] w-[290px] rounded-full border border-white/[.08]" />
-          <div className="pointer-events-none absolute bottom-[-145px] right-[145px] h-[240px] w-[240px] rounded-full bg-[#9e8346]/10 blur-3xl" />
+        <section className="diklat-home-hero relative isolate overflow-hidden rounded-[28px] border border-[#b8d5f1]/80">
+          <div className="diklat-hero-orbit diklat-hero-orbit--large pointer-events-none absolute right-[-70px] top-[-115px] h-[430px] w-[430px] rounded-full border" />
+          <div className="diklat-hero-orbit diklat-hero-orbit--small pointer-events-none absolute right-[35px] top-[-20px] h-[290px] w-[290px] rounded-full border" />
+          <div className="diklat-hero-glow pointer-events-none absolute bottom-[-145px] right-[145px] h-[240px] w-[240px] rounded-full blur-3xl" />
           <div className="relative grid gap-10 px-6 py-10 sm:px-10 sm:py-14 lg:grid-cols-[1.15fr_.85fr] lg:items-center lg:px-14 lg:py-[76px]">
-            <div><div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[.06] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[.16em] text-[#d5c28e]"><span className="h-1.5 w-1.5 rounded-full bg-[#d8bd75]" /> Portal pengembangan kompetensi</div>
-              <p className="mt-7 text-xs font-bold uppercase tracking-[.2em] text-[#b5c5ce]">SMKN 1 Wonogiri</p>
-              <h1 className="diklat-hero-title mt-3 max-w-2xl text-4xl font-extrabold leading-[1.08] tracking-[-.055em] text-[#f5f5ef] sm:text-5xl lg:text-[58px]">{overview?.settings.title || "Pusat Diklat"}</h1>
-              <p className="mt-5 max-w-xl text-base leading-7 text-[#c5d2d8] sm:text-lg">Satu portal untuk materi, LKPD, dan pengumpulan tugas diklat.</p>
-              <p className="mt-3 max-w-xl text-sm leading-7 text-[#aebfc8]">{overview?.settings.description || "Akses bahan pembelajaran dan kirim tugas kegiatan pengembangan kompetensi melalui portal digital sekolah."}</p>
+            <div className="diklat-hero-copy"><div className="inline-flex items-center gap-2 rounded-full border border-[#9fc4e8]/70 bg-white/65 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[.16em] text-[#285d8d] shadow-sm"><span className="h-1.5 w-1.5 rounded-full bg-[#3986c7]" /> Portal pengembangan kompetensi</div>
+              <p className="mt-7 text-xs font-bold uppercase tracking-[.2em] text-[#456987]">SMKN 1 Wonogiri</p>
+              <h1 className="diklat-hero-title mt-3 max-w-2xl text-4xl font-extrabold leading-[1.08] tracking-[-.055em] text-[#153651] sm:text-5xl lg:text-[58px]">{overview?.settings.title || "Pusat Diklat"}</h1>
+              <p className="mt-5 max-w-xl text-base leading-7 text-[#294b68] sm:text-lg">Satu portal untuk materi, LKPD, dan pengumpulan tugas diklat.</p>
+              <p className="mt-3 max-w-xl text-sm leading-7 text-[#49657d]">{overview?.settings.description || "Akses bahan pembelajaran dan kirim tugas kegiatan pengembangan kompetensi melalui portal digital sekolah."}</p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                <button onClick={() => visit(`${root}?tab=jelajahi`)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#e9cb83] px-5 py-3.5 text-sm font-extrabold text-[#1f3b53] transition hover:bg-[#f0d994]">Jelajahi diklat <ArrowRight size={16} /></button>
-                 {overview?.settings.submissionsEnabled && <button onClick={() => openSubmission()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/25 px-5 py-3.5 text-sm font-bold text-[#e0e7eb] transition hover:bg-white/10"><Send size={15} /> Kirim tugas</button>}
+                <button onClick={() => visit(`${root}?tab=jelajahi`)} className="diklat-primary-link inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3.5 text-sm font-extrabold">Jelajahi diklat <ArrowRight size={16} /></button>
+                 {overview?.settings.submissionsEnabled && <button onClick={() => openSubmission()} className="diklat-secondary-link inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3.5 text-sm font-bold"><Send size={15} /> Kirim tugas</button>}
               </div>
             </div>
-            <div className="relative mx-auto w-full max-w-[410px]">
-              <div className="rounded-[25px] border border-white/15 bg-[#244660] p-5 shadow-[0_28px_70px_-35px_rgba(0,0,0,.65)] sm:p-6">
-                <div className="flex items-center justify-between border-b border-white/10 pb-4"><div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#b3c4cc]">Ruang belajar</p><p className="mt-1 text-lg font-bold text-white">Satu akses, banyak bekal.</p></div><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#d8bf80]/15 text-[#e6cf99]"><BookOpen size={19} /></span></div>
+            <div className="diklat-feature-wrap relative mx-auto w-full max-w-[410px]">
+              <div className="diklat-feature-panel rounded-[25px] p-5 sm:p-6">
+                <div className="flex items-center justify-between border-b border-[#c6dbef]/80 pb-4"><div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#52728f]">Ruang belajar</p><p className="mt-1 text-lg font-bold text-[#173b5b]">Satu akses, banyak bekal.</p></div><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#d9ebff] text-[#2868a3]"><BookOpen size={19} /></span></div>
                 <div className="mt-4 space-y-3">
-                  {[{ icon: FileText, title: "Materi terkurasi", desc: "Baca dan unduh bahan pembelajaran", tint: "text-[#bed6df]" }, { icon: ClipboardList, title: "LKPD siap digunakan", desc: "Lembar kerja untuk setiap kegiatan", tint: "text-[#e0c986]" }, { icon: Send, title: "Pengumpulan terarah", desc: "Kirim hasil kerja pada jenis tugasnya", tint: "text-[#c4d6c8]" }].map(item => <div key={item.title} className="flex items-center gap-3 rounded-2xl bg-white/[.055] p-3.5"><span className={`flex h-10 w-10 items-center justify-center rounded-xl bg-white/[.07] ${item.tint}`}><item.icon size={17} /></span><div><p className="text-sm font-bold text-[#f0f2ee]">{item.title}</p><p className="mt-0.5 text-xs text-[#b1c0c8]">{item.desc}</p></div><ArrowRight size={14} className="ml-auto text-[#93a8b2]" /></div>)}
+                  {[{ icon: FileText, title: "Materi terkurasi", desc: "Baca dan unduh bahan pembelajaran" }, { icon: ClipboardList, title: "LKPD siap digunakan", desc: "Lembar kerja untuk setiap kegiatan" }, { icon: Send, title: "Pengumpulan terarah", desc: "Kirim hasil kerja pada jenis tugasnya" }].map((item, index) => <div key={item.title} className="diklat-feature-row flex items-center gap-3 rounded-2xl p-3.5" style={{ animationDelay: `${index * 90}ms` }}><span className="diklat-feature-icon flex h-10 w-10 items-center justify-center rounded-xl"><item.icon size={17} /></span><div><p className="text-sm font-bold text-[#183d5c]">{item.title}</p><p className="mt-0.5 text-xs text-[#526f89]">{item.desc}</p></div><ArrowRight size={14} className="ml-auto text-[#4d7ca7]" /></div>)}
                 </div>
-                <div className="mt-5 flex items-center gap-3 rounded-xl border border-white/10 px-4 py-3"><ShieldCheck size={16} className="shrink-0 text-[#d8c284]" /><p className="text-[11px] leading-5 text-[#bbc9ce]">Informasi dan dokumen mengikuti publikasi resmi penyelenggara.</p></div>
+                <div className="mt-5 flex items-center gap-3 rounded-xl border border-[#bcd4ec]/80 bg-white/45 px-4 py-3"><ShieldCheck size={16} className="shrink-0 text-[#3478ad]" /><p className="text-[11px] leading-5 text-[#496680]">Informasi dan dokumen mengikuti publikasi resmi penyelenggara.</p></div>
               </div>
             </div>
           </div>
         </section>
         <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {overviewCards.map(({ label, value, Icon }) => <div key={label} className="flex items-center gap-4 rounded-2xl border border-[#e0e6e6] bg-[#fffefa] px-5 py-4">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#edf2f1] text-[#43667a]"><Icon size={19} /></span><div><p className="text-xs font-semibold text-[#829098]">{label}</p><p className="mt-1 text-2xl font-extrabold text-[#1d3b52]">{overviewLoading ? <span className="inline-block h-6 w-10 animate-pulse rounded bg-[#e9eeee]" /> : value ?? "—"}</p></div>
+          {overviewCards.map(({ label, value, Icon }) => <div key={label} className="diklat-stat-card flex items-center gap-4 rounded-2xl px-5 py-4">
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#dfedfc] text-[#3475ac]"><Icon size={19} /></span><div><p className="text-xs font-semibold text-[#5b748a]">{label}</p><p className="mt-1 text-2xl font-extrabold text-[#1d3b52]">{overviewLoading ? <span className="inline-block h-6 w-10 animate-pulse rounded bg-[#dce9f4]" /> : value ?? "—"}</p></div>
           </div>)}
         </section>
         {overviewError && <div className="mt-4"><Notice title="Ringkasan belum dapat dimuat" message={overviewError} retry={() => void loadOverview()} /></div>}
@@ -479,13 +479,13 @@ export default function PusatDiklat() {
           {overviewLoading ? <div className="mt-6"><LoadingRows /></div> : overviewError ? null : overview?.featured?.length ? <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{overview.featured.map(item => <TrainingCard key={item.id} item={item} />)}</div> : <div className="mt-6 rounded-2xl border border-dashed border-[#cdd8db] bg-[#fbfcf9] p-9 text-center"><GraduationCap className="mx-auto text-[#78909c]" size={24} /><p className="mt-3 font-bold text-[#365469]">Belum ada diklat pilihan</p><p className="mt-1 text-sm text-[#849098]">Kegiatan akan tampil di sini setelah dipublikasikan.</p></div>}
         </section>
         <section className="mt-14 grid gap-4 lg:grid-cols-[1.1fr_.9fr]">
-          <button onClick={() => visit(`${root}?tab=materi`)} className="group flex min-h-[190px] items-center justify-between gap-5 rounded-[22px] border border-[#dfe6e7] bg-[#fffefa] p-6 text-left transition hover:border-[#b7c7cf] hover:shadow-[0_16px_34px_-24px_rgba(26,53,74,.35)] sm:p-8">
+          <button onClick={() => visit(`${root}?tab=materi`)} className="diklat-link-card group flex min-h-[190px] items-center justify-between gap-5 rounded-[22px] p-6 text-left sm:p-8">
             <span><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#e8eff1] text-[#43667a]"><BookOpen size={21} /></span><span className="mt-5 block text-xl font-extrabold text-[#1d3b52]">Materi & LKPD</span><span className="mt-2 block max-w-sm text-sm leading-6 text-[#77858d]">Cari dokumen pembelajaran dari berbagai kegiatan yang tersedia.</span></span>
             <ArrowRight className="shrink-0 text-[#557488] transition group-hover:translate-x-1" size={20} />
           </button>
-          <button onClick={() => overview?.settings.archiveVisible && visit(`${root}/arsip`)} disabled={!overview?.settings.archiveVisible} className="group flex min-h-[190px] items-center justify-between gap-5 rounded-[22px] border border-[#dfe6e7] bg-[#f0f1e9] p-6 text-left transition enabled:hover:border-[#c4c9ad] enabled:hover:shadow-[0_16px_34px_-24px_rgba(26,53,74,.25)] disabled:cursor-not-allowed disabled:opacity-70 sm:p-8">
-            <span><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#e2e3d6] text-[#6e714e]"><FolderArchive size={21} /></span><span className="mt-5 block text-xl font-extrabold text-[#394c50]">Arsip pembelajaran</span><span className="mt-2 block max-w-sm text-sm leading-6 text-[#747e78]">{overview?.settings.archiveVisible ? "Telusuri program terdahulu dan dokumen yang tetap tersedia." : "Arsip saat ini belum dibuka untuk pengunjung."}</span></span>
-            {overview?.settings.archiveVisible && <ArrowRight className="shrink-0 text-[#777b5c] transition group-hover:translate-x-1" size={20} />}
+          <button onClick={() => overview?.settings.archiveVisible && visit(`${root}/arsip`)} disabled={!overview?.settings.archiveVisible} className="diklat-link-card diklat-link-card--archive group flex min-h-[190px] items-center justify-between gap-5 rounded-[22px] p-6 text-left disabled:cursor-not-allowed disabled:opacity-70 sm:p-8">
+            <span><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#dfedfc] text-[#3475ac]"><FolderArchive size={21} /></span><span className="mt-5 block text-xl font-extrabold text-[#1d3b52]">Arsip pembelajaran</span><span className="mt-2 block max-w-sm text-sm leading-6 text-[#526f89]">{overview?.settings.archiveVisible ? "Telusuri program terdahulu dan dokumen yang tetap tersedia." : "Arsip saat ini belum dibuka untuk pengunjung."}</span></span>
+            {overview?.settings.archiveVisible && <ArrowRight className="shrink-0 text-[#3475ac] transition group-hover:translate-x-1" size={20} />}
           </button>
         </section>
       </>}
