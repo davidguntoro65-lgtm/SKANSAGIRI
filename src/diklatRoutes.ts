@@ -654,6 +654,23 @@ function route(handler: (req: Request, res: Response, next: NextFunction) => Pro
   return (req: Request, res: Response, next: NextFunction) => Promise.resolve(handler(req, res, next)).catch(next);
 }
 
+function uploadSingle(fieldName: string) {
+  const parseFile = upload.single(fieldName);
+  return (req: Request, res: Response, next: NextFunction) => {
+    parseFile(req, res, (error?: unknown) => {
+      if (!error) return next();
+      if (error instanceof multer.MulterError) {
+        if (error.code === "LIMIT_FILE_SIZE") {
+          const maxFileSizeMb = HARD_MAX_FILE_BYTES / (1024 * 1024);
+          return fail(res, 413, "FILE_TOO_LARGE", `Ukuran file melebihi batas teknis maksimal ${maxFileSizeMb} MB per berkas.`);
+        }
+        return fail(res, 400, "INVALID_UPLOAD", "Permintaan unggah tidak valid. Pastikan satu berkas dikirim untuk setiap permintaan.");
+      }
+      return next(error);
+    });
+  };
+}
+
 export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) {
   const admin = requireAuth as any;
 
@@ -827,7 +844,7 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
     return streamDriveFile(res, submission.driveFile);
   }));
 
-  app.post(`${API}/public/submissions`, submissionRateLimit, upload.single("file"), route(async (req, res) => {
+  app.post(`${API}/public/submissions`, submissionRateLimit, uploadSingle("file"), route(async (req, res) => {
     const settings = await ensureSettings();
     if (!settings.submissionsEnabled) return fail(res, 403, "SUBMISSIONS_CLOSED", "Pengumpulan tugas sedang ditutup.");
     const trainingId = clean(req.body?.trainingId, 100);
@@ -1086,7 +1103,7 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
     return ok(res, { deleted: true });
   }));
 
-  app.post(`${API}/admin/trainings/:id/documents`, admin, upload.single("file"), route(async (req, res) => {
+  app.post(`${API}/admin/trainings/:id/documents`, admin, uploadSingle("file"), route(async (req, res) => {
     const training = await db.diklatTraining.findUnique({ where: { id: clean(req.params.id, 100) } });
     const type = clean(req.body?.type, 20).toUpperCase();
     const title = clean(req.body?.title, 160);

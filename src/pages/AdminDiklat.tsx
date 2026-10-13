@@ -59,6 +59,7 @@ type DocumentFileInput = { id: number; files: File[] };
 
 const TOKEN_KEY = "smkn1_adm_token";
 const PAGE_SIZE = 10;
+const MAX_DOCUMENT_FILE_BYTES = 20 * 1024 * 1024;
 const emptyTraining: TrainingDraft = { title: "", summary: "", description: "", category: "", period: "", year: "", status: "DRAFT", acceptsSubmissions: false, archiveVisible: false, sortOrder: "0" };
 const emptyTask: TaskDraft = { name: "", description: "", sortOrder: "0", active: true, deadline: "", maxFileSizeMb: "", allowedMimeTypes: "" };
 const emptyDoc: DocumentDraft = { type: "MATERIAL", title: "", description: "", category: "", sortOrder: "0", status: "PUBLISHED" };
@@ -159,6 +160,7 @@ export default function AdminDiklat({ theme = "light" }: Props) {
   const [driveReconciling, setDriveReconciling] = useState(false);
   const [driveCursor, setDriveCursor] = useState("");
   const selectedDocumentFiles = documentFileInputs.flatMap(row => row.files.map((file, index) => ({ rowId: row.id, index, file })));
+  const oversizedDocumentFiles = selectedDocumentFiles.filter(({ file }) => file.size > MAX_DOCUMENT_FILE_BYTES);
 
   const success = (text: string) => setNotice({ type: "success", text });
   const failure = (error: unknown, fallback: string) => setNotice({ type: "error", text: error instanceof Error ? error.message : fallback });
@@ -311,6 +313,10 @@ export default function AdminDiklat({ theme = "light" }: Props) {
   const uploadDocument = async (event: FormEvent) => {
     event.preventDefault();
     if (!selectedTraining || !selectedDocumentFiles.length) return;
+    if (oversizedDocumentFiles.length) {
+      failure(new Error(`Batas teknis unggahan adalah 20 MB per berkas. Ganti: ${oversizedDocumentFiles.slice(0, 3).map(({ file }) => file.name).join(", ")}.`), "Berkas terlalu besar.");
+      return;
+    }
     const baseTitle = documentDraft.title.trim();
     if (!baseTitle) return;
 
@@ -570,10 +576,11 @@ export default function AdminDiklat({ theme = "light" }: Props) {
                           </div>)}
                         </div>
                         <button type="button" disabled={saving} onClick={addDocumentFileInput} className={`mt-2 inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-50 ${palette.button}`}><Plus size={14} /> Tambah berkas</button>
-                        <p className="mt-1 text-[10px] font-normal">Pilih beberapa file sekaligus atau tambah kolom dengan tombol +.</p>
+                        <p className="mt-1 text-[10px] font-normal">Pilih beberapa file sekaligus atau tambah kolom dengan tombol +. Maksimal 20 MB per berkas; batas portal dapat lebih rendah.</p>
+                        {oversizedDocumentFiles.length > 0 && <p role="alert" className="mt-2 rounded-lg border border-rose-300/70 bg-rose-50 px-3 py-2 text-[11px] font-semibold text-rose-700">Berkas melebihi batas teknis 20 MB dan tidak akan dikirim: {oversizedDocumentFiles.slice(0, 3).map(({ file }) => file.name).join(", ")}{oversizedDocumentFiles.length > 3 ? `, dan ${oversizedDocumentFiles.length - 3} lainnya` : ""}. Ganti dengan berkas yang lebih kecil.</p>}
                       </div>
                     </div>
-                    <button disabled={saving || selectedDocumentFiles.length === 0} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-[#173653] px-3.5 py-2.5 text-xs font-extrabold text-white disabled:opacity-50">{saving ? <LoaderCircle className="animate-spin" size={14} /> : <Upload size={14} />} {saving ? "Mengunggah berkas…" : selectedDocumentFiles.length > 1 ? `Unggah ${selectedDocumentFiles.length} dokumen` : "Unggah dokumen"}</button>
+                    <button disabled={saving || selectedDocumentFiles.length === 0 || oversizedDocumentFiles.length > 0} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-[#173653] px-3.5 py-2.5 text-xs font-extrabold text-white disabled:opacity-50">{saving ? <LoaderCircle className="animate-spin" size={14} /> : <Upload size={14} />} {saving ? "Mengunggah berkas…" : selectedDocumentFiles.length > 1 ? `Unggah ${selectedDocumentFiles.length} dokumen` : "Unggah dokumen"}</button>
                   </form>
                   {trainingDetail?.documents?.length ? <div className="space-y-2">{trainingDetail.documents.map(item => <div key={item.id} className={`flex items-center gap-3 rounded-xl border px-3.5 py-3 ${dark ? "border-white/10" : "border-[#e2e8e8]"}`}><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${dark ? "bg-white/[.05] text-[#d1b66f]" : "bg-[#edf2f1] text-[#557589]"}`}><File size={16} /></span><div className="min-w-0 flex-1"><p className={`truncate text-sm font-bold ${palette.text}`}>{item.title}</p><p className={`mt-0.5 text-[10px] ${palette.muted}`}>{item.type === "LKPD" ? "LKPD" : "Materi"} · {item.driveFileName}</p></div><StatusBadge dark={dark} status={item.status} /><button aria-label={`Edit ${item.title}`} onClick={() => { setEditingDocument(item); setDocumentDraft({ type: item.type, title: item.title, description: item.description || "", category: item.category || "", sortOrder: String(item.sortOrder), status: item.status }); }} className={`rounded-lg p-2 ${palette.muted} hover:text-[#bd9852]`}><Pencil size={15} /></button><button aria-label={`Arsipkan ${item.title}`} onClick={() => void archiveDocument(item)} className="rounded-lg p-2 text-rose-500 hover:bg-rose-500/10"><Archive size={15} /></button></div>)}</div> : <p className={`rounded-xl border border-dashed p-4 text-xs ${dark ? "border-white/10 text-slate-400" : "border-[#dce4e5] text-[#7b8990]"}`}>Daftar dokumen belum tersedia melalui endpoint detail untuk kegiatan ini.</p>}
                 </div>
