@@ -25235,6 +25235,7090 @@ var require_express2 = __commonJS({
   }
 });
 
+// node_modules/bn.js/lib/bn.js
+var require_bn = __commonJS({
+  "node_modules/bn.js/lib/bn.js"(exports2, module2) {
+    (function(module3, exports3) {
+      "use strict";
+      function assert(val, msg) {
+        if (!val) throw new Error(msg || "Assertion failed");
+      }
+      function inherits(ctor, superCtor) {
+        ctor.super_ = superCtor;
+        var TempCtor = function() {
+        };
+        TempCtor.prototype = superCtor.prototype;
+        ctor.prototype = new TempCtor();
+        ctor.prototype.constructor = ctor;
+      }
+      function BN(number, base, endian) {
+        if (BN.isBN(number)) {
+          return number;
+        }
+        this.negative = 0;
+        this.words = null;
+        this.length = 0;
+        this.red = null;
+        if (number !== null) {
+          if (base === "le" || base === "be") {
+            endian = base;
+            base = 10;
+          }
+          this._init(number || 0, base || 10, endian || "be");
+        }
+      }
+      if (typeof module3 === "object") {
+        module3.exports = BN;
+      } else {
+        exports3.BN = BN;
+      }
+      BN.BN = BN;
+      BN.wordSize = 26;
+      var Buffer4;
+      try {
+        if (typeof window !== "undefined" && typeof window.Buffer !== "undefined") {
+          Buffer4 = window.Buffer;
+        } else {
+          Buffer4 = require("buffer").Buffer;
+        }
+      } catch (e2) {
+      }
+      BN.isBN = function isBN(num) {
+        if (num instanceof BN) {
+          return true;
+        }
+        return num !== null && typeof num === "object" && num.constructor.wordSize === BN.wordSize && Array.isArray(num.words);
+      };
+      BN.max = function max(left, right) {
+        if (left.cmp(right) > 0) return left;
+        return right;
+      };
+      BN.min = function min(left, right) {
+        if (left.cmp(right) < 0) return left;
+        return right;
+      };
+      BN.prototype._init = function init2(number, base, endian) {
+        if (typeof number === "number") {
+          return this._initNumber(number, base, endian);
+        }
+        if (typeof number === "object") {
+          return this._initArray(number, base, endian);
+        }
+        if (base === "hex") {
+          base = 16;
+        }
+        assert(base === (base | 0) && base >= 2 && base <= 36);
+        number = number.toString().replace(/\s+/g, "");
+        var start = 0;
+        if (number[0] === "-") {
+          start++;
+          this.negative = 1;
+        }
+        if (start < number.length) {
+          if (base === 16) {
+            this._parseHex(number, start, endian);
+          } else {
+            this._parseBase(number, base, start);
+            if (endian === "le") {
+              this._initArray(this.toArray(), base, endian);
+            }
+          }
+        }
+      };
+      BN.prototype._initNumber = function _initNumber(number, base, endian) {
+        if (number < 0) {
+          this.negative = 1;
+          number = -number;
+        }
+        if (number < 67108864) {
+          this.words = [number & 67108863];
+          this.length = 1;
+        } else if (number < 4503599627370496) {
+          this.words = [
+            number & 67108863,
+            number / 67108864 & 67108863
+          ];
+          this.length = 2;
+        } else {
+          assert(number < 9007199254740992);
+          this.words = [
+            number & 67108863,
+            number / 67108864 & 67108863,
+            1
+          ];
+          this.length = 3;
+        }
+        if (endian !== "le") return;
+        this._initArray(this.toArray(), base, endian);
+      };
+      BN.prototype._initArray = function _initArray(number, base, endian) {
+        assert(typeof number.length === "number");
+        if (number.length <= 0) {
+          this.words = [0];
+          this.length = 1;
+          return this;
+        }
+        this.length = Math.ceil(number.length / 3);
+        this.words = new Array(this.length);
+        for (var i2 = 0; i2 < this.length; i2++) {
+          this.words[i2] = 0;
+        }
+        var j, w;
+        var off = 0;
+        if (endian === "be") {
+          for (i2 = number.length - 1, j = 0; i2 >= 0; i2 -= 3) {
+            w = number[i2] | number[i2 - 1] << 8 | number[i2 - 2] << 16;
+            this.words[j] |= w << off & 67108863;
+            this.words[j + 1] = w >>> 26 - off & 67108863;
+            off += 24;
+            if (off >= 26) {
+              off -= 26;
+              j++;
+            }
+          }
+        } else if (endian === "le") {
+          for (i2 = 0, j = 0; i2 < number.length; i2 += 3) {
+            w = number[i2] | number[i2 + 1] << 8 | number[i2 + 2] << 16;
+            this.words[j] |= w << off & 67108863;
+            this.words[j + 1] = w >>> 26 - off & 67108863;
+            off += 24;
+            if (off >= 26) {
+              off -= 26;
+              j++;
+            }
+          }
+        }
+        return this.strip();
+      };
+      function parseHex4Bits(string, index) {
+        var c = string.charCodeAt(index);
+        if (c >= 65 && c <= 70) {
+          return c - 55;
+        } else if (c >= 97 && c <= 102) {
+          return c - 87;
+        } else {
+          return c - 48 & 15;
+        }
+      }
+      function parseHexByte(string, lowerBound, index) {
+        var r2 = parseHex4Bits(string, index);
+        if (index - 1 >= lowerBound) {
+          r2 |= parseHex4Bits(string, index - 1) << 4;
+        }
+        return r2;
+      }
+      BN.prototype._parseHex = function _parseHex(number, start, endian) {
+        this.length = Math.ceil((number.length - start) / 6);
+        this.words = new Array(this.length);
+        for (var i2 = 0; i2 < this.length; i2++) {
+          this.words[i2] = 0;
+        }
+        var off = 0;
+        var j = 0;
+        var w;
+        if (endian === "be") {
+          for (i2 = number.length - 1; i2 >= start; i2 -= 2) {
+            w = parseHexByte(number, start, i2) << off;
+            this.words[j] |= w & 67108863;
+            if (off >= 18) {
+              off -= 18;
+              j += 1;
+              this.words[j] |= w >>> 26;
+            } else {
+              off += 8;
+            }
+          }
+        } else {
+          var parseLength = number.length - start;
+          for (i2 = parseLength % 2 === 0 ? start + 1 : start; i2 < number.length; i2 += 2) {
+            w = parseHexByte(number, start, i2) << off;
+            this.words[j] |= w & 67108863;
+            if (off >= 18) {
+              off -= 18;
+              j += 1;
+              this.words[j] |= w >>> 26;
+            } else {
+              off += 8;
+            }
+          }
+        }
+        this.strip();
+      };
+      function parseBase(str, start, end, mul) {
+        var r2 = 0;
+        var len = Math.min(str.length, end);
+        for (var i2 = start; i2 < len; i2++) {
+          var c = str.charCodeAt(i2) - 48;
+          r2 *= mul;
+          if (c >= 49) {
+            r2 += c - 49 + 10;
+          } else if (c >= 17) {
+            r2 += c - 17 + 10;
+          } else {
+            r2 += c;
+          }
+        }
+        return r2;
+      }
+      BN.prototype._parseBase = function _parseBase(number, base, start) {
+        this.words = [0];
+        this.length = 1;
+        for (var limbLen = 0, limbPow = 1; limbPow <= 67108863; limbPow *= base) {
+          limbLen++;
+        }
+        limbLen--;
+        limbPow = limbPow / base | 0;
+        var total = number.length - start;
+        var mod = total % limbLen;
+        var end = Math.min(total, total - mod) + start;
+        var word = 0;
+        for (var i2 = start; i2 < end; i2 += limbLen) {
+          word = parseBase(number, i2, i2 + limbLen, base);
+          this.imuln(limbPow);
+          if (this.words[0] + word < 67108864) {
+            this.words[0] += word;
+          } else {
+            this._iaddn(word);
+          }
+        }
+        if (mod !== 0) {
+          var pow = 1;
+          word = parseBase(number, i2, number.length, base);
+          for (i2 = 0; i2 < mod; i2++) {
+            pow *= base;
+          }
+          this.imuln(pow);
+          if (this.words[0] + word < 67108864) {
+            this.words[0] += word;
+          } else {
+            this._iaddn(word);
+          }
+        }
+        this.strip();
+      };
+      BN.prototype.copy = function copy(dest) {
+        dest.words = new Array(this.length);
+        for (var i2 = 0; i2 < this.length; i2++) {
+          dest.words[i2] = this.words[i2];
+        }
+        dest.length = this.length;
+        dest.negative = this.negative;
+        dest.red = this.red;
+      };
+      BN.prototype.clone = function clone2() {
+        var r2 = new BN(null);
+        this.copy(r2);
+        return r2;
+      };
+      BN.prototype._expand = function _expand(size) {
+        while (this.length < size) {
+          this.words[this.length++] = 0;
+        }
+        return this;
+      };
+      BN.prototype.strip = function strip() {
+        while (this.length > 1 && this.words[this.length - 1] === 0) {
+          this.length--;
+        }
+        return this._normSign();
+      };
+      BN.prototype._normSign = function _normSign() {
+        if (this.length === 1 && this.words[0] === 0) {
+          this.negative = 0;
+        }
+        return this;
+      };
+      BN.prototype.inspect = function inspect() {
+        return (this.red ? "<BN-R: " : "<BN: ") + this.toString(16) + ">";
+      };
+      var zeros = [
+        "",
+        "0",
+        "00",
+        "000",
+        "0000",
+        "00000",
+        "000000",
+        "0000000",
+        "00000000",
+        "000000000",
+        "0000000000",
+        "00000000000",
+        "000000000000",
+        "0000000000000",
+        "00000000000000",
+        "000000000000000",
+        "0000000000000000",
+        "00000000000000000",
+        "000000000000000000",
+        "0000000000000000000",
+        "00000000000000000000",
+        "000000000000000000000",
+        "0000000000000000000000",
+        "00000000000000000000000",
+        "000000000000000000000000",
+        "0000000000000000000000000"
+      ];
+      var groupSizes = [
+        0,
+        0,
+        25,
+        16,
+        12,
+        11,
+        10,
+        9,
+        8,
+        8,
+        7,
+        7,
+        7,
+        7,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5
+      ];
+      var groupBases = [
+        0,
+        0,
+        33554432,
+        43046721,
+        16777216,
+        48828125,
+        60466176,
+        40353607,
+        16777216,
+        43046721,
+        1e7,
+        19487171,
+        35831808,
+        62748517,
+        7529536,
+        11390625,
+        16777216,
+        24137569,
+        34012224,
+        47045881,
+        64e6,
+        4084101,
+        5153632,
+        6436343,
+        7962624,
+        9765625,
+        11881376,
+        14348907,
+        17210368,
+        20511149,
+        243e5,
+        28629151,
+        33554432,
+        39135393,
+        45435424,
+        52521875,
+        60466176
+      ];
+      BN.prototype.toString = function toString2(base, padding) {
+        base = base || 10;
+        padding = padding | 0 || 1;
+        var out;
+        if (base === 16 || base === "hex") {
+          out = "";
+          var off = 0;
+          var carry = 0;
+          for (var i2 = 0; i2 < this.length; i2++) {
+            var w = this.words[i2];
+            var word = ((w << off | carry) & 16777215).toString(16);
+            carry = w >>> 24 - off & 16777215;
+            off += 2;
+            if (off >= 26) {
+              off -= 26;
+              i2--;
+            }
+            if (carry !== 0 || i2 !== this.length - 1) {
+              out = zeros[6 - word.length] + word + out;
+            } else {
+              out = word + out;
+            }
+          }
+          if (carry !== 0) {
+            out = carry.toString(16) + out;
+          }
+          while (out.length % padding !== 0) {
+            out = "0" + out;
+          }
+          if (this.negative !== 0) {
+            out = "-" + out;
+          }
+          return out;
+        }
+        if (base === (base | 0) && base >= 2 && base <= 36) {
+          var groupSize = groupSizes[base];
+          var groupBase = groupBases[base];
+          out = "";
+          var c = this.clone();
+          c.negative = 0;
+          while (!c.isZero()) {
+            var r2 = c.modn(groupBase).toString(base);
+            c = c.idivn(groupBase);
+            if (!c.isZero()) {
+              out = zeros[groupSize - r2.length] + r2 + out;
+            } else {
+              out = r2 + out;
+            }
+          }
+          if (this.isZero()) {
+            out = "0" + out;
+          }
+          while (out.length % padding !== 0) {
+            out = "0" + out;
+          }
+          if (this.negative !== 0) {
+            out = "-" + out;
+          }
+          return out;
+        }
+        assert(false, "Base should be between 2 and 36");
+      };
+      BN.prototype.toNumber = function toNumber() {
+        var ret = this.words[0];
+        if (this.length === 2) {
+          ret += this.words[1] * 67108864;
+        } else if (this.length === 3 && this.words[2] === 1) {
+          ret += 4503599627370496 + this.words[1] * 67108864;
+        } else if (this.length > 2) {
+          assert(false, "Number can only safely store up to 53 bits");
+        }
+        return this.negative !== 0 ? -ret : ret;
+      };
+      BN.prototype.toJSON = function toJSON() {
+        return this.toString(16);
+      };
+      BN.prototype.toBuffer = function toBuffer(endian, length) {
+        assert(typeof Buffer4 !== "undefined");
+        return this.toArrayLike(Buffer4, endian, length);
+      };
+      BN.prototype.toArray = function toArray(endian, length) {
+        return this.toArrayLike(Array, endian, length);
+      };
+      BN.prototype.toArrayLike = function toArrayLike(ArrayType, endian, length) {
+        var byteLength = this.byteLength();
+        var reqLength = length || Math.max(1, byteLength);
+        assert(byteLength <= reqLength, "byte array longer than desired length");
+        assert(reqLength > 0, "Requested array length <= 0");
+        this.strip();
+        var littleEndian = endian === "le";
+        var res = new ArrayType(reqLength);
+        var b, i2;
+        var q = this.clone();
+        if (!littleEndian) {
+          for (i2 = 0; i2 < reqLength - byteLength; i2++) {
+            res[i2] = 0;
+          }
+          for (i2 = 0; !q.isZero(); i2++) {
+            b = q.andln(255);
+            q.iushrn(8);
+            res[reqLength - i2 - 1] = b;
+          }
+        } else {
+          for (i2 = 0; !q.isZero(); i2++) {
+            b = q.andln(255);
+            q.iushrn(8);
+            res[i2] = b;
+          }
+          for (; i2 < reqLength; i2++) {
+            res[i2] = 0;
+          }
+        }
+        return res;
+      };
+      if (Math.clz32) {
+        BN.prototype._countBits = function _countBits(w) {
+          return 32 - Math.clz32(w);
+        };
+      } else {
+        BN.prototype._countBits = function _countBits(w) {
+          var t2 = w;
+          var r2 = 0;
+          if (t2 >= 4096) {
+            r2 += 13;
+            t2 >>>= 13;
+          }
+          if (t2 >= 64) {
+            r2 += 7;
+            t2 >>>= 7;
+          }
+          if (t2 >= 8) {
+            r2 += 4;
+            t2 >>>= 4;
+          }
+          if (t2 >= 2) {
+            r2 += 2;
+            t2 >>>= 2;
+          }
+          return r2 + t2;
+        };
+      }
+      BN.prototype._zeroBits = function _zeroBits(w) {
+        if (w === 0) return 26;
+        var t2 = w;
+        var r2 = 0;
+        if ((t2 & 8191) === 0) {
+          r2 += 13;
+          t2 >>>= 13;
+        }
+        if ((t2 & 127) === 0) {
+          r2 += 7;
+          t2 >>>= 7;
+        }
+        if ((t2 & 15) === 0) {
+          r2 += 4;
+          t2 >>>= 4;
+        }
+        if ((t2 & 3) === 0) {
+          r2 += 2;
+          t2 >>>= 2;
+        }
+        if ((t2 & 1) === 0) {
+          r2++;
+        }
+        return r2;
+      };
+      BN.prototype.bitLength = function bitLength() {
+        var w = this.words[this.length - 1];
+        var hi = this._countBits(w);
+        return (this.length - 1) * 26 + hi;
+      };
+      function toBitArray(num) {
+        var w = new Array(num.bitLength());
+        for (var bit = 0; bit < w.length; bit++) {
+          var off = bit / 26 | 0;
+          var wbit = bit % 26;
+          w[bit] = (num.words[off] & 1 << wbit) >>> wbit;
+        }
+        return w;
+      }
+      BN.prototype.zeroBits = function zeroBits() {
+        if (this.isZero()) return 0;
+        var r2 = 0;
+        for (var i2 = 0; i2 < this.length; i2++) {
+          var b = this._zeroBits(this.words[i2]);
+          r2 += b;
+          if (b !== 26) break;
+        }
+        return r2;
+      };
+      BN.prototype.byteLength = function byteLength() {
+        return Math.ceil(this.bitLength() / 8);
+      };
+      BN.prototype.toTwos = function toTwos(width) {
+        if (this.negative !== 0) {
+          return this.abs().inotn(width).iaddn(1);
+        }
+        return this.clone();
+      };
+      BN.prototype.fromTwos = function fromTwos(width) {
+        if (this.testn(width - 1)) {
+          return this.notn(width).iaddn(1).ineg();
+        }
+        return this.clone();
+      };
+      BN.prototype.isNeg = function isNeg() {
+        return this.negative !== 0;
+      };
+      BN.prototype.neg = function neg() {
+        return this.clone().ineg();
+      };
+      BN.prototype.ineg = function ineg() {
+        if (!this.isZero()) {
+          this.negative ^= 1;
+        }
+        return this;
+      };
+      BN.prototype.iuor = function iuor(num) {
+        while (this.length < num.length) {
+          this.words[this.length++] = 0;
+        }
+        for (var i2 = 0; i2 < num.length; i2++) {
+          this.words[i2] = this.words[i2] | num.words[i2];
+        }
+        return this.strip();
+      };
+      BN.prototype.ior = function ior(num) {
+        assert((this.negative | num.negative) === 0);
+        return this.iuor(num);
+      };
+      BN.prototype.or = function or(num) {
+        if (this.length > num.length) return this.clone().ior(num);
+        return num.clone().ior(this);
+      };
+      BN.prototype.uor = function uor(num) {
+        if (this.length > num.length) return this.clone().iuor(num);
+        return num.clone().iuor(this);
+      };
+      BN.prototype.iuand = function iuand(num) {
+        var b;
+        if (this.length > num.length) {
+          b = num;
+        } else {
+          b = this;
+        }
+        for (var i2 = 0; i2 < b.length; i2++) {
+          this.words[i2] = this.words[i2] & num.words[i2];
+        }
+        this.length = b.length;
+        return this.strip();
+      };
+      BN.prototype.iand = function iand(num) {
+        assert((this.negative | num.negative) === 0);
+        return this.iuand(num);
+      };
+      BN.prototype.and = function and(num) {
+        if (this.length > num.length) return this.clone().iand(num);
+        return num.clone().iand(this);
+      };
+      BN.prototype.uand = function uand(num) {
+        if (this.length > num.length) return this.clone().iuand(num);
+        return num.clone().iuand(this);
+      };
+      BN.prototype.iuxor = function iuxor(num) {
+        var a;
+        var b;
+        if (this.length > num.length) {
+          a = this;
+          b = num;
+        } else {
+          a = num;
+          b = this;
+        }
+        for (var i2 = 0; i2 < b.length; i2++) {
+          this.words[i2] = a.words[i2] ^ b.words[i2];
+        }
+        if (this !== a) {
+          for (; i2 < a.length; i2++) {
+            this.words[i2] = a.words[i2];
+          }
+        }
+        this.length = a.length;
+        return this.strip();
+      };
+      BN.prototype.ixor = function ixor(num) {
+        assert((this.negative | num.negative) === 0);
+        return this.iuxor(num);
+      };
+      BN.prototype.xor = function xor(num) {
+        if (this.length > num.length) return this.clone().ixor(num);
+        return num.clone().ixor(this);
+      };
+      BN.prototype.uxor = function uxor(num) {
+        if (this.length > num.length) return this.clone().iuxor(num);
+        return num.clone().iuxor(this);
+      };
+      BN.prototype.inotn = function inotn(width) {
+        assert(typeof width === "number" && width >= 0);
+        var bytesNeeded = Math.ceil(width / 26) | 0;
+        var bitsLeft = width % 26;
+        this._expand(bytesNeeded);
+        if (bitsLeft > 0) {
+          bytesNeeded--;
+        }
+        for (var i2 = 0; i2 < bytesNeeded; i2++) {
+          this.words[i2] = ~this.words[i2] & 67108863;
+        }
+        if (bitsLeft > 0) {
+          this.words[i2] = ~this.words[i2] & 67108863 >> 26 - bitsLeft;
+          i2++;
+        }
+        for (; i2 < this.length; i2++) {
+          this.words[i2] = 0;
+        }
+        return this.strip();
+      };
+      BN.prototype.notn = function notn(width) {
+        return this.clone().inotn(width);
+      };
+      BN.prototype.setn = function setn(bit, val) {
+        assert(typeof bit === "number" && bit >= 0);
+        var off = bit / 26 | 0;
+        var wbit = bit % 26;
+        this._expand(off + 1);
+        if (val) {
+          this.words[off] = this.words[off] | 1 << wbit;
+        } else {
+          this.words[off] = this.words[off] & ~(1 << wbit);
+        }
+        return this.strip();
+      };
+      BN.prototype.iadd = function iadd(num) {
+        var r2;
+        if (this.negative !== 0 && num.negative === 0) {
+          this.negative = 0;
+          r2 = this.isub(num);
+          this.negative ^= 1;
+          return this._normSign();
+        } else if (this.negative === 0 && num.negative !== 0) {
+          num.negative = 0;
+          r2 = this.isub(num);
+          num.negative = 1;
+          return r2._normSign();
+        }
+        var a, b;
+        if (this.length > num.length) {
+          a = this;
+          b = num;
+        } else {
+          a = num;
+          b = this;
+        }
+        var carry = 0;
+        for (var i2 = 0; i2 < b.length; i2++) {
+          r2 = (a.words[i2] | 0) + (b.words[i2] | 0) + carry;
+          this.words[i2] = r2 & 67108863;
+          carry = r2 >>> 26;
+        }
+        for (; carry !== 0 && i2 < a.length; i2++) {
+          r2 = (a.words[i2] | 0) + carry;
+          this.words[i2] = r2 & 67108863;
+          carry = r2 >>> 26;
+        }
+        this.length = a.length;
+        if (carry !== 0) {
+          this.words[this.length] = carry;
+          this.length++;
+        } else if (a !== this) {
+          for (; i2 < a.length; i2++) {
+            this.words[i2] = a.words[i2];
+          }
+        }
+        return this;
+      };
+      BN.prototype.add = function add(num) {
+        var res;
+        if (num.negative !== 0 && this.negative === 0) {
+          num.negative = 0;
+          res = this.sub(num);
+          num.negative ^= 1;
+          return res;
+        } else if (num.negative === 0 && this.negative !== 0) {
+          this.negative = 0;
+          res = num.sub(this);
+          this.negative = 1;
+          return res;
+        }
+        if (this.length > num.length) return this.clone().iadd(num);
+        return num.clone().iadd(this);
+      };
+      BN.prototype.isub = function isub(num) {
+        if (num.negative !== 0) {
+          num.negative = 0;
+          var r2 = this.iadd(num);
+          num.negative = 1;
+          return r2._normSign();
+        } else if (this.negative !== 0) {
+          this.negative = 0;
+          this.iadd(num);
+          this.negative = 1;
+          return this._normSign();
+        }
+        var cmp = this.cmp(num);
+        if (cmp === 0) {
+          this.negative = 0;
+          this.length = 1;
+          this.words[0] = 0;
+          return this;
+        }
+        var a, b;
+        if (cmp > 0) {
+          a = this;
+          b = num;
+        } else {
+          a = num;
+          b = this;
+        }
+        var carry = 0;
+        for (var i2 = 0; i2 < b.length; i2++) {
+          r2 = (a.words[i2] | 0) - (b.words[i2] | 0) + carry;
+          carry = r2 >> 26;
+          this.words[i2] = r2 & 67108863;
+        }
+        for (; carry !== 0 && i2 < a.length; i2++) {
+          r2 = (a.words[i2] | 0) + carry;
+          carry = r2 >> 26;
+          this.words[i2] = r2 & 67108863;
+        }
+        if (carry === 0 && i2 < a.length && a !== this) {
+          for (; i2 < a.length; i2++) {
+            this.words[i2] = a.words[i2];
+          }
+        }
+        this.length = Math.max(this.length, i2);
+        if (a !== this) {
+          this.negative = 1;
+        }
+        return this.strip();
+      };
+      BN.prototype.sub = function sub(num) {
+        return this.clone().isub(num);
+      };
+      function smallMulTo(self2, num, out) {
+        out.negative = num.negative ^ self2.negative;
+        var len = self2.length + num.length | 0;
+        out.length = len;
+        len = len - 1 | 0;
+        var a = self2.words[0] | 0;
+        var b = num.words[0] | 0;
+        var r2 = a * b;
+        var lo = r2 & 67108863;
+        var carry = r2 / 67108864 | 0;
+        out.words[0] = lo;
+        for (var k = 1; k < len; k++) {
+          var ncarry = carry >>> 26;
+          var rword = carry & 67108863;
+          var maxJ = Math.min(k, num.length - 1);
+          for (var j = Math.max(0, k - self2.length + 1); j <= maxJ; j++) {
+            var i2 = k - j | 0;
+            a = self2.words[i2] | 0;
+            b = num.words[j] | 0;
+            r2 = a * b + rword;
+            ncarry += r2 / 67108864 | 0;
+            rword = r2 & 67108863;
+          }
+          out.words[k] = rword | 0;
+          carry = ncarry | 0;
+        }
+        if (carry !== 0) {
+          out.words[k] = carry | 0;
+        } else {
+          out.length--;
+        }
+        return out.strip();
+      }
+      var comb10MulTo = function comb10MulTo2(self2, num, out) {
+        var a = self2.words;
+        var b = num.words;
+        var o = out.words;
+        var c = 0;
+        var lo;
+        var mid;
+        var hi;
+        var a0 = a[0] | 0;
+        var al0 = a0 & 8191;
+        var ah0 = a0 >>> 13;
+        var a1 = a[1] | 0;
+        var al1 = a1 & 8191;
+        var ah1 = a1 >>> 13;
+        var a2 = a[2] | 0;
+        var al2 = a2 & 8191;
+        var ah2 = a2 >>> 13;
+        var a3 = a[3] | 0;
+        var al3 = a3 & 8191;
+        var ah3 = a3 >>> 13;
+        var a4 = a[4] | 0;
+        var al4 = a4 & 8191;
+        var ah4 = a4 >>> 13;
+        var a5 = a[5] | 0;
+        var al5 = a5 & 8191;
+        var ah5 = a5 >>> 13;
+        var a6 = a[6] | 0;
+        var al6 = a6 & 8191;
+        var ah6 = a6 >>> 13;
+        var a7 = a[7] | 0;
+        var al7 = a7 & 8191;
+        var ah7 = a7 >>> 13;
+        var a8 = a[8] | 0;
+        var al8 = a8 & 8191;
+        var ah8 = a8 >>> 13;
+        var a9 = a[9] | 0;
+        var al9 = a9 & 8191;
+        var ah9 = a9 >>> 13;
+        var b0 = b[0] | 0;
+        var bl0 = b0 & 8191;
+        var bh0 = b0 >>> 13;
+        var b1 = b[1] | 0;
+        var bl1 = b1 & 8191;
+        var bh1 = b1 >>> 13;
+        var b2 = b[2] | 0;
+        var bl2 = b2 & 8191;
+        var bh2 = b2 >>> 13;
+        var b3 = b[3] | 0;
+        var bl3 = b3 & 8191;
+        var bh3 = b3 >>> 13;
+        var b4 = b[4] | 0;
+        var bl4 = b4 & 8191;
+        var bh4 = b4 >>> 13;
+        var b5 = b[5] | 0;
+        var bl5 = b5 & 8191;
+        var bh5 = b5 >>> 13;
+        var b6 = b[6] | 0;
+        var bl6 = b6 & 8191;
+        var bh6 = b6 >>> 13;
+        var b7 = b[7] | 0;
+        var bl7 = b7 & 8191;
+        var bh7 = b7 >>> 13;
+        var b8 = b[8] | 0;
+        var bl8 = b8 & 8191;
+        var bh8 = b8 >>> 13;
+        var b9 = b[9] | 0;
+        var bl9 = b9 & 8191;
+        var bh9 = b9 >>> 13;
+        out.negative = self2.negative ^ num.negative;
+        out.length = 19;
+        lo = Math.imul(al0, bl0);
+        mid = Math.imul(al0, bh0);
+        mid = mid + Math.imul(ah0, bl0) | 0;
+        hi = Math.imul(ah0, bh0);
+        var w0 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w0 >>> 26) | 0;
+        w0 &= 67108863;
+        lo = Math.imul(al1, bl0);
+        mid = Math.imul(al1, bh0);
+        mid = mid + Math.imul(ah1, bl0) | 0;
+        hi = Math.imul(ah1, bh0);
+        lo = lo + Math.imul(al0, bl1) | 0;
+        mid = mid + Math.imul(al0, bh1) | 0;
+        mid = mid + Math.imul(ah0, bl1) | 0;
+        hi = hi + Math.imul(ah0, bh1) | 0;
+        var w1 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w1 >>> 26) | 0;
+        w1 &= 67108863;
+        lo = Math.imul(al2, bl0);
+        mid = Math.imul(al2, bh0);
+        mid = mid + Math.imul(ah2, bl0) | 0;
+        hi = Math.imul(ah2, bh0);
+        lo = lo + Math.imul(al1, bl1) | 0;
+        mid = mid + Math.imul(al1, bh1) | 0;
+        mid = mid + Math.imul(ah1, bl1) | 0;
+        hi = hi + Math.imul(ah1, bh1) | 0;
+        lo = lo + Math.imul(al0, bl2) | 0;
+        mid = mid + Math.imul(al0, bh2) | 0;
+        mid = mid + Math.imul(ah0, bl2) | 0;
+        hi = hi + Math.imul(ah0, bh2) | 0;
+        var w2 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w2 >>> 26) | 0;
+        w2 &= 67108863;
+        lo = Math.imul(al3, bl0);
+        mid = Math.imul(al3, bh0);
+        mid = mid + Math.imul(ah3, bl0) | 0;
+        hi = Math.imul(ah3, bh0);
+        lo = lo + Math.imul(al2, bl1) | 0;
+        mid = mid + Math.imul(al2, bh1) | 0;
+        mid = mid + Math.imul(ah2, bl1) | 0;
+        hi = hi + Math.imul(ah2, bh1) | 0;
+        lo = lo + Math.imul(al1, bl2) | 0;
+        mid = mid + Math.imul(al1, bh2) | 0;
+        mid = mid + Math.imul(ah1, bl2) | 0;
+        hi = hi + Math.imul(ah1, bh2) | 0;
+        lo = lo + Math.imul(al0, bl3) | 0;
+        mid = mid + Math.imul(al0, bh3) | 0;
+        mid = mid + Math.imul(ah0, bl3) | 0;
+        hi = hi + Math.imul(ah0, bh3) | 0;
+        var w3 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w3 >>> 26) | 0;
+        w3 &= 67108863;
+        lo = Math.imul(al4, bl0);
+        mid = Math.imul(al4, bh0);
+        mid = mid + Math.imul(ah4, bl0) | 0;
+        hi = Math.imul(ah4, bh0);
+        lo = lo + Math.imul(al3, bl1) | 0;
+        mid = mid + Math.imul(al3, bh1) | 0;
+        mid = mid + Math.imul(ah3, bl1) | 0;
+        hi = hi + Math.imul(ah3, bh1) | 0;
+        lo = lo + Math.imul(al2, bl2) | 0;
+        mid = mid + Math.imul(al2, bh2) | 0;
+        mid = mid + Math.imul(ah2, bl2) | 0;
+        hi = hi + Math.imul(ah2, bh2) | 0;
+        lo = lo + Math.imul(al1, bl3) | 0;
+        mid = mid + Math.imul(al1, bh3) | 0;
+        mid = mid + Math.imul(ah1, bl3) | 0;
+        hi = hi + Math.imul(ah1, bh3) | 0;
+        lo = lo + Math.imul(al0, bl4) | 0;
+        mid = mid + Math.imul(al0, bh4) | 0;
+        mid = mid + Math.imul(ah0, bl4) | 0;
+        hi = hi + Math.imul(ah0, bh4) | 0;
+        var w4 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w4 >>> 26) | 0;
+        w4 &= 67108863;
+        lo = Math.imul(al5, bl0);
+        mid = Math.imul(al5, bh0);
+        mid = mid + Math.imul(ah5, bl0) | 0;
+        hi = Math.imul(ah5, bh0);
+        lo = lo + Math.imul(al4, bl1) | 0;
+        mid = mid + Math.imul(al4, bh1) | 0;
+        mid = mid + Math.imul(ah4, bl1) | 0;
+        hi = hi + Math.imul(ah4, bh1) | 0;
+        lo = lo + Math.imul(al3, bl2) | 0;
+        mid = mid + Math.imul(al3, bh2) | 0;
+        mid = mid + Math.imul(ah3, bl2) | 0;
+        hi = hi + Math.imul(ah3, bh2) | 0;
+        lo = lo + Math.imul(al2, bl3) | 0;
+        mid = mid + Math.imul(al2, bh3) | 0;
+        mid = mid + Math.imul(ah2, bl3) | 0;
+        hi = hi + Math.imul(ah2, bh3) | 0;
+        lo = lo + Math.imul(al1, bl4) | 0;
+        mid = mid + Math.imul(al1, bh4) | 0;
+        mid = mid + Math.imul(ah1, bl4) | 0;
+        hi = hi + Math.imul(ah1, bh4) | 0;
+        lo = lo + Math.imul(al0, bl5) | 0;
+        mid = mid + Math.imul(al0, bh5) | 0;
+        mid = mid + Math.imul(ah0, bl5) | 0;
+        hi = hi + Math.imul(ah0, bh5) | 0;
+        var w5 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w5 >>> 26) | 0;
+        w5 &= 67108863;
+        lo = Math.imul(al6, bl0);
+        mid = Math.imul(al6, bh0);
+        mid = mid + Math.imul(ah6, bl0) | 0;
+        hi = Math.imul(ah6, bh0);
+        lo = lo + Math.imul(al5, bl1) | 0;
+        mid = mid + Math.imul(al5, bh1) | 0;
+        mid = mid + Math.imul(ah5, bl1) | 0;
+        hi = hi + Math.imul(ah5, bh1) | 0;
+        lo = lo + Math.imul(al4, bl2) | 0;
+        mid = mid + Math.imul(al4, bh2) | 0;
+        mid = mid + Math.imul(ah4, bl2) | 0;
+        hi = hi + Math.imul(ah4, bh2) | 0;
+        lo = lo + Math.imul(al3, bl3) | 0;
+        mid = mid + Math.imul(al3, bh3) | 0;
+        mid = mid + Math.imul(ah3, bl3) | 0;
+        hi = hi + Math.imul(ah3, bh3) | 0;
+        lo = lo + Math.imul(al2, bl4) | 0;
+        mid = mid + Math.imul(al2, bh4) | 0;
+        mid = mid + Math.imul(ah2, bl4) | 0;
+        hi = hi + Math.imul(ah2, bh4) | 0;
+        lo = lo + Math.imul(al1, bl5) | 0;
+        mid = mid + Math.imul(al1, bh5) | 0;
+        mid = mid + Math.imul(ah1, bl5) | 0;
+        hi = hi + Math.imul(ah1, bh5) | 0;
+        lo = lo + Math.imul(al0, bl6) | 0;
+        mid = mid + Math.imul(al0, bh6) | 0;
+        mid = mid + Math.imul(ah0, bl6) | 0;
+        hi = hi + Math.imul(ah0, bh6) | 0;
+        var w6 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w6 >>> 26) | 0;
+        w6 &= 67108863;
+        lo = Math.imul(al7, bl0);
+        mid = Math.imul(al7, bh0);
+        mid = mid + Math.imul(ah7, bl0) | 0;
+        hi = Math.imul(ah7, bh0);
+        lo = lo + Math.imul(al6, bl1) | 0;
+        mid = mid + Math.imul(al6, bh1) | 0;
+        mid = mid + Math.imul(ah6, bl1) | 0;
+        hi = hi + Math.imul(ah6, bh1) | 0;
+        lo = lo + Math.imul(al5, bl2) | 0;
+        mid = mid + Math.imul(al5, bh2) | 0;
+        mid = mid + Math.imul(ah5, bl2) | 0;
+        hi = hi + Math.imul(ah5, bh2) | 0;
+        lo = lo + Math.imul(al4, bl3) | 0;
+        mid = mid + Math.imul(al4, bh3) | 0;
+        mid = mid + Math.imul(ah4, bl3) | 0;
+        hi = hi + Math.imul(ah4, bh3) | 0;
+        lo = lo + Math.imul(al3, bl4) | 0;
+        mid = mid + Math.imul(al3, bh4) | 0;
+        mid = mid + Math.imul(ah3, bl4) | 0;
+        hi = hi + Math.imul(ah3, bh4) | 0;
+        lo = lo + Math.imul(al2, bl5) | 0;
+        mid = mid + Math.imul(al2, bh5) | 0;
+        mid = mid + Math.imul(ah2, bl5) | 0;
+        hi = hi + Math.imul(ah2, bh5) | 0;
+        lo = lo + Math.imul(al1, bl6) | 0;
+        mid = mid + Math.imul(al1, bh6) | 0;
+        mid = mid + Math.imul(ah1, bl6) | 0;
+        hi = hi + Math.imul(ah1, bh6) | 0;
+        lo = lo + Math.imul(al0, bl7) | 0;
+        mid = mid + Math.imul(al0, bh7) | 0;
+        mid = mid + Math.imul(ah0, bl7) | 0;
+        hi = hi + Math.imul(ah0, bh7) | 0;
+        var w7 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w7 >>> 26) | 0;
+        w7 &= 67108863;
+        lo = Math.imul(al8, bl0);
+        mid = Math.imul(al8, bh0);
+        mid = mid + Math.imul(ah8, bl0) | 0;
+        hi = Math.imul(ah8, bh0);
+        lo = lo + Math.imul(al7, bl1) | 0;
+        mid = mid + Math.imul(al7, bh1) | 0;
+        mid = mid + Math.imul(ah7, bl1) | 0;
+        hi = hi + Math.imul(ah7, bh1) | 0;
+        lo = lo + Math.imul(al6, bl2) | 0;
+        mid = mid + Math.imul(al6, bh2) | 0;
+        mid = mid + Math.imul(ah6, bl2) | 0;
+        hi = hi + Math.imul(ah6, bh2) | 0;
+        lo = lo + Math.imul(al5, bl3) | 0;
+        mid = mid + Math.imul(al5, bh3) | 0;
+        mid = mid + Math.imul(ah5, bl3) | 0;
+        hi = hi + Math.imul(ah5, bh3) | 0;
+        lo = lo + Math.imul(al4, bl4) | 0;
+        mid = mid + Math.imul(al4, bh4) | 0;
+        mid = mid + Math.imul(ah4, bl4) | 0;
+        hi = hi + Math.imul(ah4, bh4) | 0;
+        lo = lo + Math.imul(al3, bl5) | 0;
+        mid = mid + Math.imul(al3, bh5) | 0;
+        mid = mid + Math.imul(ah3, bl5) | 0;
+        hi = hi + Math.imul(ah3, bh5) | 0;
+        lo = lo + Math.imul(al2, bl6) | 0;
+        mid = mid + Math.imul(al2, bh6) | 0;
+        mid = mid + Math.imul(ah2, bl6) | 0;
+        hi = hi + Math.imul(ah2, bh6) | 0;
+        lo = lo + Math.imul(al1, bl7) | 0;
+        mid = mid + Math.imul(al1, bh7) | 0;
+        mid = mid + Math.imul(ah1, bl7) | 0;
+        hi = hi + Math.imul(ah1, bh7) | 0;
+        lo = lo + Math.imul(al0, bl8) | 0;
+        mid = mid + Math.imul(al0, bh8) | 0;
+        mid = mid + Math.imul(ah0, bl8) | 0;
+        hi = hi + Math.imul(ah0, bh8) | 0;
+        var w8 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w8 >>> 26) | 0;
+        w8 &= 67108863;
+        lo = Math.imul(al9, bl0);
+        mid = Math.imul(al9, bh0);
+        mid = mid + Math.imul(ah9, bl0) | 0;
+        hi = Math.imul(ah9, bh0);
+        lo = lo + Math.imul(al8, bl1) | 0;
+        mid = mid + Math.imul(al8, bh1) | 0;
+        mid = mid + Math.imul(ah8, bl1) | 0;
+        hi = hi + Math.imul(ah8, bh1) | 0;
+        lo = lo + Math.imul(al7, bl2) | 0;
+        mid = mid + Math.imul(al7, bh2) | 0;
+        mid = mid + Math.imul(ah7, bl2) | 0;
+        hi = hi + Math.imul(ah7, bh2) | 0;
+        lo = lo + Math.imul(al6, bl3) | 0;
+        mid = mid + Math.imul(al6, bh3) | 0;
+        mid = mid + Math.imul(ah6, bl3) | 0;
+        hi = hi + Math.imul(ah6, bh3) | 0;
+        lo = lo + Math.imul(al5, bl4) | 0;
+        mid = mid + Math.imul(al5, bh4) | 0;
+        mid = mid + Math.imul(ah5, bl4) | 0;
+        hi = hi + Math.imul(ah5, bh4) | 0;
+        lo = lo + Math.imul(al4, bl5) | 0;
+        mid = mid + Math.imul(al4, bh5) | 0;
+        mid = mid + Math.imul(ah4, bl5) | 0;
+        hi = hi + Math.imul(ah4, bh5) | 0;
+        lo = lo + Math.imul(al3, bl6) | 0;
+        mid = mid + Math.imul(al3, bh6) | 0;
+        mid = mid + Math.imul(ah3, bl6) | 0;
+        hi = hi + Math.imul(ah3, bh6) | 0;
+        lo = lo + Math.imul(al2, bl7) | 0;
+        mid = mid + Math.imul(al2, bh7) | 0;
+        mid = mid + Math.imul(ah2, bl7) | 0;
+        hi = hi + Math.imul(ah2, bh7) | 0;
+        lo = lo + Math.imul(al1, bl8) | 0;
+        mid = mid + Math.imul(al1, bh8) | 0;
+        mid = mid + Math.imul(ah1, bl8) | 0;
+        hi = hi + Math.imul(ah1, bh8) | 0;
+        lo = lo + Math.imul(al0, bl9) | 0;
+        mid = mid + Math.imul(al0, bh9) | 0;
+        mid = mid + Math.imul(ah0, bl9) | 0;
+        hi = hi + Math.imul(ah0, bh9) | 0;
+        var w9 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w9 >>> 26) | 0;
+        w9 &= 67108863;
+        lo = Math.imul(al9, bl1);
+        mid = Math.imul(al9, bh1);
+        mid = mid + Math.imul(ah9, bl1) | 0;
+        hi = Math.imul(ah9, bh1);
+        lo = lo + Math.imul(al8, bl2) | 0;
+        mid = mid + Math.imul(al8, bh2) | 0;
+        mid = mid + Math.imul(ah8, bl2) | 0;
+        hi = hi + Math.imul(ah8, bh2) | 0;
+        lo = lo + Math.imul(al7, bl3) | 0;
+        mid = mid + Math.imul(al7, bh3) | 0;
+        mid = mid + Math.imul(ah7, bl3) | 0;
+        hi = hi + Math.imul(ah7, bh3) | 0;
+        lo = lo + Math.imul(al6, bl4) | 0;
+        mid = mid + Math.imul(al6, bh4) | 0;
+        mid = mid + Math.imul(ah6, bl4) | 0;
+        hi = hi + Math.imul(ah6, bh4) | 0;
+        lo = lo + Math.imul(al5, bl5) | 0;
+        mid = mid + Math.imul(al5, bh5) | 0;
+        mid = mid + Math.imul(ah5, bl5) | 0;
+        hi = hi + Math.imul(ah5, bh5) | 0;
+        lo = lo + Math.imul(al4, bl6) | 0;
+        mid = mid + Math.imul(al4, bh6) | 0;
+        mid = mid + Math.imul(ah4, bl6) | 0;
+        hi = hi + Math.imul(ah4, bh6) | 0;
+        lo = lo + Math.imul(al3, bl7) | 0;
+        mid = mid + Math.imul(al3, bh7) | 0;
+        mid = mid + Math.imul(ah3, bl7) | 0;
+        hi = hi + Math.imul(ah3, bh7) | 0;
+        lo = lo + Math.imul(al2, bl8) | 0;
+        mid = mid + Math.imul(al2, bh8) | 0;
+        mid = mid + Math.imul(ah2, bl8) | 0;
+        hi = hi + Math.imul(ah2, bh8) | 0;
+        lo = lo + Math.imul(al1, bl9) | 0;
+        mid = mid + Math.imul(al1, bh9) | 0;
+        mid = mid + Math.imul(ah1, bl9) | 0;
+        hi = hi + Math.imul(ah1, bh9) | 0;
+        var w10 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w10 >>> 26) | 0;
+        w10 &= 67108863;
+        lo = Math.imul(al9, bl2);
+        mid = Math.imul(al9, bh2);
+        mid = mid + Math.imul(ah9, bl2) | 0;
+        hi = Math.imul(ah9, bh2);
+        lo = lo + Math.imul(al8, bl3) | 0;
+        mid = mid + Math.imul(al8, bh3) | 0;
+        mid = mid + Math.imul(ah8, bl3) | 0;
+        hi = hi + Math.imul(ah8, bh3) | 0;
+        lo = lo + Math.imul(al7, bl4) | 0;
+        mid = mid + Math.imul(al7, bh4) | 0;
+        mid = mid + Math.imul(ah7, bl4) | 0;
+        hi = hi + Math.imul(ah7, bh4) | 0;
+        lo = lo + Math.imul(al6, bl5) | 0;
+        mid = mid + Math.imul(al6, bh5) | 0;
+        mid = mid + Math.imul(ah6, bl5) | 0;
+        hi = hi + Math.imul(ah6, bh5) | 0;
+        lo = lo + Math.imul(al5, bl6) | 0;
+        mid = mid + Math.imul(al5, bh6) | 0;
+        mid = mid + Math.imul(ah5, bl6) | 0;
+        hi = hi + Math.imul(ah5, bh6) | 0;
+        lo = lo + Math.imul(al4, bl7) | 0;
+        mid = mid + Math.imul(al4, bh7) | 0;
+        mid = mid + Math.imul(ah4, bl7) | 0;
+        hi = hi + Math.imul(ah4, bh7) | 0;
+        lo = lo + Math.imul(al3, bl8) | 0;
+        mid = mid + Math.imul(al3, bh8) | 0;
+        mid = mid + Math.imul(ah3, bl8) | 0;
+        hi = hi + Math.imul(ah3, bh8) | 0;
+        lo = lo + Math.imul(al2, bl9) | 0;
+        mid = mid + Math.imul(al2, bh9) | 0;
+        mid = mid + Math.imul(ah2, bl9) | 0;
+        hi = hi + Math.imul(ah2, bh9) | 0;
+        var w11 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w11 >>> 26) | 0;
+        w11 &= 67108863;
+        lo = Math.imul(al9, bl3);
+        mid = Math.imul(al9, bh3);
+        mid = mid + Math.imul(ah9, bl3) | 0;
+        hi = Math.imul(ah9, bh3);
+        lo = lo + Math.imul(al8, bl4) | 0;
+        mid = mid + Math.imul(al8, bh4) | 0;
+        mid = mid + Math.imul(ah8, bl4) | 0;
+        hi = hi + Math.imul(ah8, bh4) | 0;
+        lo = lo + Math.imul(al7, bl5) | 0;
+        mid = mid + Math.imul(al7, bh5) | 0;
+        mid = mid + Math.imul(ah7, bl5) | 0;
+        hi = hi + Math.imul(ah7, bh5) | 0;
+        lo = lo + Math.imul(al6, bl6) | 0;
+        mid = mid + Math.imul(al6, bh6) | 0;
+        mid = mid + Math.imul(ah6, bl6) | 0;
+        hi = hi + Math.imul(ah6, bh6) | 0;
+        lo = lo + Math.imul(al5, bl7) | 0;
+        mid = mid + Math.imul(al5, bh7) | 0;
+        mid = mid + Math.imul(ah5, bl7) | 0;
+        hi = hi + Math.imul(ah5, bh7) | 0;
+        lo = lo + Math.imul(al4, bl8) | 0;
+        mid = mid + Math.imul(al4, bh8) | 0;
+        mid = mid + Math.imul(ah4, bl8) | 0;
+        hi = hi + Math.imul(ah4, bh8) | 0;
+        lo = lo + Math.imul(al3, bl9) | 0;
+        mid = mid + Math.imul(al3, bh9) | 0;
+        mid = mid + Math.imul(ah3, bl9) | 0;
+        hi = hi + Math.imul(ah3, bh9) | 0;
+        var w12 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w12 >>> 26) | 0;
+        w12 &= 67108863;
+        lo = Math.imul(al9, bl4);
+        mid = Math.imul(al9, bh4);
+        mid = mid + Math.imul(ah9, bl4) | 0;
+        hi = Math.imul(ah9, bh4);
+        lo = lo + Math.imul(al8, bl5) | 0;
+        mid = mid + Math.imul(al8, bh5) | 0;
+        mid = mid + Math.imul(ah8, bl5) | 0;
+        hi = hi + Math.imul(ah8, bh5) | 0;
+        lo = lo + Math.imul(al7, bl6) | 0;
+        mid = mid + Math.imul(al7, bh6) | 0;
+        mid = mid + Math.imul(ah7, bl6) | 0;
+        hi = hi + Math.imul(ah7, bh6) | 0;
+        lo = lo + Math.imul(al6, bl7) | 0;
+        mid = mid + Math.imul(al6, bh7) | 0;
+        mid = mid + Math.imul(ah6, bl7) | 0;
+        hi = hi + Math.imul(ah6, bh7) | 0;
+        lo = lo + Math.imul(al5, bl8) | 0;
+        mid = mid + Math.imul(al5, bh8) | 0;
+        mid = mid + Math.imul(ah5, bl8) | 0;
+        hi = hi + Math.imul(ah5, bh8) | 0;
+        lo = lo + Math.imul(al4, bl9) | 0;
+        mid = mid + Math.imul(al4, bh9) | 0;
+        mid = mid + Math.imul(ah4, bl9) | 0;
+        hi = hi + Math.imul(ah4, bh9) | 0;
+        var w13 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w13 >>> 26) | 0;
+        w13 &= 67108863;
+        lo = Math.imul(al9, bl5);
+        mid = Math.imul(al9, bh5);
+        mid = mid + Math.imul(ah9, bl5) | 0;
+        hi = Math.imul(ah9, bh5);
+        lo = lo + Math.imul(al8, bl6) | 0;
+        mid = mid + Math.imul(al8, bh6) | 0;
+        mid = mid + Math.imul(ah8, bl6) | 0;
+        hi = hi + Math.imul(ah8, bh6) | 0;
+        lo = lo + Math.imul(al7, bl7) | 0;
+        mid = mid + Math.imul(al7, bh7) | 0;
+        mid = mid + Math.imul(ah7, bl7) | 0;
+        hi = hi + Math.imul(ah7, bh7) | 0;
+        lo = lo + Math.imul(al6, bl8) | 0;
+        mid = mid + Math.imul(al6, bh8) | 0;
+        mid = mid + Math.imul(ah6, bl8) | 0;
+        hi = hi + Math.imul(ah6, bh8) | 0;
+        lo = lo + Math.imul(al5, bl9) | 0;
+        mid = mid + Math.imul(al5, bh9) | 0;
+        mid = mid + Math.imul(ah5, bl9) | 0;
+        hi = hi + Math.imul(ah5, bh9) | 0;
+        var w14 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w14 >>> 26) | 0;
+        w14 &= 67108863;
+        lo = Math.imul(al9, bl6);
+        mid = Math.imul(al9, bh6);
+        mid = mid + Math.imul(ah9, bl6) | 0;
+        hi = Math.imul(ah9, bh6);
+        lo = lo + Math.imul(al8, bl7) | 0;
+        mid = mid + Math.imul(al8, bh7) | 0;
+        mid = mid + Math.imul(ah8, bl7) | 0;
+        hi = hi + Math.imul(ah8, bh7) | 0;
+        lo = lo + Math.imul(al7, bl8) | 0;
+        mid = mid + Math.imul(al7, bh8) | 0;
+        mid = mid + Math.imul(ah7, bl8) | 0;
+        hi = hi + Math.imul(ah7, bh8) | 0;
+        lo = lo + Math.imul(al6, bl9) | 0;
+        mid = mid + Math.imul(al6, bh9) | 0;
+        mid = mid + Math.imul(ah6, bl9) | 0;
+        hi = hi + Math.imul(ah6, bh9) | 0;
+        var w15 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w15 >>> 26) | 0;
+        w15 &= 67108863;
+        lo = Math.imul(al9, bl7);
+        mid = Math.imul(al9, bh7);
+        mid = mid + Math.imul(ah9, bl7) | 0;
+        hi = Math.imul(ah9, bh7);
+        lo = lo + Math.imul(al8, bl8) | 0;
+        mid = mid + Math.imul(al8, bh8) | 0;
+        mid = mid + Math.imul(ah8, bl8) | 0;
+        hi = hi + Math.imul(ah8, bh8) | 0;
+        lo = lo + Math.imul(al7, bl9) | 0;
+        mid = mid + Math.imul(al7, bh9) | 0;
+        mid = mid + Math.imul(ah7, bl9) | 0;
+        hi = hi + Math.imul(ah7, bh9) | 0;
+        var w16 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w16 >>> 26) | 0;
+        w16 &= 67108863;
+        lo = Math.imul(al9, bl8);
+        mid = Math.imul(al9, bh8);
+        mid = mid + Math.imul(ah9, bl8) | 0;
+        hi = Math.imul(ah9, bh8);
+        lo = lo + Math.imul(al8, bl9) | 0;
+        mid = mid + Math.imul(al8, bh9) | 0;
+        mid = mid + Math.imul(ah8, bl9) | 0;
+        hi = hi + Math.imul(ah8, bh9) | 0;
+        var w17 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w17 >>> 26) | 0;
+        w17 &= 67108863;
+        lo = Math.imul(al9, bl9);
+        mid = Math.imul(al9, bh9);
+        mid = mid + Math.imul(ah9, bl9) | 0;
+        hi = Math.imul(ah9, bh9);
+        var w18 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w18 >>> 26) | 0;
+        w18 &= 67108863;
+        o[0] = w0;
+        o[1] = w1;
+        o[2] = w2;
+        o[3] = w3;
+        o[4] = w4;
+        o[5] = w5;
+        o[6] = w6;
+        o[7] = w7;
+        o[8] = w8;
+        o[9] = w9;
+        o[10] = w10;
+        o[11] = w11;
+        o[12] = w12;
+        o[13] = w13;
+        o[14] = w14;
+        o[15] = w15;
+        o[16] = w16;
+        o[17] = w17;
+        o[18] = w18;
+        if (c !== 0) {
+          o[19] = c;
+          out.length++;
+        }
+        return out;
+      };
+      if (!Math.imul) {
+        comb10MulTo = smallMulTo;
+      }
+      function bigMulTo(self2, num, out) {
+        out.negative = num.negative ^ self2.negative;
+        out.length = self2.length + num.length;
+        var carry = 0;
+        var hncarry = 0;
+        for (var k = 0; k < out.length - 1; k++) {
+          var ncarry = hncarry;
+          hncarry = 0;
+          var rword = carry & 67108863;
+          var maxJ = Math.min(k, num.length - 1);
+          for (var j = Math.max(0, k - self2.length + 1); j <= maxJ; j++) {
+            var i2 = k - j;
+            var a = self2.words[i2] | 0;
+            var b = num.words[j] | 0;
+            var r2 = a * b;
+            var lo = r2 & 67108863;
+            ncarry = ncarry + (r2 / 67108864 | 0) | 0;
+            lo = lo + rword | 0;
+            rword = lo & 67108863;
+            ncarry = ncarry + (lo >>> 26) | 0;
+            hncarry += ncarry >>> 26;
+            ncarry &= 67108863;
+          }
+          out.words[k] = rword;
+          carry = ncarry;
+          ncarry = hncarry;
+        }
+        if (carry !== 0) {
+          out.words[k] = carry;
+        } else {
+          out.length--;
+        }
+        return out.strip();
+      }
+      function jumboMulTo(self2, num, out) {
+        var fftm = new FFTM();
+        return fftm.mulp(self2, num, out);
+      }
+      BN.prototype.mulTo = function mulTo(num, out) {
+        var res;
+        var len = this.length + num.length;
+        if (this.length === 10 && num.length === 10) {
+          res = comb10MulTo(this, num, out);
+        } else if (len < 63) {
+          res = smallMulTo(this, num, out);
+        } else if (len < 1024) {
+          res = bigMulTo(this, num, out);
+        } else {
+          res = jumboMulTo(this, num, out);
+        }
+        return res;
+      };
+      function FFTM(x2, y) {
+        this.x = x2;
+        this.y = y;
+      }
+      FFTM.prototype.makeRBT = function makeRBT(N) {
+        var t2 = new Array(N);
+        var l = BN.prototype._countBits(N) - 1;
+        for (var i2 = 0; i2 < N; i2++) {
+          t2[i2] = this.revBin(i2, l, N);
+        }
+        return t2;
+      };
+      FFTM.prototype.revBin = function revBin(x2, l, N) {
+        if (x2 === 0 || x2 === N - 1) return x2;
+        var rb = 0;
+        for (var i2 = 0; i2 < l; i2++) {
+          rb |= (x2 & 1) << l - i2 - 1;
+          x2 >>= 1;
+        }
+        return rb;
+      };
+      FFTM.prototype.permute = function permute(rbt, rws, iws, rtws, itws, N) {
+        for (var i2 = 0; i2 < N; i2++) {
+          rtws[i2] = rws[rbt[i2]];
+          itws[i2] = iws[rbt[i2]];
+        }
+      };
+      FFTM.prototype.transform = function transform(rws, iws, rtws, itws, N, rbt) {
+        this.permute(rbt, rws, iws, rtws, itws, N);
+        for (var s2 = 1; s2 < N; s2 <<= 1) {
+          var l = s2 << 1;
+          var rtwdf = Math.cos(2 * Math.PI / l);
+          var itwdf = Math.sin(2 * Math.PI / l);
+          for (var p = 0; p < N; p += l) {
+            var rtwdf_ = rtwdf;
+            var itwdf_ = itwdf;
+            for (var j = 0; j < s2; j++) {
+              var re = rtws[p + j];
+              var ie = itws[p + j];
+              var ro = rtws[p + j + s2];
+              var io = itws[p + j + s2];
+              var rx = rtwdf_ * ro - itwdf_ * io;
+              io = rtwdf_ * io + itwdf_ * ro;
+              ro = rx;
+              rtws[p + j] = re + ro;
+              itws[p + j] = ie + io;
+              rtws[p + j + s2] = re - ro;
+              itws[p + j + s2] = ie - io;
+              if (j !== l) {
+                rx = rtwdf * rtwdf_ - itwdf * itwdf_;
+                itwdf_ = rtwdf * itwdf_ + itwdf * rtwdf_;
+                rtwdf_ = rx;
+              }
+            }
+          }
+        }
+      };
+      FFTM.prototype.guessLen13b = function guessLen13b(n, m2) {
+        var N = Math.max(m2, n) | 1;
+        var odd = N & 1;
+        var i2 = 0;
+        for (N = N / 2 | 0; N; N = N >>> 1) {
+          i2++;
+        }
+        return 1 << i2 + 1 + odd;
+      };
+      FFTM.prototype.conjugate = function conjugate(rws, iws, N) {
+        if (N <= 1) return;
+        for (var i2 = 0; i2 < N / 2; i2++) {
+          var t2 = rws[i2];
+          rws[i2] = rws[N - i2 - 1];
+          rws[N - i2 - 1] = t2;
+          t2 = iws[i2];
+          iws[i2] = -iws[N - i2 - 1];
+          iws[N - i2 - 1] = -t2;
+        }
+      };
+      FFTM.prototype.normalize13b = function normalize13b(ws, N) {
+        var carry = 0;
+        for (var i2 = 0; i2 < N / 2; i2++) {
+          var w = Math.round(ws[2 * i2 + 1] / N) * 8192 + Math.round(ws[2 * i2] / N) + carry;
+          ws[i2] = w & 67108863;
+          if (w < 67108864) {
+            carry = 0;
+          } else {
+            carry = w / 67108864 | 0;
+          }
+        }
+        return ws;
+      };
+      FFTM.prototype.convert13b = function convert13b(ws, len, rws, N) {
+        var carry = 0;
+        for (var i2 = 0; i2 < len; i2++) {
+          carry = carry + (ws[i2] | 0);
+          rws[2 * i2] = carry & 8191;
+          carry = carry >>> 13;
+          rws[2 * i2 + 1] = carry & 8191;
+          carry = carry >>> 13;
+        }
+        for (i2 = 2 * len; i2 < N; ++i2) {
+          rws[i2] = 0;
+        }
+        assert(carry === 0);
+        assert((carry & ~8191) === 0);
+      };
+      FFTM.prototype.stub = function stub(N) {
+        var ph = new Array(N);
+        for (var i2 = 0; i2 < N; i2++) {
+          ph[i2] = 0;
+        }
+        return ph;
+      };
+      FFTM.prototype.mulp = function mulp(x2, y, out) {
+        var N = 2 * this.guessLen13b(x2.length, y.length);
+        var rbt = this.makeRBT(N);
+        var _ = this.stub(N);
+        var rws = new Array(N);
+        var rwst = new Array(N);
+        var iwst = new Array(N);
+        var nrws = new Array(N);
+        var nrwst = new Array(N);
+        var niwst = new Array(N);
+        var rmws = out.words;
+        rmws.length = N;
+        this.convert13b(x2.words, x2.length, rws, N);
+        this.convert13b(y.words, y.length, nrws, N);
+        this.transform(rws, _, rwst, iwst, N, rbt);
+        this.transform(nrws, _, nrwst, niwst, N, rbt);
+        for (var i2 = 0; i2 < N; i2++) {
+          var rx = rwst[i2] * nrwst[i2] - iwst[i2] * niwst[i2];
+          iwst[i2] = rwst[i2] * niwst[i2] + iwst[i2] * nrwst[i2];
+          rwst[i2] = rx;
+        }
+        this.conjugate(rwst, iwst, N);
+        this.transform(rwst, iwst, rmws, _, N, rbt);
+        this.conjugate(rmws, _, N);
+        this.normalize13b(rmws, N);
+        out.negative = x2.negative ^ y.negative;
+        out.length = x2.length + y.length;
+        return out.strip();
+      };
+      BN.prototype.mul = function mul(num) {
+        var out = new BN(null);
+        out.words = new Array(this.length + num.length);
+        return this.mulTo(num, out);
+      };
+      BN.prototype.mulf = function mulf(num) {
+        var out = new BN(null);
+        out.words = new Array(this.length + num.length);
+        return jumboMulTo(this, num, out);
+      };
+      BN.prototype.imul = function imul(num) {
+        return this.clone().mulTo(num, this);
+      };
+      BN.prototype.imuln = function imuln(num) {
+        assert(typeof num === "number");
+        assert(num < 67108864);
+        var carry = 0;
+        for (var i2 = 0; i2 < this.length; i2++) {
+          var w = (this.words[i2] | 0) * num;
+          var lo = (w & 67108863) + (carry & 67108863);
+          carry >>= 26;
+          carry += w / 67108864 | 0;
+          carry += lo >>> 26;
+          this.words[i2] = lo & 67108863;
+        }
+        if (carry !== 0) {
+          this.words[i2] = carry;
+          this.length++;
+        }
+        if (num === 0) {
+          this.length = 1;
+          this._normSign();
+        }
+        return this;
+      };
+      BN.prototype.muln = function muln(num) {
+        return this.clone().imuln(num);
+      };
+      BN.prototype.sqr = function sqr() {
+        return this.mul(this);
+      };
+      BN.prototype.isqr = function isqr() {
+        return this.imul(this.clone());
+      };
+      BN.prototype.pow = function pow(num) {
+        var w = toBitArray(num);
+        if (w.length === 0) return new BN(1);
+        var res = this;
+        for (var i2 = 0; i2 < w.length; i2++, res = res.sqr()) {
+          if (w[i2] !== 0) break;
+        }
+        if (++i2 < w.length) {
+          for (var q = res.sqr(); i2 < w.length; i2++, q = q.sqr()) {
+            if (w[i2] === 0) continue;
+            res = res.mul(q);
+          }
+        }
+        return res;
+      };
+      BN.prototype.iushln = function iushln(bits) {
+        assert(typeof bits === "number" && bits >= 0);
+        var r2 = bits % 26;
+        var s2 = (bits - r2) / 26;
+        var carryMask = 67108863 >>> 26 - r2 << 26 - r2;
+        var i2;
+        if (r2 !== 0) {
+          var carry = 0;
+          for (i2 = 0; i2 < this.length; i2++) {
+            var newCarry = this.words[i2] & carryMask;
+            var c = (this.words[i2] | 0) - newCarry << r2;
+            this.words[i2] = c | carry;
+            carry = newCarry >>> 26 - r2;
+          }
+          if (carry) {
+            this.words[i2] = carry;
+            this.length++;
+          }
+        }
+        if (s2 !== 0) {
+          for (i2 = this.length - 1; i2 >= 0; i2--) {
+            this.words[i2 + s2] = this.words[i2];
+          }
+          for (i2 = 0; i2 < s2; i2++) {
+            this.words[i2] = 0;
+          }
+          this.length += s2;
+        }
+        return this.strip();
+      };
+      BN.prototype.ishln = function ishln(bits) {
+        assert(this.negative === 0);
+        return this.iushln(bits);
+      };
+      BN.prototype.iushrn = function iushrn(bits, hint, extended) {
+        assert(typeof bits === "number" && bits >= 0);
+        var h2;
+        if (hint) {
+          h2 = (hint - hint % 26) / 26;
+        } else {
+          h2 = 0;
+        }
+        var r2 = bits % 26;
+        var s2 = Math.min((bits - r2) / 26, this.length);
+        var mask = 67108863 ^ 67108863 >>> r2 << r2;
+        var maskedWords = extended;
+        h2 -= s2;
+        h2 = Math.max(0, h2);
+        if (maskedWords) {
+          for (var i2 = 0; i2 < s2; i2++) {
+            maskedWords.words[i2] = this.words[i2];
+          }
+          maskedWords.length = s2;
+        }
+        if (s2 === 0) {
+        } else if (this.length > s2) {
+          this.length -= s2;
+          for (i2 = 0; i2 < this.length; i2++) {
+            this.words[i2] = this.words[i2 + s2];
+          }
+        } else {
+          this.words[0] = 0;
+          this.length = 1;
+        }
+        var carry = 0;
+        for (i2 = this.length - 1; i2 >= 0 && (carry !== 0 || i2 >= h2); i2--) {
+          var word = this.words[i2] | 0;
+          this.words[i2] = carry << 26 - r2 | word >>> r2;
+          carry = word & mask;
+        }
+        if (maskedWords && carry !== 0) {
+          maskedWords.words[maskedWords.length++] = carry;
+        }
+        if (this.length === 0) {
+          this.words[0] = 0;
+          this.length = 1;
+        }
+        return this.strip();
+      };
+      BN.prototype.ishrn = function ishrn(bits, hint, extended) {
+        assert(this.negative === 0);
+        return this.iushrn(bits, hint, extended);
+      };
+      BN.prototype.shln = function shln(bits) {
+        return this.clone().ishln(bits);
+      };
+      BN.prototype.ushln = function ushln(bits) {
+        return this.clone().iushln(bits);
+      };
+      BN.prototype.shrn = function shrn(bits) {
+        return this.clone().ishrn(bits);
+      };
+      BN.prototype.ushrn = function ushrn(bits) {
+        return this.clone().iushrn(bits);
+      };
+      BN.prototype.testn = function testn(bit) {
+        assert(typeof bit === "number" && bit >= 0);
+        var r2 = bit % 26;
+        var s2 = (bit - r2) / 26;
+        var q = 1 << r2;
+        if (this.length <= s2) return false;
+        var w = this.words[s2];
+        return !!(w & q);
+      };
+      BN.prototype.imaskn = function imaskn(bits) {
+        assert(typeof bits === "number" && bits >= 0);
+        var r2 = bits % 26;
+        var s2 = (bits - r2) / 26;
+        assert(this.negative === 0, "imaskn works only with positive numbers");
+        if (this.length <= s2) {
+          return this;
+        }
+        if (r2 !== 0) {
+          s2++;
+        }
+        this.length = Math.min(s2, this.length);
+        if (r2 !== 0) {
+          var mask = 67108863 ^ 67108863 >>> r2 << r2;
+          this.words[this.length - 1] &= mask;
+        }
+        if (this.length === 0) {
+          this.words[0] = 0;
+          this.length = 1;
+        }
+        return this.strip();
+      };
+      BN.prototype.maskn = function maskn(bits) {
+        return this.clone().imaskn(bits);
+      };
+      BN.prototype.iaddn = function iaddn(num) {
+        assert(typeof num === "number");
+        assert(num < 67108864);
+        if (num < 0) return this.isubn(-num);
+        if (this.negative !== 0) {
+          if (this.length === 1 && (this.words[0] | 0) < num) {
+            this.words[0] = num - (this.words[0] | 0);
+            this.negative = 0;
+            return this;
+          }
+          this.negative = 0;
+          this.isubn(num);
+          this.negative = 1;
+          return this;
+        }
+        return this._iaddn(num);
+      };
+      BN.prototype._iaddn = function _iaddn(num) {
+        this.words[0] += num;
+        for (var i2 = 0; i2 < this.length && this.words[i2] >= 67108864; i2++) {
+          this.words[i2] -= 67108864;
+          if (i2 === this.length - 1) {
+            this.words[i2 + 1] = 1;
+          } else {
+            this.words[i2 + 1]++;
+          }
+        }
+        this.length = Math.max(this.length, i2 + 1);
+        return this;
+      };
+      BN.prototype.isubn = function isubn(num) {
+        assert(typeof num === "number");
+        assert(num < 67108864);
+        if (num < 0) return this.iaddn(-num);
+        if (this.negative !== 0) {
+          this.negative = 0;
+          this.iaddn(num);
+          this.negative = 1;
+          return this;
+        }
+        this.words[0] -= num;
+        if (this.length === 1 && this.words[0] < 0) {
+          this.words[0] = -this.words[0];
+          this.negative = 1;
+        } else {
+          for (var i2 = 0; i2 < this.length && this.words[i2] < 0; i2++) {
+            this.words[i2] += 67108864;
+            this.words[i2 + 1] -= 1;
+          }
+        }
+        return this.strip();
+      };
+      BN.prototype.addn = function addn(num) {
+        return this.clone().iaddn(num);
+      };
+      BN.prototype.subn = function subn(num) {
+        return this.clone().isubn(num);
+      };
+      BN.prototype.iabs = function iabs() {
+        this.negative = 0;
+        return this;
+      };
+      BN.prototype.abs = function abs() {
+        return this.clone().iabs();
+      };
+      BN.prototype._ishlnsubmul = function _ishlnsubmul(num, mul, shift) {
+        var len = num.length + shift;
+        var i2;
+        this._expand(len);
+        var w;
+        var carry = 0;
+        for (i2 = 0; i2 < num.length; i2++) {
+          w = (this.words[i2 + shift] | 0) + carry;
+          var right = (num.words[i2] | 0) * mul;
+          w -= right & 67108863;
+          carry = (w >> 26) - (right / 67108864 | 0);
+          this.words[i2 + shift] = w & 67108863;
+        }
+        for (; i2 < this.length - shift; i2++) {
+          w = (this.words[i2 + shift] | 0) + carry;
+          carry = w >> 26;
+          this.words[i2 + shift] = w & 67108863;
+        }
+        if (carry === 0) return this.strip();
+        assert(carry === -1);
+        carry = 0;
+        for (i2 = 0; i2 < this.length; i2++) {
+          w = -(this.words[i2] | 0) + carry;
+          carry = w >> 26;
+          this.words[i2] = w & 67108863;
+        }
+        this.negative = 1;
+        return this.strip();
+      };
+      BN.prototype._wordDiv = function _wordDiv(num, mode) {
+        var shift = this.length - num.length;
+        var a = this.clone();
+        var b = num;
+        var bhi = b.words[b.length - 1] | 0;
+        var bhiBits = this._countBits(bhi);
+        shift = 26 - bhiBits;
+        if (shift !== 0) {
+          b = b.ushln(shift);
+          a.iushln(shift);
+          bhi = b.words[b.length - 1] | 0;
+        }
+        var m2 = a.length - b.length;
+        var q;
+        if (mode !== "mod") {
+          q = new BN(null);
+          q.length = m2 + 1;
+          q.words = new Array(q.length);
+          for (var i2 = 0; i2 < q.length; i2++) {
+            q.words[i2] = 0;
+          }
+        }
+        var diff = a.clone()._ishlnsubmul(b, 1, m2);
+        if (diff.negative === 0) {
+          a = diff;
+          if (q) {
+            q.words[m2] = 1;
+          }
+        }
+        for (var j = m2 - 1; j >= 0; j--) {
+          var qj = (a.words[b.length + j] | 0) * 67108864 + (a.words[b.length + j - 1] | 0);
+          qj = Math.min(qj / bhi | 0, 67108863);
+          a._ishlnsubmul(b, qj, j);
+          while (a.negative !== 0) {
+            qj--;
+            a.negative = 0;
+            a._ishlnsubmul(b, 1, j);
+            if (!a.isZero()) {
+              a.negative ^= 1;
+            }
+          }
+          if (q) {
+            q.words[j] = qj;
+          }
+        }
+        if (q) {
+          q.strip();
+        }
+        a.strip();
+        if (mode !== "div" && shift !== 0) {
+          a.iushrn(shift);
+        }
+        return {
+          div: q || null,
+          mod: a
+        };
+      };
+      BN.prototype.divmod = function divmod(num, mode, positive) {
+        assert(!num.isZero());
+        if (this.isZero()) {
+          return {
+            div: new BN(0),
+            mod: new BN(0)
+          };
+        }
+        var div, mod, res;
+        if (this.negative !== 0 && num.negative === 0) {
+          res = this.neg().divmod(num, mode);
+          if (mode !== "mod") {
+            div = res.div.neg();
+          }
+          if (mode !== "div") {
+            mod = res.mod.neg();
+            if (positive && mod.negative !== 0) {
+              mod.iadd(num);
+            }
+          }
+          return {
+            div,
+            mod
+          };
+        }
+        if (this.negative === 0 && num.negative !== 0) {
+          res = this.divmod(num.neg(), mode);
+          if (mode !== "mod") {
+            div = res.div.neg();
+          }
+          return {
+            div,
+            mod: res.mod
+          };
+        }
+        if ((this.negative & num.negative) !== 0) {
+          res = this.neg().divmod(num.neg(), mode);
+          if (mode !== "div") {
+            mod = res.mod.neg();
+            if (positive && mod.negative !== 0) {
+              mod.isub(num);
+            }
+          }
+          return {
+            div: res.div,
+            mod
+          };
+        }
+        if (num.length > this.length || this.cmp(num) < 0) {
+          return {
+            div: new BN(0),
+            mod: this
+          };
+        }
+        if (num.length === 1) {
+          if (mode === "div") {
+            return {
+              div: this.divn(num.words[0]),
+              mod: null
+            };
+          }
+          if (mode === "mod") {
+            return {
+              div: null,
+              mod: new BN(this.modn(num.words[0]))
+            };
+          }
+          return {
+            div: this.divn(num.words[0]),
+            mod: new BN(this.modn(num.words[0]))
+          };
+        }
+        return this._wordDiv(num, mode);
+      };
+      BN.prototype.div = function div(num) {
+        return this.divmod(num, "div", false).div;
+      };
+      BN.prototype.mod = function mod(num) {
+        return this.divmod(num, "mod", false).mod;
+      };
+      BN.prototype.umod = function umod(num) {
+        return this.divmod(num, "mod", true).mod;
+      };
+      BN.prototype.divRound = function divRound(num) {
+        var dm = this.divmod(num);
+        if (dm.mod.isZero()) return dm.div;
+        var mod = dm.mod.abs();
+        var half = num.abs().iushrn(1);
+        var r2 = num.words[0] & 1;
+        var cmp = mod.cmp(half);
+        if (cmp < 0 || r2 === 1 && cmp === 0) return dm.div;
+        var up = new BN(1);
+        up.negative = this.negative ^ num.negative;
+        return dm.div.iadd(up);
+      };
+      BN.prototype.modn = function modn(num) {
+        assert(num <= 67108863);
+        var p = (1 << 26) % num;
+        var acc = 0;
+        for (var i2 = this.length - 1; i2 >= 0; i2--) {
+          acc = (p * acc + (this.words[i2] | 0)) % num;
+        }
+        return acc;
+      };
+      BN.prototype.idivn = function idivn(num) {
+        assert(num <= 67108863);
+        var carry = 0;
+        for (var i2 = this.length - 1; i2 >= 0; i2--) {
+          var w = (this.words[i2] | 0) + carry * 67108864;
+          this.words[i2] = w / num | 0;
+          carry = w % num;
+        }
+        return this.strip();
+      };
+      BN.prototype.divn = function divn(num) {
+        return this.clone().idivn(num);
+      };
+      BN.prototype.egcd = function egcd(p) {
+        assert(p.negative === 0);
+        assert(!p.isZero());
+        var x2 = this;
+        var y = p.clone();
+        if (x2.negative !== 0) {
+          x2 = x2.umod(p);
+        } else {
+          x2 = x2.clone();
+        }
+        var A2 = new BN(1);
+        var B = new BN(0);
+        var C = new BN(0);
+        var D = new BN(1);
+        var g = 0;
+        while (x2.isEven() && y.isEven()) {
+          x2.iushrn(1);
+          y.iushrn(1);
+          ++g;
+        }
+        var yp = y.clone();
+        var xp = x2.clone();
+        while (!x2.isZero()) {
+          for (var i2 = 0, im = 1; (x2.words[0] & im) === 0 && i2 < 26; ++i2, im <<= 1) ;
+          if (i2 > 0) {
+            x2.iushrn(i2);
+            while (i2-- > 0) {
+              if (A2.isOdd() || B.isOdd()) {
+                A2.iadd(yp);
+                B.isub(xp);
+              }
+              A2.iushrn(1);
+              B.iushrn(1);
+            }
+          }
+          for (var j = 0, jm = 1; (y.words[0] & jm) === 0 && j < 26; ++j, jm <<= 1) ;
+          if (j > 0) {
+            y.iushrn(j);
+            while (j-- > 0) {
+              if (C.isOdd() || D.isOdd()) {
+                C.iadd(yp);
+                D.isub(xp);
+              }
+              C.iushrn(1);
+              D.iushrn(1);
+            }
+          }
+          if (x2.cmp(y) >= 0) {
+            x2.isub(y);
+            A2.isub(C);
+            B.isub(D);
+          } else {
+            y.isub(x2);
+            C.isub(A2);
+            D.isub(B);
+          }
+        }
+        return {
+          a: C,
+          b: D,
+          gcd: y.iushln(g)
+        };
+      };
+      BN.prototype._invmp = function _invmp(p) {
+        assert(p.negative === 0);
+        assert(!p.isZero());
+        var a = this;
+        var b = p.clone();
+        if (a.negative !== 0) {
+          a = a.umod(p);
+        } else {
+          a = a.clone();
+        }
+        var x1 = new BN(1);
+        var x2 = new BN(0);
+        var delta = b.clone();
+        while (a.cmpn(1) > 0 && b.cmpn(1) > 0) {
+          for (var i2 = 0, im = 1; (a.words[0] & im) === 0 && i2 < 26; ++i2, im <<= 1) ;
+          if (i2 > 0) {
+            a.iushrn(i2);
+            while (i2-- > 0) {
+              if (x1.isOdd()) {
+                x1.iadd(delta);
+              }
+              x1.iushrn(1);
+            }
+          }
+          for (var j = 0, jm = 1; (b.words[0] & jm) === 0 && j < 26; ++j, jm <<= 1) ;
+          if (j > 0) {
+            b.iushrn(j);
+            while (j-- > 0) {
+              if (x2.isOdd()) {
+                x2.iadd(delta);
+              }
+              x2.iushrn(1);
+            }
+          }
+          if (a.cmp(b) >= 0) {
+            a.isub(b);
+            x1.isub(x2);
+          } else {
+            b.isub(a);
+            x2.isub(x1);
+          }
+        }
+        var res;
+        if (a.cmpn(1) === 0) {
+          res = x1;
+        } else {
+          res = x2;
+        }
+        if (res.cmpn(0) < 0) {
+          res.iadd(p);
+        }
+        return res;
+      };
+      BN.prototype.gcd = function gcd(num) {
+        if (this.isZero()) return num.abs();
+        if (num.isZero()) return this.abs();
+        var a = this.clone();
+        var b = num.clone();
+        a.negative = 0;
+        b.negative = 0;
+        for (var shift = 0; a.isEven() && b.isEven(); shift++) {
+          a.iushrn(1);
+          b.iushrn(1);
+        }
+        do {
+          while (a.isEven()) {
+            a.iushrn(1);
+          }
+          while (b.isEven()) {
+            b.iushrn(1);
+          }
+          var r2 = a.cmp(b);
+          if (r2 < 0) {
+            var t2 = a;
+            a = b;
+            b = t2;
+          } else if (r2 === 0 || b.cmpn(1) === 0) {
+            break;
+          }
+          a.isub(b);
+        } while (true);
+        return b.iushln(shift);
+      };
+      BN.prototype.invm = function invm(num) {
+        return this.egcd(num).a.umod(num);
+      };
+      BN.prototype.isEven = function isEven() {
+        return (this.words[0] & 1) === 0;
+      };
+      BN.prototype.isOdd = function isOdd() {
+        return (this.words[0] & 1) === 1;
+      };
+      BN.prototype.andln = function andln(num) {
+        return this.words[0] & num;
+      };
+      BN.prototype.bincn = function bincn(bit) {
+        assert(typeof bit === "number");
+        var r2 = bit % 26;
+        var s2 = (bit - r2) / 26;
+        var q = 1 << r2;
+        if (this.length <= s2) {
+          this._expand(s2 + 1);
+          this.words[s2] |= q;
+          return this;
+        }
+        var carry = q;
+        for (var i2 = s2; carry !== 0 && i2 < this.length; i2++) {
+          var w = this.words[i2] | 0;
+          w += carry;
+          carry = w >>> 26;
+          w &= 67108863;
+          this.words[i2] = w;
+        }
+        if (carry !== 0) {
+          this.words[i2] = carry;
+          this.length++;
+        }
+        return this;
+      };
+      BN.prototype.isZero = function isZero() {
+        return this.length === 1 && this.words[0] === 0;
+      };
+      BN.prototype.cmpn = function cmpn(num) {
+        var negative = num < 0;
+        if (this.negative !== 0 && !negative) return -1;
+        if (this.negative === 0 && negative) return 1;
+        this.strip();
+        var res;
+        if (this.length > 1) {
+          res = 1;
+        } else {
+          if (negative) {
+            num = -num;
+          }
+          assert(num <= 67108863, "Number is too big");
+          var w = this.words[0] | 0;
+          res = w === num ? 0 : w < num ? -1 : 1;
+        }
+        if (this.negative !== 0) return -res | 0;
+        return res;
+      };
+      BN.prototype.cmp = function cmp(num) {
+        if (this.negative !== 0 && num.negative === 0) return -1;
+        if (this.negative === 0 && num.negative !== 0) return 1;
+        var res = this.ucmp(num);
+        if (this.negative !== 0) return -res | 0;
+        return res;
+      };
+      BN.prototype.ucmp = function ucmp(num) {
+        if (this.length > num.length) return 1;
+        if (this.length < num.length) return -1;
+        var res = 0;
+        for (var i2 = this.length - 1; i2 >= 0; i2--) {
+          var a = this.words[i2] | 0;
+          var b = num.words[i2] | 0;
+          if (a === b) continue;
+          if (a < b) {
+            res = -1;
+          } else if (a > b) {
+            res = 1;
+          }
+          break;
+        }
+        return res;
+      };
+      BN.prototype.gtn = function gtn(num) {
+        return this.cmpn(num) === 1;
+      };
+      BN.prototype.gt = function gt(num) {
+        return this.cmp(num) === 1;
+      };
+      BN.prototype.gten = function gten(num) {
+        return this.cmpn(num) >= 0;
+      };
+      BN.prototype.gte = function gte(num) {
+        return this.cmp(num) >= 0;
+      };
+      BN.prototype.ltn = function ltn(num) {
+        return this.cmpn(num) === -1;
+      };
+      BN.prototype.lt = function lt(num) {
+        return this.cmp(num) === -1;
+      };
+      BN.prototype.lten = function lten(num) {
+        return this.cmpn(num) <= 0;
+      };
+      BN.prototype.lte = function lte(num) {
+        return this.cmp(num) <= 0;
+      };
+      BN.prototype.eqn = function eqn(num) {
+        return this.cmpn(num) === 0;
+      };
+      BN.prototype.eq = function eq(num) {
+        return this.cmp(num) === 0;
+      };
+      BN.red = function red2(num) {
+        return new Red(num);
+      };
+      BN.prototype.toRed = function toRed(ctx) {
+        assert(!this.red, "Already a number in reduction context");
+        assert(this.negative === 0, "red works only with positives");
+        return ctx.convertTo(this)._forceRed(ctx);
+      };
+      BN.prototype.fromRed = function fromRed() {
+        assert(this.red, "fromRed works only with numbers in reduction context");
+        return this.red.convertFrom(this);
+      };
+      BN.prototype._forceRed = function _forceRed(ctx) {
+        this.red = ctx;
+        return this;
+      };
+      BN.prototype.forceRed = function forceRed(ctx) {
+        assert(!this.red, "Already a number in reduction context");
+        return this._forceRed(ctx);
+      };
+      BN.prototype.redAdd = function redAdd(num) {
+        assert(this.red, "redAdd works only with red numbers");
+        return this.red.add(this, num);
+      };
+      BN.prototype.redIAdd = function redIAdd(num) {
+        assert(this.red, "redIAdd works only with red numbers");
+        return this.red.iadd(this, num);
+      };
+      BN.prototype.redSub = function redSub(num) {
+        assert(this.red, "redSub works only with red numbers");
+        return this.red.sub(this, num);
+      };
+      BN.prototype.redISub = function redISub(num) {
+        assert(this.red, "redISub works only with red numbers");
+        return this.red.isub(this, num);
+      };
+      BN.prototype.redShl = function redShl(num) {
+        assert(this.red, "redShl works only with red numbers");
+        return this.red.shl(this, num);
+      };
+      BN.prototype.redMul = function redMul(num) {
+        assert(this.red, "redMul works only with red numbers");
+        this.red._verify2(this, num);
+        return this.red.mul(this, num);
+      };
+      BN.prototype.redIMul = function redIMul(num) {
+        assert(this.red, "redMul works only with red numbers");
+        this.red._verify2(this, num);
+        return this.red.imul(this, num);
+      };
+      BN.prototype.redSqr = function redSqr() {
+        assert(this.red, "redSqr works only with red numbers");
+        this.red._verify1(this);
+        return this.red.sqr(this);
+      };
+      BN.prototype.redISqr = function redISqr() {
+        assert(this.red, "redISqr works only with red numbers");
+        this.red._verify1(this);
+        return this.red.isqr(this);
+      };
+      BN.prototype.redSqrt = function redSqrt() {
+        assert(this.red, "redSqrt works only with red numbers");
+        this.red._verify1(this);
+        return this.red.sqrt(this);
+      };
+      BN.prototype.redInvm = function redInvm() {
+        assert(this.red, "redInvm works only with red numbers");
+        this.red._verify1(this);
+        return this.red.invm(this);
+      };
+      BN.prototype.redNeg = function redNeg() {
+        assert(this.red, "redNeg works only with red numbers");
+        this.red._verify1(this);
+        return this.red.neg(this);
+      };
+      BN.prototype.redPow = function redPow(num) {
+        assert(this.red && !num.red, "redPow(normalNum)");
+        this.red._verify1(this);
+        return this.red.pow(this, num);
+      };
+      var primes = {
+        k256: null,
+        p224: null,
+        p192: null,
+        p25519: null
+      };
+      function MPrime(name2, p) {
+        this.name = name2;
+        this.p = new BN(p, 16);
+        this.n = this.p.bitLength();
+        this.k = new BN(1).iushln(this.n).isub(this.p);
+        this.tmp = this._tmp();
+      }
+      MPrime.prototype._tmp = function _tmp() {
+        var tmp = new BN(null);
+        tmp.words = new Array(Math.ceil(this.n / 13));
+        return tmp;
+      };
+      MPrime.prototype.ireduce = function ireduce(num) {
+        var r2 = num;
+        var rlen;
+        do {
+          this.split(r2, this.tmp);
+          r2 = this.imulK(r2);
+          r2 = r2.iadd(this.tmp);
+          rlen = r2.bitLength();
+        } while (rlen > this.n);
+        var cmp = rlen < this.n ? -1 : r2.ucmp(this.p);
+        if (cmp === 0) {
+          r2.words[0] = 0;
+          r2.length = 1;
+        } else if (cmp > 0) {
+          r2.isub(this.p);
+        } else {
+          if (r2.strip !== void 0) {
+            r2.strip();
+          } else {
+            r2._strip();
+          }
+        }
+        return r2;
+      };
+      MPrime.prototype.split = function split(input, out) {
+        input.iushrn(this.n, 0, out);
+      };
+      MPrime.prototype.imulK = function imulK(num) {
+        return num.imul(this.k);
+      };
+      function K256() {
+        MPrime.call(
+          this,
+          "k256",
+          "ffffffff ffffffff ffffffff ffffffff ffffffff ffffffff fffffffe fffffc2f"
+        );
+      }
+      inherits(K256, MPrime);
+      K256.prototype.split = function split(input, output) {
+        var mask = 4194303;
+        var outLen = Math.min(input.length, 9);
+        for (var i2 = 0; i2 < outLen; i2++) {
+          output.words[i2] = input.words[i2];
+        }
+        output.length = outLen;
+        if (input.length <= 9) {
+          input.words[0] = 0;
+          input.length = 1;
+          return;
+        }
+        var prev = input.words[9];
+        output.words[output.length++] = prev & mask;
+        for (i2 = 10; i2 < input.length; i2++) {
+          var next = input.words[i2] | 0;
+          input.words[i2 - 10] = (next & mask) << 4 | prev >>> 22;
+          prev = next;
+        }
+        prev >>>= 22;
+        input.words[i2 - 10] = prev;
+        if (prev === 0 && input.length > 10) {
+          input.length -= 10;
+        } else {
+          input.length -= 9;
+        }
+      };
+      K256.prototype.imulK = function imulK(num) {
+        num.words[num.length] = 0;
+        num.words[num.length + 1] = 0;
+        num.length += 2;
+        var lo = 0;
+        for (var i2 = 0; i2 < num.length; i2++) {
+          var w = num.words[i2] | 0;
+          lo += w * 977;
+          num.words[i2] = lo & 67108863;
+          lo = w * 64 + (lo / 67108864 | 0);
+        }
+        if (num.words[num.length - 1] === 0) {
+          num.length--;
+          if (num.words[num.length - 1] === 0) {
+            num.length--;
+          }
+        }
+        return num;
+      };
+      function P224() {
+        MPrime.call(
+          this,
+          "p224",
+          "ffffffff ffffffff ffffffff ffffffff 00000000 00000000 00000001"
+        );
+      }
+      inherits(P224, MPrime);
+      function P192() {
+        MPrime.call(
+          this,
+          "p192",
+          "ffffffff ffffffff ffffffff fffffffe ffffffff ffffffff"
+        );
+      }
+      inherits(P192, MPrime);
+      function P25519() {
+        MPrime.call(
+          this,
+          "25519",
+          "7fffffffffffffff ffffffffffffffff ffffffffffffffff ffffffffffffffed"
+        );
+      }
+      inherits(P25519, MPrime);
+      P25519.prototype.imulK = function imulK(num) {
+        var carry = 0;
+        for (var i2 = 0; i2 < num.length; i2++) {
+          var hi = (num.words[i2] | 0) * 19 + carry;
+          var lo = hi & 67108863;
+          hi >>>= 26;
+          num.words[i2] = lo;
+          carry = hi;
+        }
+        if (carry !== 0) {
+          num.words[num.length++] = carry;
+        }
+        return num;
+      };
+      BN._prime = function prime(name2) {
+        if (primes[name2]) return primes[name2];
+        var prime2;
+        if (name2 === "k256") {
+          prime2 = new K256();
+        } else if (name2 === "p224") {
+          prime2 = new P224();
+        } else if (name2 === "p192") {
+          prime2 = new P192();
+        } else if (name2 === "p25519") {
+          prime2 = new P25519();
+        } else {
+          throw new Error("Unknown prime " + name2);
+        }
+        primes[name2] = prime2;
+        return prime2;
+      };
+      function Red(m2) {
+        if (typeof m2 === "string") {
+          var prime = BN._prime(m2);
+          this.m = prime.p;
+          this.prime = prime;
+        } else {
+          assert(m2.gtn(1), "modulus must be greater than 1");
+          this.m = m2;
+          this.prime = null;
+        }
+      }
+      Red.prototype._verify1 = function _verify1(a) {
+        assert(a.negative === 0, "red works only with positives");
+        assert(a.red, "red works only with red numbers");
+      };
+      Red.prototype._verify2 = function _verify2(a, b) {
+        assert((a.negative | b.negative) === 0, "red works only with positives");
+        assert(
+          a.red && a.red === b.red,
+          "red works only with red numbers"
+        );
+      };
+      Red.prototype.imod = function imod(a) {
+        if (this.prime) return this.prime.ireduce(a)._forceRed(this);
+        return a.umod(this.m)._forceRed(this);
+      };
+      Red.prototype.neg = function neg(a) {
+        if (a.isZero()) {
+          return a.clone();
+        }
+        return this.m.sub(a)._forceRed(this);
+      };
+      Red.prototype.add = function add(a, b) {
+        this._verify2(a, b);
+        var res = a.add(b);
+        if (res.cmp(this.m) >= 0) {
+          res.isub(this.m);
+        }
+        return res._forceRed(this);
+      };
+      Red.prototype.iadd = function iadd(a, b) {
+        this._verify2(a, b);
+        var res = a.iadd(b);
+        if (res.cmp(this.m) >= 0) {
+          res.isub(this.m);
+        }
+        return res;
+      };
+      Red.prototype.sub = function sub(a, b) {
+        this._verify2(a, b);
+        var res = a.sub(b);
+        if (res.cmpn(0) < 0) {
+          res.iadd(this.m);
+        }
+        return res._forceRed(this);
+      };
+      Red.prototype.isub = function isub(a, b) {
+        this._verify2(a, b);
+        var res = a.isub(b);
+        if (res.cmpn(0) < 0) {
+          res.iadd(this.m);
+        }
+        return res;
+      };
+      Red.prototype.shl = function shl(a, num) {
+        this._verify1(a);
+        return this.imod(a.ushln(num));
+      };
+      Red.prototype.imul = function imul(a, b) {
+        this._verify2(a, b);
+        return this.imod(a.imul(b));
+      };
+      Red.prototype.mul = function mul(a, b) {
+        this._verify2(a, b);
+        return this.imod(a.mul(b));
+      };
+      Red.prototype.isqr = function isqr(a) {
+        return this.imul(a, a.clone());
+      };
+      Red.prototype.sqr = function sqr(a) {
+        return this.mul(a, a);
+      };
+      Red.prototype.sqrt = function sqrt(a) {
+        if (a.isZero()) return a.clone();
+        var mod3 = this.m.andln(3);
+        assert(mod3 % 2 === 1);
+        if (mod3 === 3) {
+          var pow = this.m.add(new BN(1)).iushrn(2);
+          return this.pow(a, pow);
+        }
+        var q = this.m.subn(1);
+        var s2 = 0;
+        while (!q.isZero() && q.andln(1) === 0) {
+          s2++;
+          q.iushrn(1);
+        }
+        assert(!q.isZero());
+        var one = new BN(1).toRed(this);
+        var nOne = one.redNeg();
+        var lpow = this.m.subn(1).iushrn(1);
+        var z = this.m.bitLength();
+        z = new BN(2 * z * z).toRed(this);
+        while (this.pow(z, lpow).cmp(nOne) !== 0) {
+          z.redIAdd(nOne);
+        }
+        var c = this.pow(z, q);
+        var r2 = this.pow(a, q.addn(1).iushrn(1));
+        var t2 = this.pow(a, q);
+        var m2 = s2;
+        while (t2.cmp(one) !== 0) {
+          var tmp = t2;
+          for (var i2 = 0; tmp.cmp(one) !== 0; i2++) {
+            tmp = tmp.redSqr();
+          }
+          assert(i2 < m2);
+          var b = this.pow(c, new BN(1).iushln(m2 - i2 - 1));
+          r2 = r2.redMul(b);
+          c = b.redSqr();
+          t2 = t2.redMul(c);
+          m2 = i2;
+        }
+        return r2;
+      };
+      Red.prototype.invm = function invm(a) {
+        var inv = a._invmp(this.m);
+        if (inv.negative !== 0) {
+          inv.negative = 0;
+          return this.imod(inv).redNeg();
+        } else {
+          return this.imod(inv);
+        }
+      };
+      Red.prototype.pow = function pow(a, num) {
+        if (num.isZero()) return new BN(1).toRed(this);
+        if (num.cmpn(1) === 0) return a.clone();
+        var windowSize = 4;
+        var wnd = new Array(1 << windowSize);
+        wnd[0] = new BN(1).toRed(this);
+        wnd[1] = a;
+        for (var i2 = 2; i2 < wnd.length; i2++) {
+          wnd[i2] = this.mul(wnd[i2 - 1], a);
+        }
+        var res = wnd[0];
+        var current = 0;
+        var currentLen = 0;
+        var start = num.bitLength() % 26;
+        if (start === 0) {
+          start = 26;
+        }
+        for (i2 = num.length - 1; i2 >= 0; i2--) {
+          var word = num.words[i2];
+          for (var j = start - 1; j >= 0; j--) {
+            var bit = word >> j & 1;
+            if (res !== wnd[0]) {
+              res = this.sqr(res);
+            }
+            if (bit === 0 && current === 0) {
+              currentLen = 0;
+              continue;
+            }
+            current <<= 1;
+            current |= bit;
+            currentLen++;
+            if (currentLen !== windowSize && (i2 !== 0 || j !== 0)) continue;
+            res = this.mul(res, wnd[current]);
+            currentLen = 0;
+            current = 0;
+          }
+          start = 26;
+        }
+        return res;
+      };
+      Red.prototype.convertTo = function convertTo(num) {
+        var r2 = num.umod(this.m);
+        return r2 === num ? r2.clone() : r2;
+      };
+      Red.prototype.convertFrom = function convertFrom(num) {
+        var res = num.clone();
+        res.red = null;
+        return res;
+      };
+      BN.mont = function mont(num) {
+        return new Mont(num);
+      };
+      function Mont(m2) {
+        Red.call(this, m2);
+        this.shift = this.m.bitLength();
+        if (this.shift % 26 !== 0) {
+          this.shift += 26 - this.shift % 26;
+        }
+        this.r = new BN(1).iushln(this.shift);
+        this.r2 = this.imod(this.r.sqr());
+        this.rinv = this.r._invmp(this.m);
+        this.minv = this.rinv.mul(this.r).isubn(1).div(this.m);
+        this.minv = this.minv.umod(this.r);
+        this.minv = this.r.sub(this.minv);
+      }
+      inherits(Mont, Red);
+      Mont.prototype.convertTo = function convertTo(num) {
+        return this.imod(num.ushln(this.shift));
+      };
+      Mont.prototype.convertFrom = function convertFrom(num) {
+        var r2 = this.imod(num.mul(this.rinv));
+        r2.red = null;
+        return r2;
+      };
+      Mont.prototype.imul = function imul(a, b) {
+        if (a.isZero() || b.isZero()) {
+          a.words[0] = 0;
+          a.length = 1;
+          return a;
+        }
+        var t2 = a.imul(b);
+        var c = t2.maskn(this.shift).mul(this.minv).imaskn(this.shift).mul(this.m);
+        var u = t2.isub(c).iushrn(this.shift);
+        var res = u;
+        if (u.cmp(this.m) >= 0) {
+          res = u.isub(this.m);
+        } else if (u.cmpn(0) < 0) {
+          res = u.iadd(this.m);
+        }
+        return res._forceRed(this);
+      };
+      Mont.prototype.mul = function mul(a, b) {
+        if (a.isZero() || b.isZero()) return new BN(0)._forceRed(this);
+        var t2 = a.mul(b);
+        var c = t2.maskn(this.shift).mul(this.minv).imaskn(this.shift).mul(this.m);
+        var u = t2.isub(c).iushrn(this.shift);
+        var res = u;
+        if (u.cmp(this.m) >= 0) {
+          res = u.isub(this.m);
+        } else if (u.cmpn(0) < 0) {
+          res = u.iadd(this.m);
+        }
+        return res._forceRed(this);
+      };
+      Mont.prototype.invm = function invm(a) {
+        var res = this.imod(a._invmp(this.m).mul(this.r2));
+        return res._forceRed(this);
+      };
+    })(typeof module2 === "undefined" || module2, exports2);
+  }
+});
+
+// node_modules/asn1.js/lib/asn1/base/reporter.js
+var require_reporter = __commonJS({
+  "node_modules/asn1.js/lib/asn1/base/reporter.js"(exports2) {
+    "use strict";
+    var inherits = require_inherits();
+    function Reporter(options) {
+      this._reporterState = {
+        obj: null,
+        path: [],
+        options: options || {},
+        errors: []
+      };
+    }
+    exports2.Reporter = Reporter;
+    Reporter.prototype.isError = function isError(obj) {
+      return obj instanceof ReporterError;
+    };
+    Reporter.prototype.save = function save() {
+      const state = this._reporterState;
+      return { obj: state.obj, pathLen: state.path.length };
+    };
+    Reporter.prototype.restore = function restore(data) {
+      const state = this._reporterState;
+      state.obj = data.obj;
+      state.path = state.path.slice(0, data.pathLen);
+    };
+    Reporter.prototype.enterKey = function enterKey(key) {
+      return this._reporterState.path.push(key);
+    };
+    Reporter.prototype.exitKey = function exitKey(index) {
+      const state = this._reporterState;
+      state.path = state.path.slice(0, index - 1);
+    };
+    Reporter.prototype.leaveKey = function leaveKey(index, key, value) {
+      const state = this._reporterState;
+      this.exitKey(index);
+      if (state.obj !== null)
+        state.obj[key] = value;
+    };
+    Reporter.prototype.path = function path3() {
+      return this._reporterState.path.join("/");
+    };
+    Reporter.prototype.enterObject = function enterObject() {
+      const state = this._reporterState;
+      const prev = state.obj;
+      state.obj = {};
+      return prev;
+    };
+    Reporter.prototype.leaveObject = function leaveObject(prev) {
+      const state = this._reporterState;
+      const now = state.obj;
+      state.obj = prev;
+      return now;
+    };
+    Reporter.prototype.error = function error(msg) {
+      let err;
+      const state = this._reporterState;
+      const inherited = msg instanceof ReporterError;
+      if (inherited) {
+        err = msg;
+      } else {
+        err = new ReporterError(state.path.map(function(elem) {
+          return "[" + JSON.stringify(elem) + "]";
+        }).join(""), msg.message || msg, msg.stack);
+      }
+      if (!state.options.partial)
+        throw err;
+      if (!inherited)
+        state.errors.push(err);
+      return err;
+    };
+    Reporter.prototype.wrapResult = function wrapResult(result) {
+      const state = this._reporterState;
+      if (!state.options.partial)
+        return result;
+      return {
+        result: this.isError(result) ? null : result,
+        errors: state.errors
+      };
+    };
+    function ReporterError(path3, msg) {
+      this.path = path3;
+      this.rethrow(msg);
+    }
+    inherits(ReporterError, Error);
+    ReporterError.prototype.rethrow = function rethrow(msg) {
+      this.message = msg + " at: " + (this.path || "(shallow)");
+      if (Error.captureStackTrace)
+        Error.captureStackTrace(this, ReporterError);
+      if (!this.stack) {
+        try {
+          throw new Error(this.message);
+        } catch (e2) {
+          this.stack = e2.stack;
+        }
+      }
+      return this;
+    };
+  }
+});
+
+// node_modules/asn1.js/lib/asn1/base/buffer.js
+var require_buffer = __commonJS({
+  "node_modules/asn1.js/lib/asn1/base/buffer.js"(exports2) {
+    "use strict";
+    var inherits = require_inherits();
+    var Reporter = require_reporter().Reporter;
+    var Buffer4 = require_safer().Buffer;
+    function DecoderBuffer(base, options) {
+      Reporter.call(this, options);
+      if (!Buffer4.isBuffer(base)) {
+        this.error("Input not Buffer");
+        return;
+      }
+      this.base = base;
+      this.offset = 0;
+      this.length = base.length;
+    }
+    inherits(DecoderBuffer, Reporter);
+    exports2.DecoderBuffer = DecoderBuffer;
+    DecoderBuffer.isDecoderBuffer = function isDecoderBuffer(data) {
+      if (data instanceof DecoderBuffer) {
+        return true;
+      }
+      const isCompatible = typeof data === "object" && Buffer4.isBuffer(data.base) && data.constructor.name === "DecoderBuffer" && typeof data.offset === "number" && typeof data.length === "number" && typeof data.save === "function" && typeof data.restore === "function" && typeof data.isEmpty === "function" && typeof data.readUInt8 === "function" && typeof data.skip === "function" && typeof data.raw === "function";
+      return isCompatible;
+    };
+    DecoderBuffer.prototype.save = function save() {
+      return { offset: this.offset, reporter: Reporter.prototype.save.call(this) };
+    };
+    DecoderBuffer.prototype.restore = function restore(save) {
+      const res = new DecoderBuffer(this.base);
+      res.offset = save.offset;
+      res.length = this.offset;
+      this.offset = save.offset;
+      Reporter.prototype.restore.call(this, save.reporter);
+      return res;
+    };
+    DecoderBuffer.prototype.isEmpty = function isEmpty() {
+      return this.offset === this.length;
+    };
+    DecoderBuffer.prototype.readUInt8 = function readUInt8(fail3) {
+      if (this.offset + 1 <= this.length)
+        return this.base.readUInt8(this.offset++, true);
+      else
+        return this.error(fail3 || "DecoderBuffer overrun");
+    };
+    DecoderBuffer.prototype.skip = function skip2(bytes, fail3) {
+      if (!(this.offset + bytes <= this.length))
+        return this.error(fail3 || "DecoderBuffer overrun");
+      const res = new DecoderBuffer(this.base);
+      res._reporterState = this._reporterState;
+      res.offset = this.offset;
+      res.length = this.offset + bytes;
+      this.offset += bytes;
+      return res;
+    };
+    DecoderBuffer.prototype.raw = function raw2(save) {
+      return this.base.slice(save ? save.offset : this.offset, this.length);
+    };
+    function EncoderBuffer(value, reporter) {
+      if (Array.isArray(value)) {
+        this.length = 0;
+        this.value = value.map(function(item) {
+          if (!EncoderBuffer.isEncoderBuffer(item))
+            item = new EncoderBuffer(item, reporter);
+          this.length += item.length;
+          return item;
+        }, this);
+      } else if (typeof value === "number") {
+        if (!(0 <= value && value <= 255))
+          return reporter.error("non-byte EncoderBuffer value");
+        this.value = value;
+        this.length = 1;
+      } else if (typeof value === "string") {
+        this.value = value;
+        this.length = Buffer4.byteLength(value);
+      } else if (Buffer4.isBuffer(value)) {
+        this.value = value;
+        this.length = value.length;
+      } else {
+        return reporter.error("Unsupported type: " + typeof value);
+      }
+    }
+    exports2.EncoderBuffer = EncoderBuffer;
+    EncoderBuffer.isEncoderBuffer = function isEncoderBuffer(data) {
+      if (data instanceof EncoderBuffer) {
+        return true;
+      }
+      const isCompatible = typeof data === "object" && data.constructor.name === "EncoderBuffer" && typeof data.length === "number" && typeof data.join === "function";
+      return isCompatible;
+    };
+    EncoderBuffer.prototype.join = function join2(out, offset) {
+      if (!out)
+        out = Buffer4.alloc(this.length);
+      if (!offset)
+        offset = 0;
+      if (this.length === 0)
+        return out;
+      if (Array.isArray(this.value)) {
+        this.value.forEach(function(item) {
+          item.join(out, offset);
+          offset += item.length;
+        });
+      } else {
+        if (typeof this.value === "number")
+          out[offset] = this.value;
+        else if (typeof this.value === "string")
+          out.write(this.value, offset);
+        else if (Buffer4.isBuffer(this.value))
+          this.value.copy(out, offset);
+        offset += this.length;
+      }
+      return out;
+    };
+  }
+});
+
+// node_modules/minimalistic-assert/index.js
+var require_minimalistic_assert = __commonJS({
+  "node_modules/minimalistic-assert/index.js"(exports2, module2) {
+    module2.exports = assert;
+    function assert(val, msg) {
+      if (!val)
+        throw new Error(msg || "Assertion failed");
+    }
+    assert.equal = function assertEqual(l, r2, msg) {
+      if (l != r2)
+        throw new Error(msg || "Assertion failed: " + l + " != " + r2);
+    };
+  }
+});
+
+// node_modules/asn1.js/lib/asn1/base/node.js
+var require_node5 = __commonJS({
+  "node_modules/asn1.js/lib/asn1/base/node.js"(exports2, module2) {
+    "use strict";
+    var Reporter = require_reporter().Reporter;
+    var EncoderBuffer = require_buffer().EncoderBuffer;
+    var DecoderBuffer = require_buffer().DecoderBuffer;
+    var assert = require_minimalistic_assert();
+    var tags = [
+      "seq",
+      "seqof",
+      "set",
+      "setof",
+      "objid",
+      "bool",
+      "gentime",
+      "utctime",
+      "null_",
+      "enum",
+      "int",
+      "objDesc",
+      "bitstr",
+      "bmpstr",
+      "charstr",
+      "genstr",
+      "graphstr",
+      "ia5str",
+      "iso646str",
+      "numstr",
+      "octstr",
+      "printstr",
+      "t61str",
+      "unistr",
+      "utf8str",
+      "videostr"
+    ];
+    var methods = [
+      "key",
+      "obj",
+      "use",
+      "optional",
+      "explicit",
+      "implicit",
+      "def",
+      "choice",
+      "any",
+      "contains"
+    ].concat(tags);
+    var overrided = [
+      "_peekTag",
+      "_decodeTag",
+      "_use",
+      "_decodeStr",
+      "_decodeObjid",
+      "_decodeTime",
+      "_decodeNull",
+      "_decodeInt",
+      "_decodeBool",
+      "_decodeList",
+      "_encodeComposite",
+      "_encodeStr",
+      "_encodeObjid",
+      "_encodeTime",
+      "_encodeNull",
+      "_encodeInt",
+      "_encodeBool"
+    ];
+    function Node(enc, parent, name2) {
+      const state = {};
+      this._baseState = state;
+      state.name = name2;
+      state.enc = enc;
+      state.parent = parent || null;
+      state.children = null;
+      state.tag = null;
+      state.args = null;
+      state.reverseArgs = null;
+      state.choice = null;
+      state.optional = false;
+      state.any = false;
+      state.obj = false;
+      state.use = null;
+      state.useDecoder = null;
+      state.key = null;
+      state["default"] = null;
+      state.explicit = null;
+      state.implicit = null;
+      state.contains = null;
+      if (!state.parent) {
+        state.children = [];
+        this._wrap();
+      }
+    }
+    module2.exports = Node;
+    var stateProps = [
+      "enc",
+      "parent",
+      "children",
+      "tag",
+      "args",
+      "reverseArgs",
+      "choice",
+      "optional",
+      "any",
+      "obj",
+      "use",
+      "alteredUse",
+      "key",
+      "default",
+      "explicit",
+      "implicit",
+      "contains"
+    ];
+    Node.prototype.clone = function clone2() {
+      const state = this._baseState;
+      const cstate = {};
+      stateProps.forEach(function(prop) {
+        cstate[prop] = state[prop];
+      });
+      const res = new this.constructor(cstate.parent);
+      res._baseState = cstate;
+      return res;
+    };
+    Node.prototype._wrap = function wrap() {
+      const state = this._baseState;
+      methods.forEach(function(method) {
+        this[method] = function _wrappedMethod() {
+          const clone2 = new this.constructor(this);
+          state.children.push(clone2);
+          return clone2[method].apply(clone2, arguments);
+        };
+      }, this);
+    };
+    Node.prototype._init = function init2(body) {
+      const state = this._baseState;
+      assert(state.parent === null);
+      body.call(this);
+      state.children = state.children.filter(function(child) {
+        return child._baseState.parent === this;
+      }, this);
+      assert.equal(state.children.length, 1, "Root node can have only one child");
+    };
+    Node.prototype._useArgs = function useArgs(args) {
+      const state = this._baseState;
+      const children = args.filter(function(arg) {
+        return arg instanceof this.constructor;
+      }, this);
+      args = args.filter(function(arg) {
+        return !(arg instanceof this.constructor);
+      }, this);
+      if (children.length !== 0) {
+        assert(state.children === null);
+        state.children = children;
+        children.forEach(function(child) {
+          child._baseState.parent = this;
+        }, this);
+      }
+      if (args.length !== 0) {
+        assert(state.args === null);
+        state.args = args;
+        state.reverseArgs = args.map(function(arg) {
+          if (typeof arg !== "object" || arg.constructor !== Object)
+            return arg;
+          const res = {};
+          Object.keys(arg).forEach(function(key) {
+            if (key == (key | 0))
+              key |= 0;
+            const value = arg[key];
+            res[value] = key;
+          });
+          return res;
+        });
+      }
+    };
+    overrided.forEach(function(method) {
+      Node.prototype[method] = function _overrided() {
+        const state = this._baseState;
+        throw new Error(method + " not implemented for encoding: " + state.enc);
+      };
+    });
+    tags.forEach(function(tag) {
+      Node.prototype[tag] = function _tagMethod() {
+        const state = this._baseState;
+        const args = Array.prototype.slice.call(arguments);
+        assert(state.tag === null);
+        state.tag = tag;
+        this._useArgs(args);
+        return this;
+      };
+    });
+    Node.prototype.use = function use(item) {
+      assert(item);
+      const state = this._baseState;
+      assert(state.use === null);
+      state.use = item;
+      return this;
+    };
+    Node.prototype.optional = function optional() {
+      const state = this._baseState;
+      state.optional = true;
+      return this;
+    };
+    Node.prototype.def = function def(val) {
+      const state = this._baseState;
+      assert(state["default"] === null);
+      state["default"] = val;
+      state.optional = true;
+      return this;
+    };
+    Node.prototype.explicit = function explicit(num) {
+      const state = this._baseState;
+      assert(state.explicit === null && state.implicit === null);
+      state.explicit = num;
+      return this;
+    };
+    Node.prototype.implicit = function implicit(num) {
+      const state = this._baseState;
+      assert(state.explicit === null && state.implicit === null);
+      state.implicit = num;
+      return this;
+    };
+    Node.prototype.obj = function obj() {
+      const state = this._baseState;
+      const args = Array.prototype.slice.call(arguments);
+      state.obj = true;
+      if (args.length !== 0)
+        this._useArgs(args);
+      return this;
+    };
+    Node.prototype.key = function key(newKey) {
+      const state = this._baseState;
+      assert(state.key === null);
+      state.key = newKey;
+      return this;
+    };
+    Node.prototype.any = function any() {
+      const state = this._baseState;
+      state.any = true;
+      return this;
+    };
+    Node.prototype.choice = function choice(obj) {
+      const state = this._baseState;
+      assert(state.choice === null);
+      state.choice = obj;
+      this._useArgs(Object.keys(obj).map(function(key) {
+        return obj[key];
+      }));
+      return this;
+    };
+    Node.prototype.contains = function contains(item) {
+      const state = this._baseState;
+      assert(state.use === null);
+      state.contains = item;
+      return this;
+    };
+    Node.prototype._decode = function decode(input, options) {
+      const state = this._baseState;
+      if (state.parent === null)
+        return input.wrapResult(state.children[0]._decode(input, options));
+      let result = state["default"];
+      let present = true;
+      let prevKey = null;
+      if (state.key !== null)
+        prevKey = input.enterKey(state.key);
+      if (state.optional) {
+        let tag = null;
+        if (state.explicit !== null)
+          tag = state.explicit;
+        else if (state.implicit !== null)
+          tag = state.implicit;
+        else if (state.tag !== null)
+          tag = state.tag;
+        if (tag === null && !state.any) {
+          const save = input.save();
+          try {
+            if (state.choice === null)
+              this._decodeGeneric(state.tag, input, options);
+            else
+              this._decodeChoice(input, options);
+            present = true;
+          } catch (e2) {
+            present = false;
+          }
+          input.restore(save);
+        } else {
+          present = this._peekTag(input, tag, state.any);
+          if (input.isError(present))
+            return present;
+        }
+      }
+      let prevObj;
+      if (state.obj && present)
+        prevObj = input.enterObject();
+      if (present) {
+        if (state.explicit !== null) {
+          const explicit = this._decodeTag(input, state.explicit);
+          if (input.isError(explicit))
+            return explicit;
+          input = explicit;
+        }
+        const start = input.offset;
+        if (state.use === null && state.choice === null) {
+          let save;
+          if (state.any)
+            save = input.save();
+          const body = this._decodeTag(
+            input,
+            state.implicit !== null ? state.implicit : state.tag,
+            state.any
+          );
+          if (input.isError(body))
+            return body;
+          if (state.any)
+            result = input.raw(save);
+          else
+            input = body;
+        }
+        if (options && options.track && state.tag !== null)
+          options.track(input.path(), start, input.length, "tagged");
+        if (options && options.track && state.tag !== null)
+          options.track(input.path(), input.offset, input.length, "content");
+        if (state.any) {
+        } else if (state.choice === null) {
+          result = this._decodeGeneric(state.tag, input, options);
+        } else {
+          result = this._decodeChoice(input, options);
+        }
+        if (input.isError(result))
+          return result;
+        if (!state.any && state.choice === null && state.children !== null) {
+          state.children.forEach(function decodeChildren(child) {
+            child._decode(input, options);
+          });
+        }
+        if (state.contains && (state.tag === "octstr" || state.tag === "bitstr")) {
+          const data = new DecoderBuffer(result);
+          result = this._getUse(state.contains, input._reporterState.obj)._decode(data, options);
+        }
+      }
+      if (state.obj && present)
+        result = input.leaveObject(prevObj);
+      if (state.key !== null && (result !== null || present === true))
+        input.leaveKey(prevKey, state.key, result);
+      else if (prevKey !== null)
+        input.exitKey(prevKey);
+      return result;
+    };
+    Node.prototype._decodeGeneric = function decodeGeneric(tag, input, options) {
+      const state = this._baseState;
+      if (tag === "seq" || tag === "set")
+        return null;
+      if (tag === "seqof" || tag === "setof")
+        return this._decodeList(input, tag, state.args[0], options);
+      else if (/str$/.test(tag))
+        return this._decodeStr(input, tag, options);
+      else if (tag === "objid" && state.args)
+        return this._decodeObjid(input, state.args[0], state.args[1], options);
+      else if (tag === "objid")
+        return this._decodeObjid(input, null, null, options);
+      else if (tag === "gentime" || tag === "utctime")
+        return this._decodeTime(input, tag, options);
+      else if (tag === "null_")
+        return this._decodeNull(input, options);
+      else if (tag === "bool")
+        return this._decodeBool(input, options);
+      else if (tag === "objDesc")
+        return this._decodeStr(input, tag, options);
+      else if (tag === "int" || tag === "enum")
+        return this._decodeInt(input, state.args && state.args[0], options);
+      if (state.use !== null) {
+        return this._getUse(state.use, input._reporterState.obj)._decode(input, options);
+      } else {
+        return input.error("unknown tag: " + tag);
+      }
+    };
+    Node.prototype._getUse = function _getUse(entity, obj) {
+      const state = this._baseState;
+      state.useDecoder = this._use(entity, obj);
+      assert(state.useDecoder._baseState.parent === null);
+      state.useDecoder = state.useDecoder._baseState.children[0];
+      if (state.implicit !== state.useDecoder._baseState.implicit) {
+        state.useDecoder = state.useDecoder.clone();
+        state.useDecoder._baseState.implicit = state.implicit;
+      }
+      return state.useDecoder;
+    };
+    Node.prototype._decodeChoice = function decodeChoice(input, options) {
+      const state = this._baseState;
+      let result = null;
+      let match = false;
+      Object.keys(state.choice).some(function(key) {
+        const save = input.save();
+        const node = state.choice[key];
+        try {
+          const value = node._decode(input, options);
+          if (input.isError(value))
+            return false;
+          result = { type: key, value };
+          match = true;
+        } catch (e2) {
+          input.restore(save);
+          return false;
+        }
+        return true;
+      }, this);
+      if (!match)
+        return input.error("Choice not matched");
+      return result;
+    };
+    Node.prototype._createEncoderBuffer = function createEncoderBuffer(data) {
+      return new EncoderBuffer(data, this.reporter);
+    };
+    Node.prototype._encode = function encode(data, reporter, parent) {
+      const state = this._baseState;
+      if (state["default"] !== null && state["default"] === data)
+        return;
+      const result = this._encodeValue(data, reporter, parent);
+      if (result === void 0)
+        return;
+      if (this._skipDefault(result, reporter, parent))
+        return;
+      return result;
+    };
+    Node.prototype._encodeValue = function encode(data, reporter, parent) {
+      const state = this._baseState;
+      if (state.parent === null)
+        return state.children[0]._encode(data, reporter || new Reporter());
+      let result = null;
+      this.reporter = reporter;
+      if (state.optional && data === void 0) {
+        if (state["default"] !== null)
+          data = state["default"];
+        else
+          return;
+      }
+      let content = null;
+      let primitive = false;
+      if (state.any) {
+        result = this._createEncoderBuffer(data);
+      } else if (state.choice) {
+        result = this._encodeChoice(data, reporter);
+      } else if (state.contains) {
+        content = this._getUse(state.contains, parent)._encode(data, reporter);
+        primitive = true;
+      } else if (state.children) {
+        content = state.children.map(function(child) {
+          if (child._baseState.tag === "null_")
+            return child._encode(null, reporter, data);
+          if (child._baseState.key === null)
+            return reporter.error("Child should have a key");
+          const prevKey = reporter.enterKey(child._baseState.key);
+          if (typeof data !== "object")
+            return reporter.error("Child expected, but input is not object");
+          const res = child._encode(data[child._baseState.key], reporter, data);
+          reporter.leaveKey(prevKey);
+          return res;
+        }, this).filter(function(child) {
+          return child;
+        });
+        content = this._createEncoderBuffer(content);
+      } else {
+        if (state.tag === "seqof" || state.tag === "setof") {
+          if (!(state.args && state.args.length === 1))
+            return reporter.error("Too many args for : " + state.tag);
+          if (!Array.isArray(data))
+            return reporter.error("seqof/setof, but data is not Array");
+          const child = this.clone();
+          child._baseState.implicit = null;
+          content = this._createEncoderBuffer(data.map(function(item) {
+            const state2 = this._baseState;
+            return this._getUse(state2.args[0], data)._encode(item, reporter);
+          }, child));
+        } else if (state.use !== null) {
+          result = this._getUse(state.use, parent)._encode(data, reporter);
+        } else {
+          content = this._encodePrimitive(state.tag, data);
+          primitive = true;
+        }
+      }
+      if (!state.any && state.choice === null) {
+        const tag = state.implicit !== null ? state.implicit : state.tag;
+        const cls = state.implicit === null ? "universal" : "context";
+        if (tag === null) {
+          if (state.use === null)
+            reporter.error("Tag could be omitted only for .use()");
+        } else {
+          if (state.use === null)
+            result = this._encodeComposite(tag, primitive, cls, content);
+        }
+      }
+      if (state.explicit !== null)
+        result = this._encodeComposite(state.explicit, false, "context", result);
+      return result;
+    };
+    Node.prototype._encodeChoice = function encodeChoice(data, reporter) {
+      const state = this._baseState;
+      const node = state.choice[data.type];
+      if (!node) {
+        assert(
+          false,
+          data.type + " not found in " + JSON.stringify(Object.keys(state.choice))
+        );
+      }
+      return node._encode(data.value, reporter);
+    };
+    Node.prototype._encodePrimitive = function encodePrimitive(tag, data) {
+      const state = this._baseState;
+      if (/str$/.test(tag))
+        return this._encodeStr(data, tag);
+      else if (tag === "objid" && state.args)
+        return this._encodeObjid(data, state.reverseArgs[0], state.args[1]);
+      else if (tag === "objid")
+        return this._encodeObjid(data, null, null);
+      else if (tag === "gentime" || tag === "utctime")
+        return this._encodeTime(data, tag);
+      else if (tag === "null_")
+        return this._encodeNull();
+      else if (tag === "int" || tag === "enum")
+        return this._encodeInt(data, state.args && state.reverseArgs[0]);
+      else if (tag === "bool")
+        return this._encodeBool(data);
+      else if (tag === "objDesc")
+        return this._encodeStr(data, tag);
+      else
+        throw new Error("Unsupported tag: " + tag);
+    };
+    Node.prototype._isNumstr = function isNumstr(str) {
+      return /^[0-9 ]*$/.test(str);
+    };
+    Node.prototype._isPrintstr = function isPrintstr(str) {
+      return /^[A-Za-z0-9 '()+,-./:=?]*$/.test(str);
+    };
+  }
+});
+
+// node_modules/asn1.js/lib/asn1/constants/der.js
+var require_der = __commonJS({
+  "node_modules/asn1.js/lib/asn1/constants/der.js"(exports2) {
+    "use strict";
+    function reverse(map) {
+      const res = {};
+      Object.keys(map).forEach(function(key) {
+        if ((key | 0) == key)
+          key = key | 0;
+        const value = map[key];
+        res[value] = key;
+      });
+      return res;
+    }
+    exports2.tagClass = {
+      0: "universal",
+      1: "application",
+      2: "context",
+      3: "private"
+    };
+    exports2.tagClassByName = reverse(exports2.tagClass);
+    exports2.tag = {
+      0: "end",
+      1: "bool",
+      2: "int",
+      3: "bitstr",
+      4: "octstr",
+      5: "null_",
+      6: "objid",
+      7: "objDesc",
+      8: "external",
+      9: "real",
+      10: "enum",
+      11: "embed",
+      12: "utf8str",
+      13: "relativeOid",
+      16: "seq",
+      17: "set",
+      18: "numstr",
+      19: "printstr",
+      20: "t61str",
+      21: "videostr",
+      22: "ia5str",
+      23: "utctime",
+      24: "gentime",
+      25: "graphstr",
+      26: "iso646str",
+      27: "genstr",
+      28: "unistr",
+      29: "charstr",
+      30: "bmpstr"
+    };
+    exports2.tagByName = reverse(exports2.tag);
+  }
+});
+
+// node_modules/asn1.js/lib/asn1/encoders/der.js
+var require_der2 = __commonJS({
+  "node_modules/asn1.js/lib/asn1/encoders/der.js"(exports2, module2) {
+    "use strict";
+    var inherits = require_inherits();
+    var Buffer4 = require_safer().Buffer;
+    var Node = require_node5();
+    var der = require_der();
+    function DEREncoder(entity) {
+      this.enc = "der";
+      this.name = entity.name;
+      this.entity = entity;
+      this.tree = new DERNode();
+      this.tree._init(entity.body);
+    }
+    module2.exports = DEREncoder;
+    DEREncoder.prototype.encode = function encode(data, reporter) {
+      return this.tree._encode(data, reporter).join();
+    };
+    function DERNode(parent) {
+      Node.call(this, "der", parent);
+    }
+    inherits(DERNode, Node);
+    DERNode.prototype._encodeComposite = function encodeComposite(tag, primitive, cls, content) {
+      const encodedTag = encodeTag(tag, primitive, cls, this.reporter);
+      if (content.length < 128) {
+        const header2 = Buffer4.alloc(2);
+        header2[0] = encodedTag;
+        header2[1] = content.length;
+        return this._createEncoderBuffer([header2, content]);
+      }
+      let lenOctets = 1;
+      for (let i2 = content.length; i2 >= 256; i2 >>= 8)
+        lenOctets++;
+      const header = Buffer4.alloc(1 + 1 + lenOctets);
+      header[0] = encodedTag;
+      header[1] = 128 | lenOctets;
+      for (let i2 = 1 + lenOctets, j = content.length; j > 0; i2--, j >>= 8)
+        header[i2] = j & 255;
+      return this._createEncoderBuffer([header, content]);
+    };
+    DERNode.prototype._encodeStr = function encodeStr(str, tag) {
+      if (tag === "bitstr") {
+        return this._createEncoderBuffer([str.unused | 0, str.data]);
+      } else if (tag === "bmpstr") {
+        const buf = Buffer4.alloc(str.length * 2);
+        for (let i2 = 0; i2 < str.length; i2++) {
+          buf.writeUInt16BE(str.charCodeAt(i2), i2 * 2);
+        }
+        return this._createEncoderBuffer(buf);
+      } else if (tag === "numstr") {
+        if (!this._isNumstr(str)) {
+          return this.reporter.error("Encoding of string type: numstr supports only digits and space");
+        }
+        return this._createEncoderBuffer(str);
+      } else if (tag === "printstr") {
+        if (!this._isPrintstr(str)) {
+          return this.reporter.error("Encoding of string type: printstr supports only latin upper and lower case letters, digits, space, apostrophe, left and rigth parenthesis, plus sign, comma, hyphen, dot, slash, colon, equal sign, question mark");
+        }
+        return this._createEncoderBuffer(str);
+      } else if (/str$/.test(tag)) {
+        return this._createEncoderBuffer(str);
+      } else if (tag === "objDesc") {
+        return this._createEncoderBuffer(str);
+      } else {
+        return this.reporter.error("Encoding of string type: " + tag + " unsupported");
+      }
+    };
+    DERNode.prototype._encodeObjid = function encodeObjid(id, values, relative) {
+      if (typeof id === "string") {
+        if (!values)
+          return this.reporter.error("string objid given, but no values map found");
+        if (!values.hasOwnProperty(id))
+          return this.reporter.error("objid not found in values map");
+        id = values[id].split(/[\s.]+/g);
+        for (let i2 = 0; i2 < id.length; i2++)
+          id[i2] |= 0;
+      } else if (Array.isArray(id)) {
+        id = id.slice();
+        for (let i2 = 0; i2 < id.length; i2++)
+          id[i2] |= 0;
+      }
+      if (!Array.isArray(id)) {
+        return this.reporter.error("objid() should be either array or string, got: " + JSON.stringify(id));
+      }
+      if (!relative) {
+        if (id[1] >= 40)
+          return this.reporter.error("Second objid identifier OOB");
+        id.splice(0, 2, id[0] * 40 + id[1]);
+      }
+      let size = 0;
+      for (let i2 = 0; i2 < id.length; i2++) {
+        let ident = id[i2];
+        for (size++; ident >= 128; ident >>= 7)
+          size++;
+      }
+      const objid = Buffer4.alloc(size);
+      let offset = objid.length - 1;
+      for (let i2 = id.length - 1; i2 >= 0; i2--) {
+        let ident = id[i2];
+        objid[offset--] = ident & 127;
+        while ((ident >>= 7) > 0)
+          objid[offset--] = 128 | ident & 127;
+      }
+      return this._createEncoderBuffer(objid);
+    };
+    function two(num) {
+      if (num < 10)
+        return "0" + num;
+      else
+        return num;
+    }
+    DERNode.prototype._encodeTime = function encodeTime(time, tag) {
+      let str;
+      const date = new Date(time);
+      if (tag === "gentime") {
+        str = [
+          two(date.getUTCFullYear()),
+          two(date.getUTCMonth() + 1),
+          two(date.getUTCDate()),
+          two(date.getUTCHours()),
+          two(date.getUTCMinutes()),
+          two(date.getUTCSeconds()),
+          "Z"
+        ].join("");
+      } else if (tag === "utctime") {
+        str = [
+          two(date.getUTCFullYear() % 100),
+          two(date.getUTCMonth() + 1),
+          two(date.getUTCDate()),
+          two(date.getUTCHours()),
+          two(date.getUTCMinutes()),
+          two(date.getUTCSeconds()),
+          "Z"
+        ].join("");
+      } else {
+        this.reporter.error("Encoding " + tag + " time is not supported yet");
+      }
+      return this._encodeStr(str, "octstr");
+    };
+    DERNode.prototype._encodeNull = function encodeNull() {
+      return this._createEncoderBuffer("");
+    };
+    DERNode.prototype._encodeInt = function encodeInt(num, values) {
+      if (typeof num === "string") {
+        if (!values)
+          return this.reporter.error("String int or enum given, but no values map");
+        if (!values.hasOwnProperty(num)) {
+          return this.reporter.error("Values map doesn't contain: " + JSON.stringify(num));
+        }
+        num = values[num];
+      }
+      if (typeof num !== "number" && !Buffer4.isBuffer(num)) {
+        const numArray = num.toArray();
+        if (!num.sign && numArray[0] & 128) {
+          numArray.unshift(0);
+        }
+        num = Buffer4.from(numArray);
+      }
+      if (Buffer4.isBuffer(num)) {
+        let size2 = num.length;
+        if (num.length === 0)
+          size2++;
+        const out2 = Buffer4.alloc(size2);
+        num.copy(out2);
+        if (num.length === 0)
+          out2[0] = 0;
+        return this._createEncoderBuffer(out2);
+      }
+      if (num < 128)
+        return this._createEncoderBuffer(num);
+      if (num < 256)
+        return this._createEncoderBuffer([0, num]);
+      let size = 1;
+      for (let i2 = num; i2 >= 256; i2 >>= 8)
+        size++;
+      const out = new Array(size);
+      for (let i2 = out.length - 1; i2 >= 0; i2--) {
+        out[i2] = num & 255;
+        num >>= 8;
+      }
+      if (out[0] & 128) {
+        out.unshift(0);
+      }
+      return this._createEncoderBuffer(Buffer4.from(out));
+    };
+    DERNode.prototype._encodeBool = function encodeBool(value) {
+      return this._createEncoderBuffer(value ? 255 : 0);
+    };
+    DERNode.prototype._use = function use(entity, obj) {
+      if (typeof entity === "function")
+        entity = entity(obj);
+      return entity._getEncoder("der").tree;
+    };
+    DERNode.prototype._skipDefault = function skipDefault(dataBuffer, reporter, parent) {
+      const state = this._baseState;
+      let i2;
+      if (state["default"] === null)
+        return false;
+      const data = dataBuffer.join();
+      if (state.defaultBuffer === void 0)
+        state.defaultBuffer = this._encodeValue(state["default"], reporter, parent).join();
+      if (data.length !== state.defaultBuffer.length)
+        return false;
+      for (i2 = 0; i2 < data.length; i2++)
+        if (data[i2] !== state.defaultBuffer[i2])
+          return false;
+      return true;
+    };
+    function encodeTag(tag, primitive, cls, reporter) {
+      let res;
+      if (tag === "seqof")
+        tag = "seq";
+      else if (tag === "setof")
+        tag = "set";
+      if (der.tagByName.hasOwnProperty(tag))
+        res = der.tagByName[tag];
+      else if (typeof tag === "number" && (tag | 0) === tag)
+        res = tag;
+      else
+        return reporter.error("Unknown tag: " + tag);
+      if (res >= 31)
+        return reporter.error("Multi-octet tag encoding unsupported");
+      if (!primitive)
+        res |= 32;
+      res |= der.tagClassByName[cls || "universal"] << 6;
+      return res;
+    }
+  }
+});
+
+// node_modules/asn1.js/lib/asn1/encoders/pem.js
+var require_pem = __commonJS({
+  "node_modules/asn1.js/lib/asn1/encoders/pem.js"(exports2, module2) {
+    "use strict";
+    var inherits = require_inherits();
+    var DEREncoder = require_der2();
+    function PEMEncoder(entity) {
+      DEREncoder.call(this, entity);
+      this.enc = "pem";
+    }
+    inherits(PEMEncoder, DEREncoder);
+    module2.exports = PEMEncoder;
+    PEMEncoder.prototype.encode = function encode(data, options) {
+      const buf = DEREncoder.prototype.encode.call(this, data);
+      const p = buf.toString("base64");
+      const out = ["-----BEGIN " + options.label + "-----"];
+      for (let i2 = 0; i2 < p.length; i2 += 64)
+        out.push(p.slice(i2, i2 + 64));
+      out.push("-----END " + options.label + "-----");
+      return out.join("\n");
+    };
+  }
+});
+
+// node_modules/asn1.js/lib/asn1/encoders/index.js
+var require_encoders = __commonJS({
+  "node_modules/asn1.js/lib/asn1/encoders/index.js"(exports2) {
+    "use strict";
+    var encoders = exports2;
+    encoders.der = require_der2();
+    encoders.pem = require_pem();
+  }
+});
+
+// node_modules/asn1.js/lib/asn1/decoders/der.js
+var require_der3 = __commonJS({
+  "node_modules/asn1.js/lib/asn1/decoders/der.js"(exports2, module2) {
+    "use strict";
+    var inherits = require_inherits();
+    var bignum = require_bn();
+    var DecoderBuffer = require_buffer().DecoderBuffer;
+    var Node = require_node5();
+    var der = require_der();
+    function DERDecoder(entity) {
+      this.enc = "der";
+      this.name = entity.name;
+      this.entity = entity;
+      this.tree = new DERNode();
+      this.tree._init(entity.body);
+    }
+    module2.exports = DERDecoder;
+    DERDecoder.prototype.decode = function decode(data, options) {
+      if (!DecoderBuffer.isDecoderBuffer(data)) {
+        data = new DecoderBuffer(data, options);
+      }
+      return this.tree._decode(data, options);
+    };
+    function DERNode(parent) {
+      Node.call(this, "der", parent);
+    }
+    inherits(DERNode, Node);
+    DERNode.prototype._peekTag = function peekTag(buffer, tag, any) {
+      if (buffer.isEmpty())
+        return false;
+      const state = buffer.save();
+      const decodedTag = derDecodeTag(buffer, 'Failed to peek tag: "' + tag + '"');
+      if (buffer.isError(decodedTag))
+        return decodedTag;
+      buffer.restore(state);
+      return decodedTag.tag === tag || decodedTag.tagStr === tag || decodedTag.tagStr + "of" === tag || any;
+    };
+    DERNode.prototype._decodeTag = function decodeTag(buffer, tag, any) {
+      const decodedTag = derDecodeTag(
+        buffer,
+        'Failed to decode tag of "' + tag + '"'
+      );
+      if (buffer.isError(decodedTag))
+        return decodedTag;
+      let len = derDecodeLen(
+        buffer,
+        decodedTag.primitive,
+        'Failed to get length of "' + tag + '"'
+      );
+      if (buffer.isError(len))
+        return len;
+      if (!any && decodedTag.tag !== tag && decodedTag.tagStr !== tag && decodedTag.tagStr + "of" !== tag) {
+        return buffer.error('Failed to match tag: "' + tag + '"');
+      }
+      if (decodedTag.primitive || len !== null)
+        return buffer.skip(len, 'Failed to match body of: "' + tag + '"');
+      const state = buffer.save();
+      const res = this._skipUntilEnd(
+        buffer,
+        'Failed to skip indefinite length body: "' + this.tag + '"'
+      );
+      if (buffer.isError(res))
+        return res;
+      len = buffer.offset - state.offset;
+      buffer.restore(state);
+      return buffer.skip(len, 'Failed to match body of: "' + tag + '"');
+    };
+    DERNode.prototype._skipUntilEnd = function skipUntilEnd(buffer, fail3) {
+      for (; ; ) {
+        const tag = derDecodeTag(buffer, fail3);
+        if (buffer.isError(tag))
+          return tag;
+        const len = derDecodeLen(buffer, tag.primitive, fail3);
+        if (buffer.isError(len))
+          return len;
+        let res;
+        if (tag.primitive || len !== null)
+          res = buffer.skip(len);
+        else
+          res = this._skipUntilEnd(buffer, fail3);
+        if (buffer.isError(res))
+          return res;
+        if (tag.tagStr === "end")
+          break;
+      }
+    };
+    DERNode.prototype._decodeList = function decodeList(buffer, tag, decoder, options) {
+      const result = [];
+      while (!buffer.isEmpty()) {
+        const possibleEnd = this._peekTag(buffer, "end");
+        if (buffer.isError(possibleEnd))
+          return possibleEnd;
+        const res = decoder.decode(buffer, "der", options);
+        if (buffer.isError(res) && possibleEnd)
+          break;
+        result.push(res);
+      }
+      return result;
+    };
+    DERNode.prototype._decodeStr = function decodeStr(buffer, tag) {
+      if (tag === "bitstr") {
+        const unused = buffer.readUInt8();
+        if (buffer.isError(unused))
+          return unused;
+        return { unused, data: buffer.raw() };
+      } else if (tag === "bmpstr") {
+        const raw2 = buffer.raw();
+        if (raw2.length % 2 === 1)
+          return buffer.error("Decoding of string type: bmpstr length mismatch");
+        let str = "";
+        for (let i2 = 0; i2 < raw2.length / 2; i2++) {
+          str += String.fromCharCode(raw2.readUInt16BE(i2 * 2));
+        }
+        return str;
+      } else if (tag === "numstr") {
+        const numstr = buffer.raw().toString("ascii");
+        if (!this._isNumstr(numstr)) {
+          return buffer.error("Decoding of string type: numstr unsupported characters");
+        }
+        return numstr;
+      } else if (tag === "octstr") {
+        return buffer.raw();
+      } else if (tag === "objDesc") {
+        return buffer.raw();
+      } else if (tag === "printstr") {
+        const printstr = buffer.raw().toString("ascii");
+        if (!this._isPrintstr(printstr)) {
+          return buffer.error("Decoding of string type: printstr unsupported characters");
+        }
+        return printstr;
+      } else if (/str$/.test(tag)) {
+        return buffer.raw().toString();
+      } else {
+        return buffer.error("Decoding of string type: " + tag + " unsupported");
+      }
+    };
+    DERNode.prototype._decodeObjid = function decodeObjid(buffer, values, relative) {
+      let result;
+      const identifiers = [];
+      let ident = 0;
+      let subident = 0;
+      while (!buffer.isEmpty()) {
+        subident = buffer.readUInt8();
+        ident <<= 7;
+        ident |= subident & 127;
+        if ((subident & 128) === 0) {
+          identifiers.push(ident);
+          ident = 0;
+        }
+      }
+      if (subident & 128)
+        identifiers.push(ident);
+      const first = identifiers[0] / 40 | 0;
+      const second = identifiers[0] % 40;
+      if (relative)
+        result = identifiers;
+      else
+        result = [first, second].concat(identifiers.slice(1));
+      if (values) {
+        let tmp = values[result.join(" ")];
+        if (tmp === void 0)
+          tmp = values[result.join(".")];
+        if (tmp !== void 0)
+          result = tmp;
+      }
+      return result;
+    };
+    DERNode.prototype._decodeTime = function decodeTime(buffer, tag) {
+      const str = buffer.raw().toString();
+      let year;
+      let mon;
+      let day;
+      let hour;
+      let min;
+      let sec;
+      if (tag === "gentime") {
+        year = str.slice(0, 4) | 0;
+        mon = str.slice(4, 6) | 0;
+        day = str.slice(6, 8) | 0;
+        hour = str.slice(8, 10) | 0;
+        min = str.slice(10, 12) | 0;
+        sec = str.slice(12, 14) | 0;
+      } else if (tag === "utctime") {
+        year = str.slice(0, 2) | 0;
+        mon = str.slice(2, 4) | 0;
+        day = str.slice(4, 6) | 0;
+        hour = str.slice(6, 8) | 0;
+        min = str.slice(8, 10) | 0;
+        sec = str.slice(10, 12) | 0;
+        if (year < 70)
+          year = 2e3 + year;
+        else
+          year = 1900 + year;
+      } else {
+        return buffer.error("Decoding " + tag + " time is not supported yet");
+      }
+      return Date.UTC(year, mon - 1, day, hour, min, sec, 0);
+    };
+    DERNode.prototype._decodeNull = function decodeNull() {
+      return null;
+    };
+    DERNode.prototype._decodeBool = function decodeBool(buffer) {
+      const res = buffer.readUInt8();
+      if (buffer.isError(res))
+        return res;
+      else
+        return res !== 0;
+    };
+    DERNode.prototype._decodeInt = function decodeInt(buffer, values) {
+      const raw2 = buffer.raw();
+      let res = new bignum(raw2);
+      if (values)
+        res = values[res.toString(10)] || res;
+      return res;
+    };
+    DERNode.prototype._use = function use(entity, obj) {
+      if (typeof entity === "function")
+        entity = entity(obj);
+      return entity._getDecoder("der").tree;
+    };
+    function derDecodeTag(buf, fail3) {
+      let tag = buf.readUInt8(fail3);
+      if (buf.isError(tag))
+        return tag;
+      const cls = der.tagClass[tag >> 6];
+      const primitive = (tag & 32) === 0;
+      if ((tag & 31) === 31) {
+        let oct = tag;
+        tag = 0;
+        while ((oct & 128) === 128) {
+          oct = buf.readUInt8(fail3);
+          if (buf.isError(oct))
+            return oct;
+          tag <<= 7;
+          tag |= oct & 127;
+        }
+      } else {
+        tag &= 31;
+      }
+      const tagStr = der.tag[tag];
+      return {
+        cls,
+        primitive,
+        tag,
+        tagStr
+      };
+    }
+    function derDecodeLen(buf, primitive, fail3) {
+      let len = buf.readUInt8(fail3);
+      if (buf.isError(len))
+        return len;
+      if (!primitive && len === 128)
+        return null;
+      if ((len & 128) === 0) {
+        return len;
+      }
+      const num = len & 127;
+      if (num > 4)
+        return buf.error("length octect is too long");
+      len = 0;
+      for (let i2 = 0; i2 < num; i2++) {
+        len <<= 8;
+        const j = buf.readUInt8(fail3);
+        if (buf.isError(j))
+          return j;
+        len |= j;
+      }
+      return len;
+    }
+  }
+});
+
+// node_modules/asn1.js/lib/asn1/decoders/pem.js
+var require_pem2 = __commonJS({
+  "node_modules/asn1.js/lib/asn1/decoders/pem.js"(exports2, module2) {
+    "use strict";
+    var inherits = require_inherits();
+    var Buffer4 = require_safer().Buffer;
+    var DERDecoder = require_der3();
+    function PEMDecoder(entity) {
+      DERDecoder.call(this, entity);
+      this.enc = "pem";
+    }
+    inherits(PEMDecoder, DERDecoder);
+    module2.exports = PEMDecoder;
+    PEMDecoder.prototype.decode = function decode(data, options) {
+      const lines = data.toString().split(/[\r\n]+/g);
+      const label = options.label.toUpperCase();
+      const re = /^-----(BEGIN|END) ([^-]+)-----$/;
+      let start = -1;
+      let end = -1;
+      for (let i2 = 0; i2 < lines.length; i2++) {
+        const match = lines[i2].match(re);
+        if (match === null)
+          continue;
+        if (match[2] !== label)
+          continue;
+        if (start === -1) {
+          if (match[1] !== "BEGIN")
+            break;
+          start = i2;
+        } else {
+          if (match[1] !== "END")
+            break;
+          end = i2;
+          break;
+        }
+      }
+      if (start === -1 || end === -1)
+        throw new Error("PEM section not found for: " + label);
+      const base64 = lines.slice(start + 1, end).join("");
+      base64.replace(/[^a-z0-9+/=]+/gi, "");
+      const input = Buffer4.from(base64, "base64");
+      return DERDecoder.prototype.decode.call(this, input, options);
+    };
+  }
+});
+
+// node_modules/asn1.js/lib/asn1/decoders/index.js
+var require_decoders = __commonJS({
+  "node_modules/asn1.js/lib/asn1/decoders/index.js"(exports2) {
+    "use strict";
+    var decoders = exports2;
+    decoders.der = require_der3();
+    decoders.pem = require_pem2();
+  }
+});
+
+// node_modules/asn1.js/lib/asn1/api.js
+var require_api = __commonJS({
+  "node_modules/asn1.js/lib/asn1/api.js"(exports2) {
+    "use strict";
+    var encoders = require_encoders();
+    var decoders = require_decoders();
+    var inherits = require_inherits();
+    var api = exports2;
+    api.define = function define2(name2, body) {
+      return new Entity(name2, body);
+    };
+    function Entity(name2, body) {
+      this.name = name2;
+      this.body = body;
+      this.decoders = {};
+      this.encoders = {};
+    }
+    Entity.prototype._createNamed = function createNamed(Base) {
+      const name2 = this.name;
+      function Generated(entity) {
+        this._initNamed(entity, name2);
+      }
+      inherits(Generated, Base);
+      Generated.prototype._initNamed = function _initNamed(entity, name3) {
+        Base.call(this, entity, name3);
+      };
+      return new Generated(this);
+    };
+    Entity.prototype._getDecoder = function _getDecoder(enc) {
+      enc = enc || "der";
+      if (!this.decoders.hasOwnProperty(enc))
+        this.decoders[enc] = this._createNamed(decoders[enc]);
+      return this.decoders[enc];
+    };
+    Entity.prototype.decode = function decode(data, enc, options) {
+      return this._getDecoder(enc).decode(data, options);
+    };
+    Entity.prototype._getEncoder = function _getEncoder(enc) {
+      enc = enc || "der";
+      if (!this.encoders.hasOwnProperty(enc))
+        this.encoders[enc] = this._createNamed(encoders[enc]);
+      return this.encoders[enc];
+    };
+    Entity.prototype.encode = function encode(data, enc, reporter) {
+      return this._getEncoder(enc).encode(data, reporter);
+    };
+  }
+});
+
+// node_modules/asn1.js/lib/asn1/base/index.js
+var require_base = __commonJS({
+  "node_modules/asn1.js/lib/asn1/base/index.js"(exports2) {
+    "use strict";
+    var base = exports2;
+    base.Reporter = require_reporter().Reporter;
+    base.DecoderBuffer = require_buffer().DecoderBuffer;
+    base.EncoderBuffer = require_buffer().EncoderBuffer;
+    base.Node = require_node5();
+  }
+});
+
+// node_modules/asn1.js/lib/asn1/constants/index.js
+var require_constants = __commonJS({
+  "node_modules/asn1.js/lib/asn1/constants/index.js"(exports2) {
+    "use strict";
+    var constants = exports2;
+    constants._reverse = function reverse(map) {
+      const res = {};
+      Object.keys(map).forEach(function(key) {
+        if ((key | 0) == key)
+          key = key | 0;
+        const value = map[key];
+        res[value] = key;
+      });
+      return res;
+    };
+    constants.der = require_der();
+  }
+});
+
+// node_modules/asn1.js/lib/asn1.js
+var require_asn1 = __commonJS({
+  "node_modules/asn1.js/lib/asn1.js"(exports2) {
+    "use strict";
+    var asn1 = exports2;
+    asn1.bignum = require_bn();
+    asn1.define = require_api().define;
+    asn1.base = require_base();
+    asn1.constants = require_constants();
+    asn1.decoders = require_decoders();
+    asn1.encoders = require_encoders();
+  }
+});
+
+// node_modules/jws/lib/data-stream.js
+var require_data_stream = __commonJS({
+  "node_modules/jws/lib/data-stream.js"(exports2, module2) {
+    var Buffer4 = require_safe_buffer().Buffer;
+    var Stream3 = require("stream");
+    var util = require("util");
+    function DataStream(data) {
+      this.buffer = null;
+      this.writable = true;
+      this.readable = true;
+      if (!data) {
+        this.buffer = Buffer4.alloc(0);
+        return this;
+      }
+      if (typeof data.pipe === "function") {
+        this.buffer = Buffer4.alloc(0);
+        data.pipe(this);
+        return this;
+      }
+      if (data.length || typeof data === "object") {
+        this.buffer = data;
+        this.writable = false;
+        process.nextTick(function() {
+          this.emit("end", data);
+          this.readable = false;
+          this.emit("close");
+        }.bind(this));
+        return this;
+      }
+      throw new TypeError("Unexpected data type (" + typeof data + ")");
+    }
+    util.inherits(DataStream, Stream3);
+    DataStream.prototype.write = function write3(data) {
+      this.buffer = Buffer4.concat([this.buffer, Buffer4.from(data)]);
+      this.emit("data", data);
+    };
+    DataStream.prototype.end = function end(data) {
+      if (data)
+        this.write(data);
+      this.emit("end", data);
+      this.emit("close");
+      this.writable = false;
+      this.readable = false;
+    };
+    module2.exports = DataStream;
+  }
+});
+
+// node_modules/ecdsa-sig-formatter/src/param-bytes-for-alg.js
+var require_param_bytes_for_alg = __commonJS({
+  "node_modules/ecdsa-sig-formatter/src/param-bytes-for-alg.js"(exports2, module2) {
+    "use strict";
+    function getParamSize(keySize) {
+      var result = (keySize / 8 | 0) + (keySize % 8 === 0 ? 0 : 1);
+      return result;
+    }
+    var paramBytesForAlg = {
+      ES256: getParamSize(256),
+      ES384: getParamSize(384),
+      ES512: getParamSize(521)
+    };
+    function getParamBytesForAlg(alg) {
+      var paramBytes = paramBytesForAlg[alg];
+      if (paramBytes) {
+        return paramBytes;
+      }
+      throw new Error('Unknown algorithm "' + alg + '"');
+    }
+    module2.exports = getParamBytesForAlg;
+  }
+});
+
+// node_modules/ecdsa-sig-formatter/src/ecdsa-sig-formatter.js
+var require_ecdsa_sig_formatter = __commonJS({
+  "node_modules/ecdsa-sig-formatter/src/ecdsa-sig-formatter.js"(exports2, module2) {
+    "use strict";
+    var Buffer4 = require_safe_buffer().Buffer;
+    var getParamBytesForAlg = require_param_bytes_for_alg();
+    var MAX_OCTET = 128;
+    var CLASS_UNIVERSAL = 0;
+    var PRIMITIVE_BIT = 32;
+    var TAG_SEQ = 16;
+    var TAG_INT = 2;
+    var ENCODED_TAG_SEQ = TAG_SEQ | PRIMITIVE_BIT | CLASS_UNIVERSAL << 6;
+    var ENCODED_TAG_INT = TAG_INT | CLASS_UNIVERSAL << 6;
+    function base64Url(base64) {
+      return base64.replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+    }
+    function signatureAsBuffer(signature) {
+      if (Buffer4.isBuffer(signature)) {
+        return signature;
+      } else if ("string" === typeof signature) {
+        return Buffer4.from(signature, "base64");
+      }
+      throw new TypeError("ECDSA signature must be a Base64 string or a Buffer");
+    }
+    function derToJose(signature, alg) {
+      signature = signatureAsBuffer(signature);
+      var paramBytes = getParamBytesForAlg(alg);
+      var maxEncodedParamLength = paramBytes + 1;
+      var inputLength = signature.length;
+      var offset = 0;
+      if (signature[offset++] !== ENCODED_TAG_SEQ) {
+        throw new Error('Could not find expected "seq"');
+      }
+      var seqLength = signature[offset++];
+      if (seqLength === (MAX_OCTET | 1)) {
+        seqLength = signature[offset++];
+      }
+      if (inputLength - offset < seqLength) {
+        throw new Error('"seq" specified length of "' + seqLength + '", only "' + (inputLength - offset) + '" remaining');
+      }
+      if (signature[offset++] !== ENCODED_TAG_INT) {
+        throw new Error('Could not find expected "int" for "r"');
+      }
+      var rLength = signature[offset++];
+      if (inputLength - offset - 2 < rLength) {
+        throw new Error('"r" specified length of "' + rLength + '", only "' + (inputLength - offset - 2) + '" available');
+      }
+      if (maxEncodedParamLength < rLength) {
+        throw new Error('"r" specified length of "' + rLength + '", max of "' + maxEncodedParamLength + '" is acceptable');
+      }
+      var rOffset = offset;
+      offset += rLength;
+      if (signature[offset++] !== ENCODED_TAG_INT) {
+        throw new Error('Could not find expected "int" for "s"');
+      }
+      var sLength = signature[offset++];
+      if (inputLength - offset !== sLength) {
+        throw new Error('"s" specified length of "' + sLength + '", expected "' + (inputLength - offset) + '"');
+      }
+      if (maxEncodedParamLength < sLength) {
+        throw new Error('"s" specified length of "' + sLength + '", max of "' + maxEncodedParamLength + '" is acceptable');
+      }
+      var sOffset = offset;
+      offset += sLength;
+      if (offset !== inputLength) {
+        throw new Error('Expected to consume entire buffer, but "' + (inputLength - offset) + '" bytes remain');
+      }
+      var rPadding = paramBytes - rLength, sPadding = paramBytes - sLength;
+      var dst = Buffer4.allocUnsafe(rPadding + rLength + sPadding + sLength);
+      for (offset = 0; offset < rPadding; ++offset) {
+        dst[offset] = 0;
+      }
+      signature.copy(dst, offset, rOffset + Math.max(-rPadding, 0), rOffset + rLength);
+      offset = paramBytes;
+      for (var o = offset; offset < o + sPadding; ++offset) {
+        dst[offset] = 0;
+      }
+      signature.copy(dst, offset, sOffset + Math.max(-sPadding, 0), sOffset + sLength);
+      dst = dst.toString("base64");
+      dst = base64Url(dst);
+      return dst;
+    }
+    function countPadding(buf, start, stop) {
+      var padding = 0;
+      while (start + padding < stop && buf[start + padding] === 0) {
+        ++padding;
+      }
+      var needsSign = buf[start + padding] >= MAX_OCTET;
+      if (needsSign) {
+        --padding;
+      }
+      return padding;
+    }
+    function joseToDer(signature, alg) {
+      signature = signatureAsBuffer(signature);
+      var paramBytes = getParamBytesForAlg(alg);
+      var signatureBytes = signature.length;
+      if (signatureBytes !== paramBytes * 2) {
+        throw new TypeError('"' + alg + '" signatures must be "' + paramBytes * 2 + '" bytes, saw "' + signatureBytes + '"');
+      }
+      var rPadding = countPadding(signature, 0, paramBytes);
+      var sPadding = countPadding(signature, paramBytes, signature.length);
+      var rLength = paramBytes - rPadding;
+      var sLength = paramBytes - sPadding;
+      var rsBytes = 1 + 1 + rLength + 1 + 1 + sLength;
+      var shortLength = rsBytes < MAX_OCTET;
+      var dst = Buffer4.allocUnsafe((shortLength ? 2 : 3) + rsBytes);
+      var offset = 0;
+      dst[offset++] = ENCODED_TAG_SEQ;
+      if (shortLength) {
+        dst[offset++] = rsBytes;
+      } else {
+        dst[offset++] = MAX_OCTET | 1;
+        dst[offset++] = rsBytes & 255;
+      }
+      dst[offset++] = ENCODED_TAG_INT;
+      dst[offset++] = rLength;
+      if (rPadding < 0) {
+        dst[offset++] = 0;
+        offset += signature.copy(dst, offset, 0, paramBytes);
+      } else {
+        offset += signature.copy(dst, offset, rPadding, paramBytes);
+      }
+      dst[offset++] = ENCODED_TAG_INT;
+      dst[offset++] = sLength;
+      if (sPadding < 0) {
+        dst[offset++] = 0;
+        signature.copy(dst, offset, paramBytes);
+      } else {
+        signature.copy(dst, offset, paramBytes + sPadding);
+      }
+      return dst;
+    }
+    module2.exports = {
+      derToJose,
+      joseToDer
+    };
+  }
+});
+
+// node_modules/buffer-equal-constant-time/index.js
+var require_buffer_equal_constant_time = __commonJS({
+  "node_modules/buffer-equal-constant-time/index.js"(exports2, module2) {
+    "use strict";
+    var Buffer4 = require("buffer").Buffer;
+    var SlowBuffer = require("buffer").SlowBuffer;
+    module2.exports = bufferEq;
+    function bufferEq(a, b) {
+      if (!Buffer4.isBuffer(a) || !Buffer4.isBuffer(b)) {
+        return false;
+      }
+      if (a.length !== b.length) {
+        return false;
+      }
+      var c = 0;
+      for (var i2 = 0; i2 < a.length; i2++) {
+        c |= a[i2] ^ b[i2];
+      }
+      return c === 0;
+    }
+    bufferEq.install = function() {
+      Buffer4.prototype.equal = SlowBuffer.prototype.equal = function equal(that) {
+        return bufferEq(this, that);
+      };
+    };
+    var origBufEqual = Buffer4.prototype.equal;
+    var origSlowBufEqual = SlowBuffer.prototype.equal;
+    bufferEq.restore = function() {
+      Buffer4.prototype.equal = origBufEqual;
+      SlowBuffer.prototype.equal = origSlowBufEqual;
+    };
+  }
+});
+
+// node_modules/jwa/index.js
+var require_jwa = __commonJS({
+  "node_modules/jwa/index.js"(exports2, module2) {
+    var Buffer4 = require_safe_buffer().Buffer;
+    var crypto5 = require("crypto");
+    var formatEcdsa = require_ecdsa_sig_formatter();
+    var util = require("util");
+    var MSG_INVALID_ALGORITHM = '"%s" is not a valid algorithm.\n  Supported algorithms are:\n  "HS256", "HS384", "HS512", "RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES384", "ES512" and "none".';
+    var MSG_INVALID_SECRET = "secret must be a string or buffer";
+    var MSG_INVALID_VERIFIER_KEY = "key must be a string or a buffer";
+    var MSG_INVALID_SIGNER_KEY = "key must be a string, a buffer or an object";
+    var supportsKeyObjects = typeof crypto5.createPublicKey === "function";
+    if (supportsKeyObjects) {
+      MSG_INVALID_VERIFIER_KEY += " or a KeyObject";
+      MSG_INVALID_SECRET += "or a KeyObject";
+    }
+    function checkIsPublicKey(key) {
+      if (Buffer4.isBuffer(key)) {
+        return;
+      }
+      if (typeof key === "string") {
+        return;
+      }
+      if (!supportsKeyObjects) {
+        throw typeError(MSG_INVALID_VERIFIER_KEY);
+      }
+      if (typeof key !== "object") {
+        throw typeError(MSG_INVALID_VERIFIER_KEY);
+      }
+      if (typeof key.type !== "string") {
+        throw typeError(MSG_INVALID_VERIFIER_KEY);
+      }
+      if (typeof key.asymmetricKeyType !== "string") {
+        throw typeError(MSG_INVALID_VERIFIER_KEY);
+      }
+      if (typeof key.export !== "function") {
+        throw typeError(MSG_INVALID_VERIFIER_KEY);
+      }
+    }
+    function checkIsPrivateKey(key) {
+      if (Buffer4.isBuffer(key)) {
+        return;
+      }
+      if (typeof key === "string") {
+        return;
+      }
+      if (typeof key === "object") {
+        return;
+      }
+      throw typeError(MSG_INVALID_SIGNER_KEY);
+    }
+    function checkIsSecretKey(key) {
+      if (Buffer4.isBuffer(key)) {
+        return;
+      }
+      if (typeof key === "string") {
+        return key;
+      }
+      if (!supportsKeyObjects) {
+        throw typeError(MSG_INVALID_SECRET);
+      }
+      if (typeof key !== "object") {
+        throw typeError(MSG_INVALID_SECRET);
+      }
+      if (key.type !== "secret") {
+        throw typeError(MSG_INVALID_SECRET);
+      }
+      if (typeof key.export !== "function") {
+        throw typeError(MSG_INVALID_SECRET);
+      }
+    }
+    function fromBase64(base64) {
+      return base64.replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+    }
+    function toBase64(base64url) {
+      base64url = base64url.toString();
+      var padding = 4 - base64url.length % 4;
+      if (padding !== 4) {
+        for (var i2 = 0; i2 < padding; ++i2) {
+          base64url += "=";
+        }
+      }
+      return base64url.replace(/\-/g, "+").replace(/_/g, "/");
+    }
+    function typeError(template) {
+      var args = [].slice.call(arguments, 1);
+      var errMsg = util.format.bind(util, template).apply(null, args);
+      return new TypeError(errMsg);
+    }
+    function bufferOrString(obj) {
+      return Buffer4.isBuffer(obj) || typeof obj === "string";
+    }
+    function normalizeInput(thing) {
+      if (!bufferOrString(thing))
+        thing = JSON.stringify(thing);
+      return thing;
+    }
+    function createHmacSigner(bits) {
+      return function sign(thing, secret) {
+        checkIsSecretKey(secret);
+        thing = normalizeInput(thing);
+        var hmac = crypto5.createHmac("sha" + bits, secret);
+        var sig = (hmac.update(thing), hmac.digest("base64"));
+        return fromBase64(sig);
+      };
+    }
+    var bufferEqual;
+    var timingSafeEqual = "timingSafeEqual" in crypto5 ? function timingSafeEqual2(a, b) {
+      if (a.byteLength !== b.byteLength) {
+        return false;
+      }
+      return crypto5.timingSafeEqual(a, b);
+    } : function timingSafeEqual2(a, b) {
+      if (!bufferEqual) {
+        bufferEqual = require_buffer_equal_constant_time();
+      }
+      return bufferEqual(a, b);
+    };
+    function createHmacVerifier(bits) {
+      return function verify(thing, signature, secret) {
+        var computedSig = createHmacSigner(bits)(thing, secret);
+        return timingSafeEqual(Buffer4.from(signature), Buffer4.from(computedSig));
+      };
+    }
+    function createKeySigner(bits) {
+      return function sign(thing, privateKey) {
+        checkIsPrivateKey(privateKey);
+        thing = normalizeInput(thing);
+        var signer = crypto5.createSign("RSA-SHA" + bits);
+        var sig = (signer.update(thing), signer.sign(privateKey, "base64"));
+        return fromBase64(sig);
+      };
+    }
+    function createKeyVerifier(bits) {
+      return function verify(thing, signature, publicKey) {
+        checkIsPublicKey(publicKey);
+        thing = normalizeInput(thing);
+        signature = toBase64(signature);
+        var verifier = crypto5.createVerify("RSA-SHA" + bits);
+        verifier.update(thing);
+        return verifier.verify(publicKey, signature, "base64");
+      };
+    }
+    function createPSSKeySigner(bits) {
+      return function sign(thing, privateKey) {
+        checkIsPrivateKey(privateKey);
+        thing = normalizeInput(thing);
+        var signer = crypto5.createSign("RSA-SHA" + bits);
+        var sig = (signer.update(thing), signer.sign({
+          key: privateKey,
+          padding: crypto5.constants.RSA_PKCS1_PSS_PADDING,
+          saltLength: crypto5.constants.RSA_PSS_SALTLEN_DIGEST
+        }, "base64"));
+        return fromBase64(sig);
+      };
+    }
+    function createPSSKeyVerifier(bits) {
+      return function verify(thing, signature, publicKey) {
+        checkIsPublicKey(publicKey);
+        thing = normalizeInput(thing);
+        signature = toBase64(signature);
+        var verifier = crypto5.createVerify("RSA-SHA" + bits);
+        verifier.update(thing);
+        return verifier.verify({
+          key: publicKey,
+          padding: crypto5.constants.RSA_PKCS1_PSS_PADDING,
+          saltLength: crypto5.constants.RSA_PSS_SALTLEN_DIGEST
+        }, signature, "base64");
+      };
+    }
+    function createECDSASigner(bits) {
+      var inner = createKeySigner(bits);
+      return function sign() {
+        var signature = inner.apply(null, arguments);
+        signature = formatEcdsa.derToJose(signature, "ES" + bits);
+        return signature;
+      };
+    }
+    function createECDSAVerifer(bits) {
+      var inner = createKeyVerifier(bits);
+      return function verify(thing, signature, publicKey) {
+        signature = formatEcdsa.joseToDer(signature, "ES" + bits).toString("base64");
+        var result = inner(thing, signature, publicKey);
+        return result;
+      };
+    }
+    function createNoneSigner() {
+      return function sign() {
+        return "";
+      };
+    }
+    function createNoneVerifier() {
+      return function verify(thing, signature) {
+        return signature === "";
+      };
+    }
+    module2.exports = function jwa(algorithm) {
+      var signerFactories = {
+        hs: createHmacSigner,
+        rs: createKeySigner,
+        ps: createPSSKeySigner,
+        es: createECDSASigner,
+        none: createNoneSigner
+      };
+      var verifierFactories = {
+        hs: createHmacVerifier,
+        rs: createKeyVerifier,
+        ps: createPSSKeyVerifier,
+        es: createECDSAVerifer,
+        none: createNoneVerifier
+      };
+      var match = algorithm.match(/^(RS|PS|ES|HS)(256|384|512)$|^(none)$/);
+      if (!match)
+        throw typeError(MSG_INVALID_ALGORITHM, algorithm);
+      var algo = (match[1] || match[3]).toLowerCase();
+      var bits = match[2];
+      return {
+        sign: signerFactories[algo](bits),
+        verify: verifierFactories[algo](bits)
+      };
+    };
+  }
+});
+
+// node_modules/jws/lib/tostring.js
+var require_tostring = __commonJS({
+  "node_modules/jws/lib/tostring.js"(exports2, module2) {
+    var Buffer4 = require("buffer").Buffer;
+    module2.exports = function toString2(obj) {
+      if (typeof obj === "string")
+        return obj;
+      if (typeof obj === "number" || Buffer4.isBuffer(obj))
+        return obj.toString();
+      return JSON.stringify(obj);
+    };
+  }
+});
+
+// node_modules/jws/lib/sign-stream.js
+var require_sign_stream = __commonJS({
+  "node_modules/jws/lib/sign-stream.js"(exports2, module2) {
+    var Buffer4 = require_safe_buffer().Buffer;
+    var DataStream = require_data_stream();
+    var jwa = require_jwa();
+    var Stream3 = require("stream");
+    var toString2 = require_tostring();
+    var util = require("util");
+    function base64url(string, encoding) {
+      return Buffer4.from(string, encoding).toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+    }
+    function jwsSecuredInput(header, payload, encoding) {
+      encoding = encoding || "utf8";
+      var encodedHeader = base64url(toString2(header), "binary");
+      var encodedPayload = base64url(toString2(payload), encoding);
+      return util.format("%s.%s", encodedHeader, encodedPayload);
+    }
+    function jwsSign(opts) {
+      var header = opts.header;
+      var payload = opts.payload;
+      var secretOrKey = opts.secret || opts.privateKey;
+      var encoding = opts.encoding;
+      var algo = jwa(header.alg);
+      var securedInput = jwsSecuredInput(header, payload, encoding);
+      var signature = algo.sign(securedInput, secretOrKey);
+      return util.format("%s.%s", securedInput, signature);
+    }
+    function SignStream(opts) {
+      var secret = opts.secret;
+      secret = secret == null ? opts.privateKey : secret;
+      secret = secret == null ? opts.key : secret;
+      if (/^hs/i.test(opts.header.alg) === true && secret == null) {
+        throw new TypeError("secret must be a string or buffer or a KeyObject");
+      }
+      var secretStream = new DataStream(secret);
+      this.readable = true;
+      this.header = opts.header;
+      this.encoding = opts.encoding;
+      this.secret = this.privateKey = this.key = secretStream;
+      this.payload = new DataStream(opts.payload);
+      this.secret.once("close", function() {
+        if (!this.payload.writable && this.readable)
+          this.sign();
+      }.bind(this));
+      this.payload.once("close", function() {
+        if (!this.secret.writable && this.readable)
+          this.sign();
+      }.bind(this));
+    }
+    util.inherits(SignStream, Stream3);
+    SignStream.prototype.sign = function sign() {
+      try {
+        var signature = jwsSign({
+          header: this.header,
+          payload: this.payload.buffer,
+          secret: this.secret.buffer,
+          encoding: this.encoding
+        });
+        this.emit("done", signature);
+        this.emit("data", signature);
+        this.emit("end");
+        this.readable = false;
+        return signature;
+      } catch (e2) {
+        this.readable = false;
+        this.emit("error", e2);
+        this.emit("close");
+      }
+    };
+    SignStream.sign = jwsSign;
+    module2.exports = SignStream;
+  }
+});
+
+// node_modules/jws/lib/verify-stream.js
+var require_verify_stream = __commonJS({
+  "node_modules/jws/lib/verify-stream.js"(exports2, module2) {
+    var Buffer4 = require_safe_buffer().Buffer;
+    var DataStream = require_data_stream();
+    var jwa = require_jwa();
+    var Stream3 = require("stream");
+    var toString2 = require_tostring();
+    var util = require("util");
+    var JWS_REGEX = /^[a-zA-Z0-9\-_]+?\.[a-zA-Z0-9\-_]+?\.([a-zA-Z0-9\-_]+)?$/;
+    function isObject(thing) {
+      return Object.prototype.toString.call(thing) === "[object Object]";
+    }
+    function safeJsonParse(thing) {
+      if (isObject(thing))
+        return thing;
+      try {
+        return JSON.parse(thing);
+      } catch (e2) {
+        return void 0;
+      }
+    }
+    function headerFromJWS(jwsSig) {
+      var encodedHeader = jwsSig.split(".", 1)[0];
+      return safeJsonParse(Buffer4.from(encodedHeader, "base64").toString("binary"));
+    }
+    function securedInputFromJWS(jwsSig) {
+      return jwsSig.split(".", 2).join(".");
+    }
+    function signatureFromJWS(jwsSig) {
+      return jwsSig.split(".")[2];
+    }
+    function payloadFromJWS(jwsSig, encoding) {
+      encoding = encoding || "utf8";
+      var payload = jwsSig.split(".")[1];
+      return Buffer4.from(payload, "base64").toString(encoding);
+    }
+    function isValidJws(string) {
+      return JWS_REGEX.test(string) && !!headerFromJWS(string);
+    }
+    function jwsVerify(jwsSig, algorithm, secretOrKey) {
+      if (!algorithm) {
+        var err = new Error("Missing algorithm parameter for jws.verify");
+        err.code = "MISSING_ALGORITHM";
+        throw err;
+      }
+      jwsSig = toString2(jwsSig);
+      var signature = signatureFromJWS(jwsSig);
+      var securedInput = securedInputFromJWS(jwsSig);
+      var algo = jwa(algorithm);
+      return algo.verify(securedInput, signature, secretOrKey);
+    }
+    function jwsDecode(jwsSig, opts) {
+      opts = opts || {};
+      jwsSig = toString2(jwsSig);
+      if (!isValidJws(jwsSig))
+        return null;
+      var header = headerFromJWS(jwsSig);
+      if (!header)
+        return null;
+      var payload = payloadFromJWS(jwsSig);
+      if (header.typ === "JWT" || opts.json)
+        payload = JSON.parse(payload, opts.encoding);
+      return {
+        header,
+        payload,
+        signature: signatureFromJWS(jwsSig)
+      };
+    }
+    function VerifyStream(opts) {
+      opts = opts || {};
+      var secretOrKey = opts.secret;
+      secretOrKey = secretOrKey == null ? opts.publicKey : secretOrKey;
+      secretOrKey = secretOrKey == null ? opts.key : secretOrKey;
+      if (/^hs/i.test(opts.algorithm) === true && secretOrKey == null) {
+        throw new TypeError("secret must be a string or buffer or a KeyObject");
+      }
+      var secretStream = new DataStream(secretOrKey);
+      this.readable = true;
+      this.algorithm = opts.algorithm;
+      this.encoding = opts.encoding;
+      this.secret = this.publicKey = this.key = secretStream;
+      this.signature = new DataStream(opts.signature);
+      this.secret.once("close", function() {
+        if (!this.signature.writable && this.readable)
+          this.verify();
+      }.bind(this));
+      this.signature.once("close", function() {
+        if (!this.secret.writable && this.readable)
+          this.verify();
+      }.bind(this));
+    }
+    util.inherits(VerifyStream, Stream3);
+    VerifyStream.prototype.verify = function verify() {
+      try {
+        var valid = jwsVerify(this.signature.buffer, this.algorithm, this.key.buffer);
+        var obj = jwsDecode(this.signature.buffer, this.encoding);
+        this.emit("done", valid, obj);
+        this.emit("data", valid);
+        this.emit("end");
+        this.readable = false;
+        return valid;
+      } catch (e2) {
+        this.readable = false;
+        this.emit("error", e2);
+        this.emit("close");
+      }
+    };
+    VerifyStream.decode = jwsDecode;
+    VerifyStream.isValid = isValidJws;
+    VerifyStream.verify = jwsVerify;
+    module2.exports = VerifyStream;
+  }
+});
+
+// node_modules/jws/index.js
+var require_jws = __commonJS({
+  "node_modules/jws/index.js"(exports2) {
+    var SignStream = require_sign_stream();
+    var VerifyStream = require_verify_stream();
+    var ALGORITHMS = [
+      "HS256",
+      "HS384",
+      "HS512",
+      "RS256",
+      "RS384",
+      "RS512",
+      "PS256",
+      "PS384",
+      "PS512",
+      "ES256",
+      "ES384",
+      "ES512"
+    ];
+    exports2.ALGORITHMS = ALGORITHMS;
+    exports2.sign = SignStream.sign;
+    exports2.verify = VerifyStream.verify;
+    exports2.decode = VerifyStream.decode;
+    exports2.isValid = VerifyStream.isValid;
+    exports2.createSign = function createSign(opts) {
+      return new SignStream(opts);
+    };
+    exports2.createVerify = function createVerify(opts) {
+      return new VerifyStream(opts);
+    };
+  }
+});
+
+// node_modules/web-push/src/web-push-constants.js
+var require_web_push_constants = __commonJS({
+  "node_modules/web-push/src/web-push-constants.js"(exports2, module2) {
+    "use strict";
+    var WebPushConstants = {};
+    WebPushConstants.supportedContentEncodings = {
+      AES_GCM: "aesgcm",
+      AES_128_GCM: "aes128gcm"
+    };
+    WebPushConstants.supportedUrgency = {
+      VERY_LOW: "very-low",
+      LOW: "low",
+      NORMAL: "normal",
+      HIGH: "high"
+    };
+    module2.exports = WebPushConstants;
+  }
+});
+
+// node_modules/web-push/src/urlsafe-base64-helper.js
+var require_urlsafe_base64_helper = __commonJS({
+  "node_modules/web-push/src/urlsafe-base64-helper.js"(exports2, module2) {
+    "use strict";
+    function validate(base64) {
+      return /^[A-Za-z0-9\-_]+$/.test(base64);
+    }
+    module2.exports = {
+      validate
+    };
+  }
+});
+
+// node_modules/web-push/src/vapid-helper.js
+var require_vapid_helper = __commonJS({
+  "node_modules/web-push/src/vapid-helper.js"(exports2, module2) {
+    "use strict";
+    var crypto5 = require("crypto");
+    var asn1 = require_asn1();
+    var jws = require_jws();
+    var { URL: URL2 } = require("url");
+    var WebPushConstants = require_web_push_constants();
+    var urlBase64Helper = require_urlsafe_base64_helper();
+    var DEFAULT_EXPIRATION_SECONDS = 12 * 60 * 60;
+    var MAX_EXPIRATION_SECONDS = 24 * 60 * 60;
+    var ECPrivateKeyASN = asn1.define("ECPrivateKey", function() {
+      this.seq().obj(
+        this.key("version").int(),
+        this.key("privateKey").octstr(),
+        this.key("parameters").explicit(0).objid().optional(),
+        this.key("publicKey").explicit(1).bitstr().optional()
+      );
+    });
+    function toPEM(key) {
+      return ECPrivateKeyASN.encode({
+        version: 1,
+        privateKey: key,
+        parameters: [1, 2, 840, 10045, 3, 1, 7]
+        // prime256v1
+      }, "pem", {
+        label: "EC PRIVATE KEY"
+      });
+    }
+    function generateVAPIDKeys() {
+      const curve = crypto5.createECDH("prime256v1");
+      curve.generateKeys();
+      let publicKeyBuffer = curve.getPublicKey();
+      let privateKeyBuffer = curve.getPrivateKey();
+      if (privateKeyBuffer.length < 32) {
+        const padding = Buffer.alloc(32 - privateKeyBuffer.length);
+        padding.fill(0);
+        privateKeyBuffer = Buffer.concat([padding, privateKeyBuffer]);
+      }
+      if (publicKeyBuffer.length < 65) {
+        const padding = Buffer.alloc(65 - publicKeyBuffer.length);
+        padding.fill(0);
+        publicKeyBuffer = Buffer.concat([padding, publicKeyBuffer]);
+      }
+      return {
+        publicKey: publicKeyBuffer.toString("base64url"),
+        privateKey: privateKeyBuffer.toString("base64url")
+      };
+    }
+    function validateSubject(subject) {
+      if (!subject) {
+        throw new Error("No subject set in vapidDetails.subject.");
+      }
+      if (typeof subject !== "string" || subject.length === 0) {
+        throw new Error("The subject value must be a string containing an https: URL or mailto: address. " + subject);
+      }
+      let subjectParseResult = null;
+      try {
+        subjectParseResult = new URL2(subject);
+      } catch (err) {
+        throw new Error("Vapid subject is not a valid URL. " + subject);
+      }
+      if (!["https:", "mailto:"].includes(subjectParseResult.protocol)) {
+        throw new Error("Vapid subject is not an https: or mailto: URL. " + subject);
+      }
+      if (subjectParseResult.hostname === "localhost") {
+        console.warn("Vapid subject points to a localhost web URI, which is unsupported by Apple's push notification server and will result in a BadJwtToken error when sending notifications.");
+      }
+    }
+    function validatePublicKey(publicKey) {
+      if (!publicKey) {
+        throw new Error("No key set vapidDetails.publicKey");
+      }
+      if (typeof publicKey !== "string") {
+        throw new Error("Vapid public key is must be a URL safe Base 64 encoded string.");
+      }
+      if (!urlBase64Helper.validate(publicKey)) {
+        throw new Error('Vapid public key must be a URL safe Base 64 (without "=")');
+      }
+      publicKey = Buffer.from(publicKey, "base64url");
+      if (publicKey.length !== 65) {
+        throw new Error("Vapid public key should be 65 bytes long when decoded.");
+      }
+    }
+    function validatePrivateKey(privateKey) {
+      if (!privateKey) {
+        throw new Error("No key set in vapidDetails.privateKey");
+      }
+      if (typeof privateKey !== "string") {
+        throw new Error("Vapid private key must be a URL safe Base 64 encoded string.");
+      }
+      if (!urlBase64Helper.validate(privateKey)) {
+        throw new Error('Vapid private key must be a URL safe Base 64 (without "=")');
+      }
+      privateKey = Buffer.from(privateKey, "base64url");
+      if (privateKey.length !== 32) {
+        throw new Error("Vapid private key should be 32 bytes long when decoded.");
+      }
+    }
+    function getFutureExpirationTimestamp(numSeconds) {
+      const futureExp = /* @__PURE__ */ new Date();
+      futureExp.setSeconds(futureExp.getSeconds() + numSeconds);
+      return Math.floor(futureExp.getTime() / 1e3);
+    }
+    function validateExpiration(expiration) {
+      if (!Number.isInteger(expiration)) {
+        throw new Error("`expiration` value must be a number");
+      }
+      if (expiration < 0) {
+        throw new Error("`expiration` must be a positive integer");
+      }
+      const maxExpirationTimestamp = getFutureExpirationTimestamp(MAX_EXPIRATION_SECONDS);
+      if (expiration >= maxExpirationTimestamp) {
+        throw new Error("`expiration` value is greater than maximum of 24 hours");
+      }
+    }
+    function getVapidHeaders(audience, subject, publicKey, privateKey, contentEncoding, expiration) {
+      if (!audience) {
+        throw new Error("No audience could be generated for VAPID.");
+      }
+      if (typeof audience !== "string" || audience.length === 0) {
+        throw new Error("The audience value must be a string containing the origin of a push service. " + audience);
+      }
+      try {
+        new URL2(audience);
+      } catch (err) {
+        throw new Error("VAPID audience is not a url. " + audience);
+      }
+      validateSubject(subject);
+      validatePublicKey(publicKey);
+      validatePrivateKey(privateKey);
+      privateKey = Buffer.from(privateKey, "base64url");
+      if (expiration) {
+        validateExpiration(expiration);
+      } else {
+        expiration = getFutureExpirationTimestamp(DEFAULT_EXPIRATION_SECONDS);
+      }
+      const header = {
+        typ: "JWT",
+        alg: "ES256"
+      };
+      const jwtPayload = {
+        aud: audience,
+        exp: expiration,
+        sub: subject
+      };
+      const jwt = jws.sign({
+        header,
+        payload: jwtPayload,
+        privateKey: toPEM(privateKey)
+      });
+      if (contentEncoding === WebPushConstants.supportedContentEncodings.AES_128_GCM) {
+        return {
+          Authorization: "vapid t=" + jwt + ", k=" + publicKey
+        };
+      }
+      if (contentEncoding === WebPushConstants.supportedContentEncodings.AES_GCM) {
+        return {
+          Authorization: "WebPush " + jwt,
+          "Crypto-Key": "p256ecdsa=" + publicKey
+        };
+      }
+      throw new Error("Unsupported encoding type specified.");
+    }
+    module2.exports = {
+      generateVAPIDKeys,
+      getFutureExpirationTimestamp,
+      getVapidHeaders,
+      validateSubject,
+      validatePublicKey,
+      validatePrivateKey,
+      validateExpiration
+    };
+  }
+});
+
+// node_modules/http_ece/ece.js
+var require_ece = __commonJS({
+  "node_modules/http_ece/ece.js"(exports2, module2) {
+    "use strict";
+    var crypto5 = require("crypto");
+    var AES_GCM = "aes-128-gcm";
+    var PAD_SIZE = { "aes128gcm": 1, "aesgcm": 2 };
+    var TAG_LENGTH = 16;
+    var KEY_LENGTH = 16;
+    var NONCE_LENGTH = 12;
+    var SHA_256_LENGTH = 32;
+    var MODE_ENCRYPT = "encrypt";
+    var MODE_DECRYPT = "decrypt";
+    var keylog;
+    if (process.env.ECE_KEYLOG === "1") {
+      keylog = function(m2, k) {
+        console.warn(m2 + " [" + k.length + "]: " + k.toString("base64url"));
+        return k;
+      };
+    } else {
+      keylog = function(m2, k) {
+        return k;
+      };
+    }
+    function decode(b) {
+      if (typeof b === "string") {
+        return Buffer.from(b, "base64url");
+      }
+      return b;
+    }
+    function HMAC_hash(key, input) {
+      var hmac = crypto5.createHmac("sha256", key);
+      hmac.update(input);
+      return hmac.digest();
+    }
+    function HKDF_extract(salt, ikm) {
+      keylog("salt", salt);
+      keylog("ikm", ikm);
+      return keylog("extract", HMAC_hash(salt, ikm));
+    }
+    function HKDF_expand(prk, info2, l) {
+      keylog("prk", prk);
+      keylog("info", info2);
+      var output = Buffer.alloc(0);
+      var T = Buffer.alloc(0);
+      info2 = Buffer.from(info2, "ascii");
+      var counter = 0;
+      var cbuf = Buffer.alloc(1);
+      while (output.length < l) {
+        cbuf.writeUIntBE(++counter, 0, 1);
+        T = HMAC_hash(prk, Buffer.concat([T, info2, cbuf]));
+        output = Buffer.concat([output, T]);
+      }
+      return keylog("expand", output.slice(0, l));
+    }
+    function HKDF(salt, ikm, info2, len) {
+      return HKDF_expand(HKDF_extract(salt, ikm), info2, len);
+    }
+    function info(base, context) {
+      var result = Buffer.concat([
+        Buffer.from("Content-Encoding: " + base + "\0", "ascii"),
+        context
+      ]);
+      keylog("info " + base, result);
+      return result;
+    }
+    function lengthPrefix(buffer) {
+      var b = Buffer.concat([Buffer.alloc(2), buffer]);
+      b.writeUIntBE(buffer.length, 0, 2);
+      return b;
+    }
+    function extractDH(header, mode) {
+      var key = header.privateKey;
+      var senderPubKey, receiverPubKey;
+      if (mode === MODE_ENCRYPT) {
+        senderPubKey = key.getPublicKey();
+        receiverPubKey = header.dh;
+      } else if (mode === MODE_DECRYPT) {
+        senderPubKey = header.dh;
+        receiverPubKey = key.getPublicKey();
+      } else {
+        throw new Error("Unknown mode only " + MODE_ENCRYPT + " and " + MODE_DECRYPT + " supported");
+      }
+      return {
+        secret: key.computeSecret(header.dh),
+        context: Buffer.concat([
+          Buffer.from(header.keylabel, "ascii"),
+          Buffer.from([0]),
+          lengthPrefix(receiverPubKey),
+          // user agent
+          lengthPrefix(senderPubKey)
+          // application server
+        ])
+      };
+    }
+    function extractSecretAndContext(header, mode) {
+      var result = { secret: null, context: Buffer.alloc(0) };
+      if (header.key) {
+        result.secret = header.key;
+        if (result.secret.length !== KEY_LENGTH) {
+          throw new Error("An explicit key must be " + KEY_LENGTH + " bytes");
+        }
+      } else if (header.dh) {
+        result = extractDH(header, mode);
+      } else if (typeof header.keyid !== void 0) {
+        result.secret = header.keymap[header.keyid];
+      }
+      if (!result.secret) {
+        throw new Error("Unable to determine key");
+      }
+      keylog("secret", result.secret);
+      keylog("context", result.context);
+      if (header.authSecret) {
+        result.secret = HKDF(
+          header.authSecret,
+          result.secret,
+          info("auth", Buffer.alloc(0)),
+          SHA_256_LENGTH
+        );
+        keylog("authsecret", result.secret);
+      }
+      return result;
+    }
+    function webpushSecret(header, mode) {
+      if (!header.authSecret) {
+        throw new Error("No authentication secret for webpush");
+      }
+      keylog("authsecret", header.authSecret);
+      var remotePubKey, senderPubKey, receiverPubKey;
+      if (mode === MODE_ENCRYPT) {
+        senderPubKey = header.privateKey.getPublicKey();
+        remotePubKey = receiverPubKey = header.dh;
+      } else if (mode === MODE_DECRYPT) {
+        remotePubKey = senderPubKey = header.keyid;
+        receiverPubKey = header.privateKey.getPublicKey();
+      } else {
+        throw new Error("Unknown mode only " + MODE_ENCRYPT + " and " + MODE_DECRYPT + " supported");
+      }
+      keylog("remote pubkey", remotePubKey);
+      keylog("sender pubkey", senderPubKey);
+      keylog("receiver pubkey", receiverPubKey);
+      return keylog(
+        "secret dh",
+        HKDF(
+          header.authSecret,
+          header.privateKey.computeSecret(remotePubKey),
+          Buffer.concat([
+            Buffer.from("WebPush: info\0"),
+            receiverPubKey,
+            senderPubKey
+          ]),
+          SHA_256_LENGTH
+        )
+      );
+    }
+    function extractSecret(header, mode, keyLookupCallback) {
+      if (keyLookupCallback) {
+        if (!isFunction(keyLookupCallback)) {
+          throw new Error("Callback is not a function");
+        }
+      }
+      if (header.key) {
+        if (header.key.length !== KEY_LENGTH) {
+          throw new Error("An explicit key must be " + KEY_LENGTH + " bytes");
+        }
+        return keylog("secret key", header.key);
+      }
+      if (!header.privateKey) {
+        if (!keyLookupCallback) {
+          var key = header.keymap && header.keymap[header.keyid];
+        } else {
+          var key = keyLookupCallback(header.keyid);
+        }
+        if (!key) {
+          throw new Error('No saved key (keyid: "' + header.keyid + '")');
+        }
+        return key;
+      }
+      return webpushSecret(header, mode);
+    }
+    function deriveKeyAndNonce(header, mode, lookupKeyCallback) {
+      if (!header.salt) {
+        throw new Error("must include a salt parameter for " + header.version);
+      }
+      var keyInfo;
+      var nonceInfo;
+      var secret;
+      if (header.version === "aesgcm") {
+        var s2 = extractSecretAndContext(header, mode, lookupKeyCallback);
+        keyInfo = info("aesgcm", s2.context);
+        nonceInfo = info("nonce", s2.context);
+        secret = s2.secret;
+      } else if (header.version === "aes128gcm") {
+        keyInfo = Buffer.from("Content-Encoding: aes128gcm\0");
+        nonceInfo = Buffer.from("Content-Encoding: nonce\0");
+        secret = extractSecret(header, mode, lookupKeyCallback);
+      } else {
+        throw new Error("Unable to set context for mode " + header.version);
+      }
+      var prk = HKDF_extract(header.salt, secret);
+      var result = {
+        key: HKDF_expand(prk, keyInfo, KEY_LENGTH),
+        nonce: HKDF_expand(prk, nonceInfo, NONCE_LENGTH)
+      };
+      keylog("key", result.key);
+      keylog("nonce base", result.nonce);
+      return result;
+    }
+    function parseParams(params) {
+      var header = {};
+      header.version = params.version || "aes128gcm";
+      header.rs = parseInt(params.rs, 10);
+      if (isNaN(header.rs)) {
+        header.rs = 4096;
+      }
+      var overhead = PAD_SIZE[header.version];
+      if (header.version === "aes128gcm") {
+        overhead += TAG_LENGTH;
+      }
+      if (header.rs <= overhead) {
+        throw new Error("The rs parameter has to be greater than " + overhead);
+      }
+      if (params.salt) {
+        header.salt = decode(params.salt);
+        if (header.salt.length !== KEY_LENGTH) {
+          throw new Error("The salt parameter must be " + KEY_LENGTH + " bytes");
+        }
+      }
+      header.keyid = params.keyid;
+      if (params.key) {
+        header.key = decode(params.key);
+      } else {
+        header.privateKey = params.privateKey;
+        if (!header.privateKey) {
+          header.keymap = params.keymap;
+        }
+        if (header.version !== "aes128gcm") {
+          header.keylabel = params.keylabel || "P-256";
+        }
+        if (params.dh) {
+          header.dh = decode(params.dh);
+        }
+      }
+      if (params.authSecret) {
+        header.authSecret = decode(params.authSecret);
+      }
+      return header;
+    }
+    function generateNonce(base, counter) {
+      var nonce = Buffer.from(base);
+      var m2 = nonce.readUIntBE(nonce.length - 6, 6);
+      var x2 = ((m2 ^ counter) & 16777215) + ((m2 / 16777216 ^ counter / 16777216) & 16777215) * 16777216;
+      nonce.writeUIntBE(x2, nonce.length - 6, 6);
+      keylog("nonce" + counter, nonce);
+      return nonce;
+    }
+    function readHeader(buffer, header) {
+      var idsz = buffer.readUIntBE(20, 1);
+      header.salt = buffer.slice(0, KEY_LENGTH);
+      header.rs = buffer.readUIntBE(KEY_LENGTH, 4);
+      header.keyid = buffer.slice(21, 21 + idsz);
+      return 21 + idsz;
+    }
+    function unpadLegacy(data, version) {
+      var padSize = PAD_SIZE[version];
+      var pad = data.readUIntBE(0, padSize);
+      if (pad + padSize > data.length) {
+        throw new Error("padding exceeds block size");
+      }
+      keylog("padding", data.slice(0, padSize + pad));
+      var padCheck = Buffer.alloc(pad);
+      padCheck.fill(0);
+      if (padCheck.compare(data.slice(padSize, padSize + pad)) !== 0) {
+        throw new Error("invalid padding");
+      }
+      return data.slice(padSize + pad);
+    }
+    function unpad(data, last) {
+      var i2 = data.length - 1;
+      while (i2 >= 0) {
+        if (data[i2]) {
+          if (last) {
+            if (data[i2] !== 2) {
+              throw new Error("last record needs to start padding with a 2");
+            }
+          } else {
+            if (data[i2] !== 1) {
+              throw new Error("last record needs to start padding with a 2");
+            }
+          }
+          return data.slice(0, i2);
+        }
+        --i2;
+      }
+      throw new Error("all zero plaintext");
+    }
+    function decryptRecord(key, counter, buffer, header, last) {
+      keylog("decrypt", buffer);
+      var nonce = generateNonce(key.nonce, counter);
+      var gcm = crypto5.createDecipheriv(AES_GCM, key.key, nonce);
+      gcm.setAuthTag(buffer.slice(buffer.length - TAG_LENGTH));
+      var data = gcm.update(buffer.slice(0, buffer.length - TAG_LENGTH));
+      data = Buffer.concat([data, gcm.final()]);
+      keylog("decrypted", data);
+      if (header.version !== "aes128gcm") {
+        return unpadLegacy(data, header.version);
+      }
+      return unpad(data, last);
+    }
+    function decrypt(buffer, params, keyLookupCallback) {
+      var header = parseParams(params);
+      if (header.version === "aes128gcm") {
+        var headerLength = readHeader(buffer, header);
+        buffer = buffer.slice(headerLength);
+      }
+      var key = deriveKeyAndNonce(header, MODE_DECRYPT, keyLookupCallback);
+      var start = 0;
+      var result = Buffer.alloc(0);
+      var chunkSize = header.rs;
+      if (header.version !== "aes128gcm") {
+        chunkSize += TAG_LENGTH;
+      }
+      for (var i2 = 0; start < buffer.length; ++i2) {
+        var end = start + chunkSize;
+        if (header.version !== "aes128gcm" && end === buffer.length) {
+          throw new Error("Truncated payload");
+        }
+        end = Math.min(end, buffer.length);
+        if (end - start <= TAG_LENGTH) {
+          throw new Error("Invalid block: too small at " + i2);
+        }
+        var block = decryptRecord(
+          key,
+          i2,
+          buffer.slice(start, end),
+          header,
+          end >= buffer.length
+        );
+        result = Buffer.concat([result, block]);
+        start = end;
+      }
+      return result;
+    }
+    function encryptRecord(key, counter, buffer, pad, header, last) {
+      keylog("encrypt", buffer);
+      pad = pad || 0;
+      var nonce = generateNonce(key.nonce, counter);
+      var gcm = crypto5.createCipheriv(AES_GCM, key.key, nonce);
+      var ciphertext = [];
+      var padSize = PAD_SIZE[header.version];
+      var padding = Buffer.alloc(pad + padSize);
+      padding.fill(0);
+      if (header.version !== "aes128gcm") {
+        padding.writeUIntBE(pad, 0, padSize);
+        keylog("padding", padding);
+        ciphertext.push(gcm.update(padding));
+        ciphertext.push(gcm.update(buffer));
+        if (!last && padding.length + buffer.length < header.rs) {
+          throw new Error("Unable to pad to record size");
+        }
+      } else {
+        ciphertext.push(gcm.update(buffer));
+        padding.writeUIntBE(last ? 2 : 1, 0, 1);
+        keylog("padding", padding);
+        ciphertext.push(gcm.update(padding));
+      }
+      gcm.final();
+      var tag = gcm.getAuthTag();
+      if (tag.length !== TAG_LENGTH) {
+        throw new Error("invalid tag generated");
+      }
+      ciphertext.push(tag);
+      return keylog("encrypted", Buffer.concat(ciphertext));
+    }
+    function writeHeader(header) {
+      var ints = Buffer.alloc(5);
+      var keyid = Buffer.from(header.keyid || []);
+      if (keyid.length > 255) {
+        throw new Error("keyid is too large");
+      }
+      ints.writeUIntBE(header.rs, 0, 4);
+      ints.writeUIntBE(keyid.length, 4, 1);
+      return Buffer.concat([header.salt, ints, keyid]);
+    }
+    function encrypt(buffer, params, keyLookupCallback) {
+      if (!Buffer.isBuffer(buffer)) {
+        throw new Error("buffer argument must be a Buffer");
+      }
+      var header = parseParams(params);
+      if (!header.salt) {
+        header.salt = crypto5.randomBytes(KEY_LENGTH);
+      }
+      var result;
+      if (header.version === "aes128gcm") {
+        if (header.privateKey && !header.keyid) {
+          header.keyid = header.privateKey.getPublicKey();
+        }
+        result = writeHeader(header);
+      } else {
+        result = Buffer.alloc(0);
+      }
+      var key = deriveKeyAndNonce(header, MODE_ENCRYPT, keyLookupCallback);
+      var start = 0;
+      var padSize = PAD_SIZE[header.version];
+      var overhead = padSize;
+      if (header.version === "aes128gcm") {
+        overhead += TAG_LENGTH;
+      }
+      var pad = isNaN(parseInt(params.pad, 10)) ? 0 : parseInt(params.pad, 10);
+      var counter = 0;
+      var last = false;
+      while (!last) {
+        var recordPad = Math.min(header.rs - overhead - 1, pad);
+        if (header.version !== "aes128gcm") {
+          recordPad = Math.min((1 << padSize * 8) - 1, recordPad);
+        }
+        if (pad > 0 && recordPad === 0) {
+          ++recordPad;
+        }
+        pad -= recordPad;
+        var end = start + header.rs - overhead - recordPad;
+        if (header.version !== "aes128gcm") {
+          last = end > buffer.length;
+        } else {
+          last = end >= buffer.length;
+        }
+        last = last && pad <= 0;
+        var block = encryptRecord(
+          key,
+          counter,
+          buffer.slice(start, end),
+          recordPad,
+          header,
+          last
+        );
+        result = Buffer.concat([result, block]);
+        start = end;
+        ++counter;
+      }
+      return result;
+    }
+    function isFunction(object) {
+      return typeof object === "function";
+    }
+    module2.exports = {
+      decrypt,
+      encrypt
+    };
+  }
+});
+
+// node_modules/web-push/src/encryption-helper.js
+var require_encryption_helper = __commonJS({
+  "node_modules/web-push/src/encryption-helper.js"(exports2, module2) {
+    "use strict";
+    var crypto5 = require("crypto");
+    var ece = require_ece();
+    var encrypt = function(userPublicKey, userAuth, payload, contentEncoding) {
+      if (!userPublicKey) {
+        throw new Error("No user public key provided for encryption.");
+      }
+      if (typeof userPublicKey !== "string") {
+        throw new Error("The subscription p256dh value must be a string.");
+      }
+      if (Buffer.from(userPublicKey, "base64url").length !== 65) {
+        throw new Error("The subscription p256dh value should be 65 bytes long.");
+      }
+      if (!userAuth) {
+        throw new Error("No user auth provided for encryption.");
+      }
+      if (typeof userAuth !== "string") {
+        throw new Error("The subscription auth key must be a string.");
+      }
+      if (Buffer.from(userAuth, "base64url").length < 16) {
+        throw new Error("The subscription auth key should be at least 16 bytes long");
+      }
+      if (typeof payload !== "string" && !Buffer.isBuffer(payload)) {
+        throw new Error("Payload must be either a string or a Node Buffer.");
+      }
+      if (typeof payload === "string" || payload instanceof String) {
+        payload = Buffer.from(payload);
+      }
+      const localCurve = crypto5.createECDH("prime256v1");
+      const localPublicKey = localCurve.generateKeys();
+      const salt = crypto5.randomBytes(16).toString("base64url");
+      const cipherText = ece.encrypt(payload, {
+        version: contentEncoding,
+        dh: userPublicKey,
+        privateKey: localCurve,
+        salt,
+        authSecret: userAuth
+      });
+      return {
+        localPublicKey,
+        salt,
+        cipherText
+      };
+    };
+    module2.exports = {
+      encrypt
+    };
+  }
+});
+
+// node_modules/web-push/src/web-push-error.js
+var require_web_push_error = __commonJS({
+  "node_modules/web-push/src/web-push-error.js"(exports2, module2) {
+    "use strict";
+    function WebPushError(message, statusCode, headers, body, endpoint) {
+      Error.captureStackTrace(this, this.constructor);
+      this.name = this.constructor.name;
+      this.message = message;
+      this.statusCode = statusCode;
+      this.headers = headers;
+      this.body = body;
+      this.endpoint = endpoint;
+    }
+    require("util").inherits(WebPushError, Error);
+    module2.exports = WebPushError;
+  }
+});
+
+// node_modules/debug/src/common.js
+var require_common = __commonJS({
+  "node_modules/debug/src/common.js"(exports2, module2) {
+    function setup(env) {
+      createDebug.debug = createDebug;
+      createDebug.default = createDebug;
+      createDebug.coerce = coerce;
+      createDebug.disable = disable;
+      createDebug.enable = enable;
+      createDebug.enabled = enabled;
+      createDebug.humanize = require_ms5();
+      createDebug.destroy = destroy;
+      Object.keys(env).forEach((key) => {
+        createDebug[key] = env[key];
+      });
+      createDebug.names = [];
+      createDebug.skips = [];
+      createDebug.formatters = {};
+      function selectColor(namespace) {
+        let hash = 0;
+        for (let i2 = 0; i2 < namespace.length; i2++) {
+          hash = (hash << 5) - hash + namespace.charCodeAt(i2);
+          hash |= 0;
+        }
+        return createDebug.colors[Math.abs(hash) % createDebug.colors.length];
+      }
+      createDebug.selectColor = selectColor;
+      function createDebug(namespace) {
+        let prevTime;
+        let enableOverride = null;
+        let namespacesCache;
+        let enabledCache;
+        function debug3(...args) {
+          if (!debug3.enabled) {
+            return;
+          }
+          const self2 = debug3;
+          const curr = Number(/* @__PURE__ */ new Date());
+          const ms = curr - (prevTime || curr);
+          self2.diff = ms;
+          self2.prev = prevTime;
+          self2.curr = curr;
+          prevTime = curr;
+          args[0] = createDebug.coerce(args[0]);
+          if (typeof args[0] !== "string") {
+            args.unshift("%O");
+          }
+          let index = 0;
+          args[0] = args[0].replace(/%([a-zA-Z%])/g, (match, format) => {
+            if (match === "%%") {
+              return "%";
+            }
+            index++;
+            const formatter = createDebug.formatters[format];
+            if (typeof formatter === "function") {
+              const val = args[index];
+              match = formatter.call(self2, val);
+              args.splice(index, 1);
+              index--;
+            }
+            return match;
+          });
+          createDebug.formatArgs.call(self2, args);
+          const logFn = self2.log || createDebug.log;
+          logFn.apply(self2, args);
+        }
+        debug3.namespace = namespace;
+        debug3.useColors = createDebug.useColors();
+        debug3.color = createDebug.selectColor(namespace);
+        debug3.extend = extend;
+        debug3.destroy = createDebug.destroy;
+        Object.defineProperty(debug3, "enabled", {
+          enumerable: true,
+          configurable: false,
+          get: () => {
+            if (enableOverride !== null) {
+              return enableOverride;
+            }
+            if (namespacesCache !== createDebug.namespaces) {
+              namespacesCache = createDebug.namespaces;
+              enabledCache = createDebug.enabled(namespace);
+            }
+            return enabledCache;
+          },
+          set: (v) => {
+            enableOverride = v;
+          }
+        });
+        if (typeof createDebug.init === "function") {
+          createDebug.init(debug3);
+        }
+        return debug3;
+      }
+      function extend(namespace, delimiter) {
+        const newDebug = createDebug(this.namespace + (typeof delimiter === "undefined" ? ":" : delimiter) + namespace);
+        newDebug.log = this.log;
+        return newDebug;
+      }
+      function enable(namespaces) {
+        createDebug.save(namespaces);
+        createDebug.namespaces = namespaces;
+        createDebug.names = [];
+        createDebug.skips = [];
+        const split = (typeof namespaces === "string" ? namespaces : "").trim().replace(/\s+/g, ",").split(",").filter(Boolean);
+        for (const ns of split) {
+          if (ns[0] === "-") {
+            createDebug.skips.push(ns.slice(1));
+          } else {
+            createDebug.names.push(ns);
+          }
+        }
+      }
+      function matchesTemplate(search, template) {
+        let searchIndex = 0;
+        let templateIndex = 0;
+        let starIndex = -1;
+        let matchIndex = 0;
+        while (searchIndex < search.length) {
+          if (templateIndex < template.length && (template[templateIndex] === search[searchIndex] || template[templateIndex] === "*")) {
+            if (template[templateIndex] === "*") {
+              starIndex = templateIndex;
+              matchIndex = searchIndex;
+              templateIndex++;
+            } else {
+              searchIndex++;
+              templateIndex++;
+            }
+          } else if (starIndex !== -1) {
+            templateIndex = starIndex + 1;
+            matchIndex++;
+            searchIndex = matchIndex;
+          } else {
+            return false;
+          }
+        }
+        while (templateIndex < template.length && template[templateIndex] === "*") {
+          templateIndex++;
+        }
+        return templateIndex === template.length;
+      }
+      function disable() {
+        const namespaces = [
+          ...createDebug.names,
+          ...createDebug.skips.map((namespace) => "-" + namespace)
+        ].join(",");
+        createDebug.enable("");
+        return namespaces;
+      }
+      function enabled(name2) {
+        for (const skip2 of createDebug.skips) {
+          if (matchesTemplate(name2, skip2)) {
+            return false;
+          }
+        }
+        for (const ns of createDebug.names) {
+          if (matchesTemplate(name2, ns)) {
+            return true;
+          }
+        }
+        return false;
+      }
+      function coerce(val) {
+        if (val instanceof Error) {
+          return val.stack || val.message;
+        }
+        return val;
+      }
+      function destroy() {
+        console.warn("Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.");
+      }
+      createDebug.enable(createDebug.load());
+      return createDebug;
+    }
+    module2.exports = setup;
+  }
+});
+
+// node_modules/debug/src/browser.js
+var require_browser5 = __commonJS({
+  "node_modules/debug/src/browser.js"(exports2, module2) {
+    exports2.formatArgs = formatArgs;
+    exports2.save = save;
+    exports2.load = load;
+    exports2.useColors = useColors;
+    exports2.storage = localstorage();
+    exports2.destroy = /* @__PURE__ */ (() => {
+      let warned = false;
+      return () => {
+        if (!warned) {
+          warned = true;
+          console.warn("Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.");
+        }
+      };
+    })();
+    exports2.colors = [
+      "#0000CC",
+      "#0000FF",
+      "#0033CC",
+      "#0033FF",
+      "#0066CC",
+      "#0066FF",
+      "#0099CC",
+      "#0099FF",
+      "#00CC00",
+      "#00CC33",
+      "#00CC66",
+      "#00CC99",
+      "#00CCCC",
+      "#00CCFF",
+      "#3300CC",
+      "#3300FF",
+      "#3333CC",
+      "#3333FF",
+      "#3366CC",
+      "#3366FF",
+      "#3399CC",
+      "#3399FF",
+      "#33CC00",
+      "#33CC33",
+      "#33CC66",
+      "#33CC99",
+      "#33CCCC",
+      "#33CCFF",
+      "#6600CC",
+      "#6600FF",
+      "#6633CC",
+      "#6633FF",
+      "#66CC00",
+      "#66CC33",
+      "#9900CC",
+      "#9900FF",
+      "#9933CC",
+      "#9933FF",
+      "#99CC00",
+      "#99CC33",
+      "#CC0000",
+      "#CC0033",
+      "#CC0066",
+      "#CC0099",
+      "#CC00CC",
+      "#CC00FF",
+      "#CC3300",
+      "#CC3333",
+      "#CC3366",
+      "#CC3399",
+      "#CC33CC",
+      "#CC33FF",
+      "#CC6600",
+      "#CC6633",
+      "#CC9900",
+      "#CC9933",
+      "#CCCC00",
+      "#CCCC33",
+      "#FF0000",
+      "#FF0033",
+      "#FF0066",
+      "#FF0099",
+      "#FF00CC",
+      "#FF00FF",
+      "#FF3300",
+      "#FF3333",
+      "#FF3366",
+      "#FF3399",
+      "#FF33CC",
+      "#FF33FF",
+      "#FF6600",
+      "#FF6633",
+      "#FF9900",
+      "#FF9933",
+      "#FFCC00",
+      "#FFCC33"
+    ];
+    function useColors() {
+      if (typeof window !== "undefined" && window.process && (window.process.type === "renderer" || window.process.__nwjs)) {
+        return true;
+      }
+      if (typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/(edge|trident)\/(\d+)/)) {
+        return false;
+      }
+      let m2;
+      return typeof document !== "undefined" && document.documentElement && document.documentElement.style && document.documentElement.style.WebkitAppearance || // Is firebug? http://stackoverflow.com/a/398120/376773
+      typeof window !== "undefined" && window.console && (window.console.firebug || window.console.exception && window.console.table) || // Is firefox >= v31?
+      // https://developer.mozilla.org/en-US/docs/Tools/Web_Console#Styling_messages
+      typeof navigator !== "undefined" && navigator.userAgent && (m2 = navigator.userAgent.toLowerCase().match(/firefox\/(\d+)/)) && parseInt(m2[1], 10) >= 31 || // Double check webkit in userAgent just in case we are in a worker
+      typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/applewebkit\/(\d+)/);
+    }
+    function formatArgs(args) {
+      args[0] = (this.useColors ? "%c" : "") + this.namespace + (this.useColors ? " %c" : " ") + args[0] + (this.useColors ? "%c " : " ") + "+" + module2.exports.humanize(this.diff);
+      if (!this.useColors) {
+        return;
+      }
+      const c = "color: " + this.color;
+      args.splice(1, 0, c, "color: inherit");
+      let index = 0;
+      let lastC = 0;
+      args[0].replace(/%[a-zA-Z%]/g, (match) => {
+        if (match === "%%") {
+          return;
+        }
+        index++;
+        if (match === "%c") {
+          lastC = index;
+        }
+      });
+      args.splice(lastC, 0, c);
+    }
+    exports2.log = console.debug || console.log || (() => {
+    });
+    function save(namespaces) {
+      try {
+        if (namespaces) {
+          exports2.storage.setItem("debug", namespaces);
+        } else {
+          exports2.storage.removeItem("debug");
+        }
+      } catch (error) {
+      }
+    }
+    function load() {
+      let r2;
+      try {
+        r2 = exports2.storage.getItem("debug") || exports2.storage.getItem("DEBUG");
+      } catch (error) {
+      }
+      if (!r2 && typeof process !== "undefined" && "env" in process) {
+        r2 = process.env.DEBUG;
+      }
+      return r2;
+    }
+    function localstorage() {
+      try {
+        return localStorage;
+      } catch (error) {
+      }
+    }
+    module2.exports = require_common()(exports2);
+    var { formatters } = module2.exports;
+    formatters.j = function(v) {
+      try {
+        return JSON.stringify(v);
+      } catch (error) {
+        return "[UnexpectedJSONParseError]: " + error.message;
+      }
+    };
+  }
+});
+
+// node_modules/debug/src/node.js
+var require_node6 = __commonJS({
+  "node_modules/debug/src/node.js"(exports2, module2) {
+    var tty = require("tty");
+    var util = require("util");
+    exports2.init = init2;
+    exports2.log = log;
+    exports2.formatArgs = formatArgs;
+    exports2.save = save;
+    exports2.load = load;
+    exports2.useColors = useColors;
+    exports2.destroy = util.deprecate(
+      () => {
+      },
+      "Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`."
+    );
+    exports2.colors = [6, 2, 3, 4, 5, 1];
+    try {
+      const supportsColor = require("supports-color");
+      if (supportsColor && (supportsColor.stderr || supportsColor).level >= 2) {
+        exports2.colors = [
+          20,
+          21,
+          26,
+          27,
+          32,
+          33,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          56,
+          57,
+          62,
+          63,
+          68,
+          69,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          92,
+          93,
+          98,
+          99,
+          112,
+          113,
+          128,
+          129,
+          134,
+          135,
+          148,
+          149,
+          160,
+          161,
+          162,
+          163,
+          164,
+          165,
+          166,
+          167,
+          168,
+          169,
+          170,
+          171,
+          172,
+          173,
+          178,
+          179,
+          184,
+          185,
+          196,
+          197,
+          198,
+          199,
+          200,
+          201,
+          202,
+          203,
+          204,
+          205,
+          206,
+          207,
+          208,
+          209,
+          214,
+          215,
+          220,
+          221
+        ];
+      }
+    } catch (error) {
+    }
+    exports2.inspectOpts = Object.keys(process.env).filter((key) => {
+      return /^debug_/i.test(key);
+    }).reduce((obj, key) => {
+      const prop = key.substring(6).toLowerCase().replace(/_([a-z])/g, (_, k) => {
+        return k.toUpperCase();
+      });
+      let val = process.env[key];
+      if (/^(yes|on|true|enabled)$/i.test(val)) {
+        val = true;
+      } else if (/^(no|off|false|disabled)$/i.test(val)) {
+        val = false;
+      } else if (val === "null") {
+        val = null;
+      } else {
+        val = Number(val);
+      }
+      obj[prop] = val;
+      return obj;
+    }, {});
+    function useColors() {
+      return "colors" in exports2.inspectOpts ? Boolean(exports2.inspectOpts.colors) : tty.isatty(process.stderr.fd);
+    }
+    function formatArgs(args) {
+      const { namespace: name2, useColors: useColors2 } = this;
+      if (useColors2) {
+        const c = this.color;
+        const colorCode = "\x1B[3" + (c < 8 ? c : "8;5;" + c);
+        const prefix = `  ${colorCode};1m${name2} \x1B[0m`;
+        args[0] = prefix + args[0].split("\n").join("\n" + prefix);
+        args.push(colorCode + "m+" + module2.exports.humanize(this.diff) + "\x1B[0m");
+      } else {
+        args[0] = getDate() + name2 + " " + args[0];
+      }
+    }
+    function getDate() {
+      if (exports2.inspectOpts.hideDate) {
+        return "";
+      }
+      return (/* @__PURE__ */ new Date()).toISOString() + " ";
+    }
+    function log(...args) {
+      return process.stderr.write(util.formatWithOptions(exports2.inspectOpts, ...args) + "\n");
+    }
+    function save(namespaces) {
+      if (namespaces) {
+        process.env.DEBUG = namespaces;
+      } else {
+        delete process.env.DEBUG;
+      }
+    }
+    function load() {
+      return process.env.DEBUG;
+    }
+    function init2(debug3) {
+      debug3.inspectOpts = {};
+      const keys = Object.keys(exports2.inspectOpts);
+      for (let i2 = 0; i2 < keys.length; i2++) {
+        debug3.inspectOpts[keys[i2]] = exports2.inspectOpts[keys[i2]];
+      }
+    }
+    module2.exports = require_common()(exports2);
+    var { formatters } = module2.exports;
+    formatters.o = function(v) {
+      this.inspectOpts.colors = this.useColors;
+      return util.inspect(v, this.inspectOpts).split("\n").map((str) => str.trim()).join(" ");
+    };
+    formatters.O = function(v) {
+      this.inspectOpts.colors = this.useColors;
+      return util.inspect(v, this.inspectOpts);
+    };
+  }
+});
+
+// node_modules/debug/src/index.js
+var require_src5 = __commonJS({
+  "node_modules/debug/src/index.js"(exports2, module2) {
+    if (typeof process === "undefined" || process.type === "renderer" || process.browser === true || process.__nwjs) {
+      module2.exports = require_browser5();
+    } else {
+      module2.exports = require_node6();
+    }
+  }
+});
+
+// node_modules/agent-base/dist/helpers.js
+var require_helpers = __commonJS({
+  "node_modules/agent-base/dist/helpers.js"(exports2) {
+    "use strict";
+    var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m2, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m2, k);
+      if (!desc || ("get" in desc ? !m2.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m2[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m2, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m2[k];
+    }));
+    var __setModuleDefault = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
+      Object.defineProperty(o, "default", { enumerable: true, value: v });
+    }) : function(o, v) {
+      o["default"] = v;
+    });
+    var __importStar = exports2 && exports2.__importStar || function(mod) {
+      if (mod && mod.__esModule) return mod;
+      var result = {};
+      if (mod != null) {
+        for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+      }
+      __setModuleDefault(result, mod);
+      return result;
+    };
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.req = exports2.json = exports2.toBuffer = void 0;
+    var http3 = __importStar(require("http"));
+    var https2 = __importStar(require("https"));
+    async function toBuffer(stream) {
+      let length = 0;
+      const chunks = [];
+      for await (const chunk of stream) {
+        length += chunk.length;
+        chunks.push(chunk);
+      }
+      return Buffer.concat(chunks, length);
+    }
+    exports2.toBuffer = toBuffer;
+    async function json(stream) {
+      const buf = await toBuffer(stream);
+      const str = buf.toString("utf8");
+      try {
+        return JSON.parse(str);
+      } catch (_err) {
+        const err = _err;
+        err.message += ` (input: ${str})`;
+        throw err;
+      }
+    }
+    exports2.json = json;
+    function req(url, opts = {}) {
+      const href = typeof url === "string" ? url : url.href;
+      const req2 = (href.startsWith("https:") ? https2 : http3).request(url, opts);
+      const promise = new Promise((resolve, reject) => {
+        req2.once("response", resolve).once("error", reject).end();
+      });
+      req2.then = promise.then.bind(promise);
+      return req2;
+    }
+    exports2.req = req;
+  }
+});
+
+// node_modules/agent-base/dist/index.js
+var require_dist = __commonJS({
+  "node_modules/agent-base/dist/index.js"(exports2) {
+    "use strict";
+    var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m2, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m2, k);
+      if (!desc || ("get" in desc ? !m2.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m2[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m2, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m2[k];
+    }));
+    var __setModuleDefault = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
+      Object.defineProperty(o, "default", { enumerable: true, value: v });
+    }) : function(o, v) {
+      o["default"] = v;
+    });
+    var __importStar = exports2 && exports2.__importStar || function(mod) {
+      if (mod && mod.__esModule) return mod;
+      var result = {};
+      if (mod != null) {
+        for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+      }
+      __setModuleDefault(result, mod);
+      return result;
+    };
+    var __exportStar = exports2 && exports2.__exportStar || function(m2, exports3) {
+      for (var p in m2) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports3, p)) __createBinding(exports3, m2, p);
+    };
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.Agent = void 0;
+    var net = __importStar(require("net"));
+    var http3 = __importStar(require("http"));
+    var https_1 = require("https");
+    __exportStar(require_helpers(), exports2);
+    var INTERNAL = Symbol("AgentBaseInternalState");
+    var Agent = class extends http3.Agent {
+      constructor(opts) {
+        super(opts);
+        this[INTERNAL] = {};
+      }
+      /**
+       * Determine whether this is an `http` or `https` request.
+       */
+      isSecureEndpoint(options) {
+        if (options) {
+          if (typeof options.secureEndpoint === "boolean") {
+            return options.secureEndpoint;
+          }
+          if (typeof options.protocol === "string") {
+            return options.protocol === "https:";
+          }
+        }
+        const { stack } = new Error();
+        if (typeof stack !== "string")
+          return false;
+        return stack.split("\n").some((l) => l.indexOf("(https.js:") !== -1 || l.indexOf("node:https:") !== -1);
+      }
+      // In order to support async signatures in `connect()` and Node's native
+      // connection pooling in `http.Agent`, the array of sockets for each origin
+      // has to be updated synchronously. This is so the length of the array is
+      // accurate when `addRequest()` is next called. We achieve this by creating a
+      // fake socket and adding it to `sockets[origin]` and incrementing
+      // `totalSocketCount`.
+      incrementSockets(name2) {
+        if (this.maxSockets === Infinity && this.maxTotalSockets === Infinity) {
+          return null;
+        }
+        if (!this.sockets[name2]) {
+          this.sockets[name2] = [];
+        }
+        const fakeSocket = new net.Socket({ writable: false });
+        this.sockets[name2].push(fakeSocket);
+        this.totalSocketCount++;
+        return fakeSocket;
+      }
+      decrementSockets(name2, socket) {
+        if (!this.sockets[name2] || socket === null) {
+          return;
+        }
+        const sockets = this.sockets[name2];
+        const index = sockets.indexOf(socket);
+        if (index !== -1) {
+          sockets.splice(index, 1);
+          this.totalSocketCount--;
+          if (sockets.length === 0) {
+            delete this.sockets[name2];
+          }
+        }
+      }
+      // In order to properly update the socket pool, we need to call `getName()` on
+      // the core `https.Agent` if it is a secureEndpoint.
+      getName(options) {
+        const secureEndpoint = this.isSecureEndpoint(options);
+        if (secureEndpoint) {
+          return https_1.Agent.prototype.getName.call(this, options);
+        }
+        return super.getName(options);
+      }
+      createSocket(req, options, cb) {
+        const connectOpts = {
+          ...options,
+          secureEndpoint: this.isSecureEndpoint(options)
+        };
+        const name2 = this.getName(connectOpts);
+        const fakeSocket = this.incrementSockets(name2);
+        Promise.resolve().then(() => this.connect(req, connectOpts)).then((socket) => {
+          this.decrementSockets(name2, fakeSocket);
+          if (socket instanceof http3.Agent) {
+            try {
+              return socket.addRequest(req, connectOpts);
+            } catch (err) {
+              return cb(err);
+            }
+          }
+          this[INTERNAL].currentSocket = socket;
+          super.createSocket(req, options, cb);
+        }, (err) => {
+          this.decrementSockets(name2, fakeSocket);
+          cb(err);
+        });
+      }
+      createConnection() {
+        const socket = this[INTERNAL].currentSocket;
+        this[INTERNAL].currentSocket = void 0;
+        if (!socket) {
+          throw new Error("No socket was returned in the `connect()` function");
+        }
+        return socket;
+      }
+      get defaultPort() {
+        return this[INTERNAL].defaultPort ?? (this.protocol === "https:" ? 443 : 80);
+      }
+      set defaultPort(v) {
+        if (this[INTERNAL]) {
+          this[INTERNAL].defaultPort = v;
+        }
+      }
+      get protocol() {
+        return this[INTERNAL].protocol ?? (this.isSecureEndpoint() ? "https:" : "http:");
+      }
+      set protocol(v) {
+        if (this[INTERNAL]) {
+          this[INTERNAL].protocol = v;
+        }
+      }
+    };
+    exports2.Agent = Agent;
+  }
+});
+
+// node_modules/https-proxy-agent/dist/parse-proxy-response.js
+var require_parse_proxy_response = __commonJS({
+  "node_modules/https-proxy-agent/dist/parse-proxy-response.js"(exports2) {
+    "use strict";
+    var __importDefault = exports2 && exports2.__importDefault || function(mod) {
+      return mod && mod.__esModule ? mod : { "default": mod };
+    };
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.parseProxyResponse = void 0;
+    var debug_1 = __importDefault(require_src5());
+    var debug3 = (0, debug_1.default)("https-proxy-agent:parse-proxy-response");
+    function parseProxyResponse(socket) {
+      return new Promise((resolve, reject) => {
+        let buffersLength = 0;
+        const buffers = [];
+        function read2() {
+          const b = socket.read();
+          if (b)
+            ondata(b);
+          else
+            socket.once("readable", read2);
+        }
+        function cleanup() {
+          socket.removeListener("end", onend);
+          socket.removeListener("error", onerror);
+          socket.removeListener("readable", read2);
+        }
+        function onend() {
+          cleanup();
+          debug3("onend");
+          reject(new Error("Proxy connection ended before receiving CONNECT response"));
+        }
+        function onerror(err) {
+          cleanup();
+          debug3("onerror %o", err);
+          reject(err);
+        }
+        function ondata(b) {
+          buffers.push(b);
+          buffersLength += b.length;
+          const buffered = Buffer.concat(buffers, buffersLength);
+          const endOfHeaders = buffered.indexOf("\r\n\r\n");
+          if (endOfHeaders === -1) {
+            debug3("have not received end of HTTP headers yet...");
+            read2();
+            return;
+          }
+          const headerParts = buffered.slice(0, endOfHeaders).toString("ascii").split("\r\n");
+          const firstLine = headerParts.shift();
+          if (!firstLine) {
+            socket.destroy();
+            return reject(new Error("No header received from proxy CONNECT response"));
+          }
+          const firstLineParts = firstLine.split(" ");
+          const statusCode = +firstLineParts[1];
+          const statusText = firstLineParts.slice(2).join(" ");
+          const headers = {};
+          for (const header of headerParts) {
+            if (!header)
+              continue;
+            const firstColon = header.indexOf(":");
+            if (firstColon === -1) {
+              socket.destroy();
+              return reject(new Error(`Invalid header from proxy CONNECT response: "${header}"`));
+            }
+            const key = header.slice(0, firstColon).toLowerCase();
+            const value = header.slice(firstColon + 1).trimStart();
+            const current = headers[key];
+            if (typeof current === "string") {
+              headers[key] = [current, value];
+            } else if (Array.isArray(current)) {
+              current.push(value);
+            } else {
+              headers[key] = value;
+            }
+          }
+          debug3("got proxy server response: %o %o", firstLine, headers);
+          cleanup();
+          resolve({
+            connect: {
+              statusCode,
+              statusText,
+              headers
+            },
+            buffered
+          });
+        }
+        socket.on("error", onerror);
+        socket.on("end", onend);
+        read2();
+      });
+    }
+    exports2.parseProxyResponse = parseProxyResponse;
+  }
+});
+
+// node_modules/https-proxy-agent/dist/index.js
+var require_dist2 = __commonJS({
+  "node_modules/https-proxy-agent/dist/index.js"(exports2) {
+    "use strict";
+    var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m2, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m2, k);
+      if (!desc || ("get" in desc ? !m2.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m2[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m2, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m2[k];
+    }));
+    var __setModuleDefault = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
+      Object.defineProperty(o, "default", { enumerable: true, value: v });
+    }) : function(o, v) {
+      o["default"] = v;
+    });
+    var __importStar = exports2 && exports2.__importStar || function(mod) {
+      if (mod && mod.__esModule) return mod;
+      var result = {};
+      if (mod != null) {
+        for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+      }
+      __setModuleDefault(result, mod);
+      return result;
+    };
+    var __importDefault = exports2 && exports2.__importDefault || function(mod) {
+      return mod && mod.__esModule ? mod : { "default": mod };
+    };
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.HttpsProxyAgent = void 0;
+    var net = __importStar(require("net"));
+    var tls = __importStar(require("tls"));
+    var assert_1 = __importDefault(require("assert"));
+    var debug_1 = __importDefault(require_src5());
+    var agent_base_1 = require_dist();
+    var url_1 = require("url");
+    var parse_proxy_response_1 = require_parse_proxy_response();
+    var debug3 = (0, debug_1.default)("https-proxy-agent");
+    var setServernameFromNonIpHost = (options) => {
+      if (options.servername === void 0 && options.host && !net.isIP(options.host)) {
+        return {
+          ...options,
+          servername: options.host
+        };
+      }
+      return options;
+    };
+    var HttpsProxyAgent = class extends agent_base_1.Agent {
+      constructor(proxy, opts) {
+        super(opts);
+        this.options = { path: void 0 };
+        this.proxy = typeof proxy === "string" ? new url_1.URL(proxy) : proxy;
+        this.proxyHeaders = opts?.headers ?? {};
+        debug3("Creating new HttpsProxyAgent instance: %o", this.proxy.href);
+        const host = (this.proxy.hostname || this.proxy.host).replace(/^\[|\]$/g, "");
+        const port = this.proxy.port ? parseInt(this.proxy.port, 10) : this.proxy.protocol === "https:" ? 443 : 80;
+        this.connectOpts = {
+          // Attempt to negotiate http/1.1 for proxy servers that support http/2
+          ALPNProtocols: ["http/1.1"],
+          ...opts ? omit(opts, "headers") : null,
+          host,
+          port
+        };
+      }
+      /**
+       * Called when the node-core HTTP client library is creating a
+       * new HTTP request.
+       */
+      async connect(req, opts) {
+        const { proxy } = this;
+        if (!opts.host) {
+          throw new TypeError('No "host" provided');
+        }
+        let socket;
+        if (proxy.protocol === "https:") {
+          debug3("Creating `tls.Socket`: %o", this.connectOpts);
+          socket = tls.connect(setServernameFromNonIpHost(this.connectOpts));
+        } else {
+          debug3("Creating `net.Socket`: %o", this.connectOpts);
+          socket = net.connect(this.connectOpts);
+        }
+        const headers = typeof this.proxyHeaders === "function" ? this.proxyHeaders() : { ...this.proxyHeaders };
+        const host = net.isIPv6(opts.host) ? `[${opts.host}]` : opts.host;
+        let payload = `CONNECT ${host}:${opts.port} HTTP/1.1\r
+`;
+        if (proxy.username || proxy.password) {
+          const auth = `${decodeURIComponent(proxy.username)}:${decodeURIComponent(proxy.password)}`;
+          headers["Proxy-Authorization"] = `Basic ${Buffer.from(auth).toString("base64")}`;
+        }
+        headers.Host = `${host}:${opts.port}`;
+        if (!headers["Proxy-Connection"]) {
+          headers["Proxy-Connection"] = this.keepAlive ? "Keep-Alive" : "close";
+        }
+        for (const name2 of Object.keys(headers)) {
+          payload += `${name2}: ${headers[name2]}\r
+`;
+        }
+        const proxyResponsePromise = (0, parse_proxy_response_1.parseProxyResponse)(socket);
+        socket.write(`${payload}\r
+`);
+        const { connect, buffered } = await proxyResponsePromise;
+        req.emit("proxyConnect", connect);
+        this.emit("proxyConnect", connect, req);
+        if (connect.statusCode === 200) {
+          req.once("socket", resume);
+          if (opts.secureEndpoint) {
+            debug3("Upgrading socket connection to TLS");
+            return tls.connect({
+              ...omit(setServernameFromNonIpHost(opts), "host", "path", "port"),
+              socket
+            });
+          }
+          return socket;
+        }
+        socket.destroy();
+        const fakeSocket = new net.Socket({ writable: false });
+        fakeSocket.readable = true;
+        req.once("socket", (s2) => {
+          debug3("Replaying proxy buffer for failed request");
+          (0, assert_1.default)(s2.listenerCount("data") > 0);
+          s2.push(buffered);
+          s2.push(null);
+        });
+        return fakeSocket;
+      }
+    };
+    HttpsProxyAgent.protocols = ["http", "https"];
+    exports2.HttpsProxyAgent = HttpsProxyAgent;
+    function resume(socket) {
+      socket.resume();
+    }
+    function omit(obj, ...keys) {
+      const ret = {};
+      let key;
+      for (key in obj) {
+        if (!keys.includes(key)) {
+          ret[key] = obj[key];
+        }
+      }
+      return ret;
+    }
+  }
+});
+
+// node_modules/web-push/src/web-push-lib.js
+var require_web_push_lib = __commonJS({
+  "node_modules/web-push/src/web-push-lib.js"(exports2, module2) {
+    "use strict";
+    var url = require("url");
+    var https2 = require("https");
+    var WebPushError = require_web_push_error();
+    var vapidHelper = require_vapid_helper();
+    var encryptionHelper = require_encryption_helper();
+    var webPushConstants = require_web_push_constants();
+    var urlBase64Helper = require_urlsafe_base64_helper();
+    var DEFAULT_TTL = 2419200;
+    var gcmAPIKey = "";
+    var vapidDetails;
+    function WebPushLib() {
+    }
+    WebPushLib.prototype.setGCMAPIKey = function(apiKey) {
+      if (apiKey === null) {
+        gcmAPIKey = null;
+        return;
+      }
+      if (typeof apiKey === "undefined" || typeof apiKey !== "string" || apiKey.length === 0) {
+        throw new Error("The GCM API Key should be a non-empty string or null.");
+      }
+      gcmAPIKey = apiKey;
+    };
+    WebPushLib.prototype.setVapidDetails = function(subject, publicKey, privateKey) {
+      if (arguments.length === 1 && arguments[0] === null) {
+        vapidDetails = null;
+        return;
+      }
+      vapidHelper.validateSubject(subject);
+      vapidHelper.validatePublicKey(publicKey);
+      vapidHelper.validatePrivateKey(privateKey);
+      vapidDetails = {
+        subject,
+        publicKey,
+        privateKey
+      };
+    };
+    WebPushLib.prototype.generateRequestDetails = function(subscription, payload, options) {
+      if (!subscription || !subscription.endpoint) {
+        throw new Error("You must pass in a subscription with at least an endpoint.");
+      }
+      if (typeof subscription.endpoint !== "string" || subscription.endpoint.length === 0) {
+        throw new Error("The subscription endpoint must be a string with a valid URL.");
+      }
+      if (payload) {
+        if (typeof subscription !== "object" || !subscription.keys || !subscription.keys.p256dh || !subscription.keys.auth) {
+          throw new Error("To send a message with a payload, the subscription must have 'auth' and 'p256dh' keys.");
+        }
+      }
+      let currentGCMAPIKey = gcmAPIKey;
+      let currentVapidDetails = vapidDetails;
+      let timeToLive = DEFAULT_TTL;
+      let extraHeaders = {};
+      let contentEncoding = webPushConstants.supportedContentEncodings.AES_128_GCM;
+      let urgency = webPushConstants.supportedUrgency.NORMAL;
+      let topic;
+      let proxy;
+      let agent;
+      let timeout;
+      if (options) {
+        const validOptionKeys = [
+          "headers",
+          "gcmAPIKey",
+          "vapidDetails",
+          "TTL",
+          "contentEncoding",
+          "urgency",
+          "topic",
+          "proxy",
+          "agent",
+          "timeout"
+        ];
+        const optionKeys = Object.keys(options);
+        for (let i2 = 0; i2 < optionKeys.length; i2 += 1) {
+          const optionKey = optionKeys[i2];
+          if (!validOptionKeys.includes(optionKey)) {
+            throw new Error("'" + optionKey + "' is an invalid option. The valid options are ['" + validOptionKeys.join("', '") + "'].");
+          }
+        }
+        if (options.headers) {
+          extraHeaders = options.headers;
+          let duplicates = Object.keys(extraHeaders).filter(function(header) {
+            return typeof options[header] !== "undefined";
+          });
+          if (duplicates.length > 0) {
+            throw new Error("Duplicated headers defined [" + duplicates.join(",") + "]. Please either define the header in thetop level options OR in the 'headers' key.");
+          }
+        }
+        if (options.gcmAPIKey) {
+          currentGCMAPIKey = options.gcmAPIKey;
+        }
+        if (options.vapidDetails !== void 0) {
+          currentVapidDetails = options.vapidDetails;
+        }
+        if (options.TTL !== void 0) {
+          timeToLive = Number(options.TTL);
+          if (timeToLive < 0) {
+            throw new Error("TTL should be a number and should be at least 0");
+          }
+        }
+        if (options.contentEncoding) {
+          if (options.contentEncoding === webPushConstants.supportedContentEncodings.AES_128_GCM || options.contentEncoding === webPushConstants.supportedContentEncodings.AES_GCM) {
+            contentEncoding = options.contentEncoding;
+          } else {
+            throw new Error("Unsupported content encoding specified.");
+          }
+        }
+        if (options.urgency) {
+          if (options.urgency === webPushConstants.supportedUrgency.VERY_LOW || options.urgency === webPushConstants.supportedUrgency.LOW || options.urgency === webPushConstants.supportedUrgency.NORMAL || options.urgency === webPushConstants.supportedUrgency.HIGH) {
+            urgency = options.urgency;
+          } else {
+            throw new Error("Unsupported urgency specified.");
+          }
+        }
+        if (options.topic) {
+          if (!urlBase64Helper.validate(options.topic)) {
+            throw new Error("Unsupported characters set use the URL or filename-safe Base64 characters set");
+          }
+          if (options.topic.length > 32) {
+            throw new Error("use maximum of 32 characters from the URL or filename-safe Base64 characters set");
+          }
+          topic = options.topic;
+        }
+        if (options.proxy) {
+          if (typeof options.proxy === "string" || typeof options.proxy.host === "string") {
+            proxy = options.proxy;
+          } else {
+            console.warn("Attempt to use proxy option, but invalid type it should be a string or proxy options object.");
+          }
+        }
+        if (options.agent) {
+          if (options.agent instanceof https2.Agent) {
+            if (proxy) {
+              console.warn("Agent option will be ignored because proxy option is defined.");
+            }
+            agent = options.agent;
+          } else {
+            console.warn("Wrong type for the agent option, it should be an instance of https.Agent.");
+          }
+        }
+        if (typeof options.timeout === "number") {
+          timeout = options.timeout;
+        }
+      }
+      if (typeof timeToLive === "undefined") {
+        timeToLive = DEFAULT_TTL;
+      }
+      const requestDetails = {
+        method: "POST",
+        headers: {
+          TTL: timeToLive
+        }
+      };
+      Object.keys(extraHeaders).forEach(function(header) {
+        requestDetails.headers[header] = extraHeaders[header];
+      });
+      let requestPayload = null;
+      if (payload) {
+        const encrypted = encryptionHelper.encrypt(subscription.keys.p256dh, subscription.keys.auth, payload, contentEncoding);
+        requestDetails.headers["Content-Length"] = encrypted.cipherText.length;
+        requestDetails.headers["Content-Type"] = "application/octet-stream";
+        if (contentEncoding === webPushConstants.supportedContentEncodings.AES_128_GCM) {
+          requestDetails.headers["Content-Encoding"] = webPushConstants.supportedContentEncodings.AES_128_GCM;
+        } else if (contentEncoding === webPushConstants.supportedContentEncodings.AES_GCM) {
+          requestDetails.headers["Content-Encoding"] = webPushConstants.supportedContentEncodings.AES_GCM;
+          requestDetails.headers.Encryption = "salt=" + encrypted.salt;
+          requestDetails.headers["Crypto-Key"] = "dh=" + encrypted.localPublicKey.toString("base64url");
+        }
+        requestPayload = encrypted.cipherText;
+      } else {
+        requestDetails.headers["Content-Length"] = 0;
+      }
+      const isGCM = subscription.endpoint.startsWith("https://android.googleapis.com/gcm/send");
+      const isFCM = subscription.endpoint.startsWith("https://fcm.googleapis.com/fcm/send");
+      if (isGCM) {
+        if (!currentGCMAPIKey) {
+          console.warn("Attempt to send push notification to GCM endpoint, but no GCM key is defined. Please use setGCMApiKey() or add 'gcmAPIKey' as an option.");
+        } else {
+          requestDetails.headers.Authorization = "key=" + currentGCMAPIKey;
+        }
+      } else if (currentVapidDetails) {
+        const parsedUrl = url.parse(subscription.endpoint);
+        const audience = parsedUrl.protocol + "//" + parsedUrl.host;
+        const vapidHeaders = vapidHelper.getVapidHeaders(
+          audience,
+          currentVapidDetails.subject,
+          currentVapidDetails.publicKey,
+          currentVapidDetails.privateKey,
+          contentEncoding
+        );
+        requestDetails.headers.Authorization = vapidHeaders.Authorization;
+        if (contentEncoding === webPushConstants.supportedContentEncodings.AES_GCM) {
+          if (requestDetails.headers["Crypto-Key"]) {
+            requestDetails.headers["Crypto-Key"] += ";" + vapidHeaders["Crypto-Key"];
+          } else {
+            requestDetails.headers["Crypto-Key"] = vapidHeaders["Crypto-Key"];
+          }
+        }
+      } else if (isFCM && currentGCMAPIKey) {
+        requestDetails.headers.Authorization = "key=" + currentGCMAPIKey;
+      }
+      requestDetails.headers.Urgency = urgency;
+      if (topic) {
+        requestDetails.headers.Topic = topic;
+      }
+      requestDetails.body = requestPayload;
+      requestDetails.endpoint = subscription.endpoint;
+      if (proxy) {
+        requestDetails.proxy = proxy;
+      }
+      if (agent) {
+        requestDetails.agent = agent;
+      }
+      if (timeout) {
+        requestDetails.timeout = timeout;
+      }
+      return requestDetails;
+    };
+    WebPushLib.prototype.sendNotification = function(subscription, payload, options) {
+      let requestDetails;
+      try {
+        requestDetails = this.generateRequestDetails(subscription, payload, options);
+      } catch (err) {
+        return Promise.reject(err);
+      }
+      return new Promise(function(resolve, reject) {
+        const httpsOptions = {};
+        const urlParts = url.parse(requestDetails.endpoint);
+        httpsOptions.hostname = urlParts.hostname;
+        httpsOptions.port = urlParts.port;
+        httpsOptions.path = urlParts.path;
+        httpsOptions.headers = requestDetails.headers;
+        httpsOptions.method = requestDetails.method;
+        if (requestDetails.timeout) {
+          httpsOptions.timeout = requestDetails.timeout;
+        }
+        if (requestDetails.agent) {
+          httpsOptions.agent = requestDetails.agent;
+        }
+        if (requestDetails.proxy) {
+          const { HttpsProxyAgent } = require_dist2();
+          httpsOptions.agent = new HttpsProxyAgent(requestDetails.proxy);
+        }
+        const pushRequest = https2.request(httpsOptions, function(pushResponse) {
+          let responseText = "";
+          pushResponse.on("data", function(chunk) {
+            responseText += chunk;
+          });
+          pushResponse.on("end", function() {
+            if (pushResponse.statusCode < 200 || pushResponse.statusCode > 299) {
+              reject(new WebPushError(
+                "Received unexpected response code",
+                pushResponse.statusCode,
+                pushResponse.headers,
+                responseText,
+                requestDetails.endpoint
+              ));
+            } else {
+              resolve({
+                statusCode: pushResponse.statusCode,
+                body: responseText,
+                headers: pushResponse.headers
+              });
+            }
+          });
+        });
+        if (requestDetails.timeout) {
+          pushRequest.on("timeout", function() {
+            pushRequest.destroy(new Error("Socket timeout"));
+          });
+        }
+        pushRequest.on("error", function(e2) {
+          reject(e2);
+        });
+        if (requestDetails.body) {
+          pushRequest.write(requestDetails.body);
+        }
+        pushRequest.end();
+      });
+    };
+    module2.exports = WebPushLib;
+  }
+});
+
+// node_modules/web-push/src/index.js
+var require_src6 = __commonJS({
+  "node_modules/web-push/src/index.js"(exports2, module2) {
+    "use strict";
+    var vapidHelper = require_vapid_helper();
+    var encryptionHelper = require_encryption_helper();
+    var WebPushLib = require_web_push_lib();
+    var WebPushError = require_web_push_error();
+    var WebPushConstants = require_web_push_constants();
+    var webPush = new WebPushLib();
+    module2.exports = {
+      WebPushError,
+      supportedContentEncodings: WebPushConstants.supportedContentEncodings,
+      encrypt: encryptionHelper.encrypt,
+      getVapidHeaders: vapidHelper.getVapidHeaders,
+      generateVAPIDKeys: vapidHelper.generateVAPIDKeys,
+      setGCMAPIKey: webPush.setGCMAPIKey,
+      setVapidDetails: webPush.setVapidDetails,
+      generateRequestDetails: webPush.generateRequestDetails,
+      sendNotification: webPush.sendNotification.bind(webPush)
+    };
+  }
+});
+
 // node_modules/pg-types/node_modules/postgres-array/index.js
 var require_postgres_array = __commonJS({
   "node_modules/pg-types/node_modules/postgres-array/index.js"(exports2) {
@@ -28275,7 +35359,7 @@ var require_parser = __commonJS({
 });
 
 // node_modules/pg-protocol/dist/index.js
-var require_dist = __commonJS({
+var require_dist3 = __commonJS({
   "node_modules/pg-protocol/dist/index.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
@@ -28378,7 +35462,7 @@ var require_connection = __commonJS({
   "node_modules/pg/lib/connection.js"(exports2, module2) {
     "use strict";
     var EventEmitter = require("events").EventEmitter;
-    var { parse, serialize } = require_dist();
+    var { parse, serialize } = require_dist3();
     var stream = require_stream();
     var { getStream } = stream;
     var flushBuffer = serialize.flush();
@@ -30491,7 +37575,7 @@ var require_lib5 = __commonJS({
     var utils3 = require_utils4();
     var Pool2 = require_pg_pool();
     var TypeOverrides2 = require_type_overrides();
-    var { DatabaseError: DatabaseError2 } = require_dist();
+    var { DatabaseError: DatabaseError2 } = require_dist3();
     var { escapeIdentifier: escapeIdentifier2, escapeLiteral: escapeLiteral2 } = require_utils4();
     var poolFactory = (Client3) => {
       return class BoundPool extends Pool2 {
@@ -30642,7 +37726,7 @@ var require_postgres_array2 = __commonJS({
 });
 
 // node_modules/@prisma/client-runtime-utils/dist/index.js
-var require_dist2 = __commonJS({
+var require_dist4 = __commonJS({
   "node_modules/@prisma/client-runtime-utils/dist/index.js"(exports2, module2) {
     "use strict";
     var __defProp3 = Object.defineProperty;
@@ -33296,7 +40380,7 @@ var require_client3 = __commonJS({
       for (let { name: r2, ...n } of e2) t2[r2] = n;
       return t2;
     }
-    var as = require_dist2();
+    var as = require_dist4();
     var br = {};
     lt(br, { $: () => po, bgBlack: () => Au, bgBlue: () => ku, bgCyan: () => Nu, bgGreen: () => Cu, bgMagenta: () => Ou, bgRed: () => Ru, bgWhite: () => Du, bgYellow: () => Iu, black: () => Eu, blue: () => He, bold: () => Ee, cyan: () => _e, dim: () => Dt, gray: () => $t, green: () => Ft, grey: () => Su, hidden: () => bu, inverse: () => xu, italic: () => wu, magenta: () => Tu, red: () => ze, reset: () => hu, strikethrough: () => Pu, underline: () => Mt, white: () => vu, yellow: () => _t });
     var kn;
@@ -33467,11 +40551,11 @@ var require_client3 = __commonJS({
     function pt(e2) {
       return e2.toString() !== "Invalid Date";
     }
-    var Io = require_dist2();
+    var Io = require_dist4();
     function dt(e2) {
       return Io.Decimal.isDecimal(e2) ? true : e2 !== null && typeof e2 == "object" && typeof e2.s == "number" && typeof e2.e == "number" && typeof e2.toFixed == "function" && Array.isArray(e2.d);
     }
-    var Yo = require_dist2();
+    var Yo = require_dist4();
     var Qt = {};
     lt(Qt, { ModelAction: () => mt, datamodelEnumToSchemaEnum: () => Qu });
     function Qu(e2) {
@@ -34314,7 +41398,7 @@ Note that ${s2.bold("include")} statements only accept relation fields.`, a;
       }
       return n;
     }
-    var Ko = require_dist2();
+    var Ko = require_dist4();
     var zt = class {
       modelName;
       name;
@@ -34757,7 +41841,7 @@ Note that ${s2.bold("include")} statements only accept relation fields.`, a;
     function Ur(e2) {
       return e2 != null && e2[qr] === qr;
     }
-    var nu = require_dist2();
+    var nu = require_dist4();
     var iu = require("node:async_hooks");
     var ou = require("node:events");
     function Zt(e2) {
@@ -35094,7 +42178,7 @@ Note that ${s2.bold("include")} statements only accept relation fields.`, a;
         return Cs({ result: a, modelName: P, select: m2.select, omit: m2.select ? void 0 : { ...o?.[P], ...m2.omit }, extensions: n });
       } });
     }
-    var Ke = require_dist2();
+    var Ke = require_dist4();
     var hp = ["$connect", "$disconnect", "$on", "$use", "$extends"];
     var Os = hp;
     function Ns(e2) {
@@ -35197,8 +42281,8 @@ Note that ${s2.bold("include")} statements only accept relation fields.`, a;
     function Vs(e2) {
       return !!e2 && typeof e2 == "object" && !Array.isArray(e2);
     }
-    var Gs = require_dist2();
-    var tr = require_dist2();
+    var Gs = require_dist4();
+    var tr = require_dist4();
     function vt(e2) {
       return ArrayBuffer.isView(e2) && Object.prototype.toString.call(e2) === "[object Uint8Array]";
     }
@@ -35488,7 +42572,7 @@ Note that ${s2.bold("include")} statements only accept relation fields.`, a;
         }
       });
     }
-    var Xs = require_dist2();
+    var Xs = require_dist4();
     var Q = class extends X {
       name = "DataMapperError";
       constructor(t2, r2) {
@@ -38233,7 +45317,7 @@ Note that ${s2.bold("include")} statements only accept relation fields.`, a;
       });
       return Promise.race([e2, n]).finally(() => clearTimeout(r2));
     }
-    var ne = require_dist2();
+    var ne = require_dist4();
     var mn = "7.10.0";
     var rl = { bigint: "bigint", date: "datetime", decimal: "decimal", bytes: "bytes" };
     function il(e2) {
@@ -38420,7 +45504,7 @@ how you used Prisma Client in the issue.
         return this.#t.size;
       }
     };
-    var hl = require_dist2();
+    var hl = require_dist4();
     var yn = /^[\u0009\u0020-\u007E\u0080-\u00FF]+$/;
     function dl(e2, t2, r2) {
       let n = r2 || {}, i2 = n.encode || encodeURIComponent;
@@ -38713,7 +45797,7 @@ how you used Prisma Client in the issue.
         }
       }
     };
-    var Ji = require_dist2();
+    var Ji = require_dist4();
     var Qi = {};
     var xl = { async loadQueryCompiler(e2) {
       let { clientVersion: t2, compilerWasm: r2 } = e2;
@@ -39004,9 +46088,9 @@ ${n.backtrace}`, { clientVersion: this.config.clientVersion });
       return new yr(e2);
     }
     var Sl = (e2) => ({ command: e2 });
-    var Nl = require_dist2();
+    var Nl = require_dist4();
     var Al = (e2) => e2.strings.reduce((t2, r2, n) => `${t2}@P${n}${r2}`);
-    var Pn = require_dist2();
+    var Pn = require_dist4();
     function It(e2, t2) {
       try {
         return Rl(e2, "fast", t2);
@@ -39179,7 +46263,7 @@ More Information: https://pris.ly/d/execute-raw
         return n === "query" ? t2 : t2 && (r2 === "info" || t2 === "info") ? "info" : n;
       }, void 0);
     }
-    var Ql = require_dist2();
+    var Ql = require_dist4();
     function Zi(e2) {
       if (e2.action !== "findUnique" && e2.action !== "findUniqueOrThrow") return;
       let t2 = [];
@@ -39232,7 +46316,7 @@ More Information: https://pris.ly/d/execute-raw
         return "DataLoader";
       }
     };
-    var jl = require_dist2();
+    var jl = require_dist4();
     function st(e2, t2) {
       if (t2 === null) return t2;
       switch (e2) {
@@ -39572,7 +46656,7 @@ ${i2}
 
 ${n}`;
     }
-    var Yl = require_dist2();
+    var Yl = require_dist4();
     function eu(e2) {
       return e2.length === 0 ? Promise.resolve([]) : new Promise((t2, r2) => {
         let n = new Array(e2.length), i2 = null, o = false, s2 = 0, a = () => {
@@ -39849,10 +46933,10 @@ new PrismaClient({
       let e2 = Gm();
       return { id: e2, prettyName: zm[e2] || e2, isEdge: ["workerd", "deno", "netlify", "edge-light"].includes(e2) };
     }
-    var _ = require_dist2();
-    var Fe = require_dist2();
-    var ee = require_dist2();
-    var cu = require_dist2();
+    var _ = require_dist4();
+    var Fe = require_dist4();
+    var ee = require_dist4();
+    var cu = require_dist4();
   }
 });
 
@@ -78907,7 +85991,7 @@ var require_util = __commonJS({
 });
 
 // node_modules/googleapis-common/node_modules/gaxios/build/cjs/src/common.js
-var require_common = __commonJS({
+var require_common2 = __commonJS({
   "node_modules/googleapis-common/node_modules/gaxios/build/cjs/src/common.js"(exports2) {
     "use strict";
     var __importDefault = exports2 && exports2.__importDefault || function(mod) {
@@ -79262,1010 +86346,6 @@ var require_interceptor = __commonJS({
     var GaxiosInterceptorManager = class extends Set {
     };
     exports2.GaxiosInterceptorManager = GaxiosInterceptorManager;
-  }
-});
-
-// node_modules/debug/src/common.js
-var require_common2 = __commonJS({
-  "node_modules/debug/src/common.js"(exports2, module2) {
-    function setup(env) {
-      createDebug.debug = createDebug;
-      createDebug.default = createDebug;
-      createDebug.coerce = coerce;
-      createDebug.disable = disable;
-      createDebug.enable = enable;
-      createDebug.enabled = enabled;
-      createDebug.humanize = require_ms5();
-      createDebug.destroy = destroy;
-      Object.keys(env).forEach((key) => {
-        createDebug[key] = env[key];
-      });
-      createDebug.names = [];
-      createDebug.skips = [];
-      createDebug.formatters = {};
-      function selectColor(namespace) {
-        let hash = 0;
-        for (let i2 = 0; i2 < namespace.length; i2++) {
-          hash = (hash << 5) - hash + namespace.charCodeAt(i2);
-          hash |= 0;
-        }
-        return createDebug.colors[Math.abs(hash) % createDebug.colors.length];
-      }
-      createDebug.selectColor = selectColor;
-      function createDebug(namespace) {
-        let prevTime;
-        let enableOverride = null;
-        let namespacesCache;
-        let enabledCache;
-        function debug3(...args) {
-          if (!debug3.enabled) {
-            return;
-          }
-          const self2 = debug3;
-          const curr = Number(/* @__PURE__ */ new Date());
-          const ms = curr - (prevTime || curr);
-          self2.diff = ms;
-          self2.prev = prevTime;
-          self2.curr = curr;
-          prevTime = curr;
-          args[0] = createDebug.coerce(args[0]);
-          if (typeof args[0] !== "string") {
-            args.unshift("%O");
-          }
-          let index = 0;
-          args[0] = args[0].replace(/%([a-zA-Z%])/g, (match, format) => {
-            if (match === "%%") {
-              return "%";
-            }
-            index++;
-            const formatter = createDebug.formatters[format];
-            if (typeof formatter === "function") {
-              const val = args[index];
-              match = formatter.call(self2, val);
-              args.splice(index, 1);
-              index--;
-            }
-            return match;
-          });
-          createDebug.formatArgs.call(self2, args);
-          const logFn = self2.log || createDebug.log;
-          logFn.apply(self2, args);
-        }
-        debug3.namespace = namespace;
-        debug3.useColors = createDebug.useColors();
-        debug3.color = createDebug.selectColor(namespace);
-        debug3.extend = extend;
-        debug3.destroy = createDebug.destroy;
-        Object.defineProperty(debug3, "enabled", {
-          enumerable: true,
-          configurable: false,
-          get: () => {
-            if (enableOverride !== null) {
-              return enableOverride;
-            }
-            if (namespacesCache !== createDebug.namespaces) {
-              namespacesCache = createDebug.namespaces;
-              enabledCache = createDebug.enabled(namespace);
-            }
-            return enabledCache;
-          },
-          set: (v) => {
-            enableOverride = v;
-          }
-        });
-        if (typeof createDebug.init === "function") {
-          createDebug.init(debug3);
-        }
-        return debug3;
-      }
-      function extend(namespace, delimiter) {
-        const newDebug = createDebug(this.namespace + (typeof delimiter === "undefined" ? ":" : delimiter) + namespace);
-        newDebug.log = this.log;
-        return newDebug;
-      }
-      function enable(namespaces) {
-        createDebug.save(namespaces);
-        createDebug.namespaces = namespaces;
-        createDebug.names = [];
-        createDebug.skips = [];
-        const split = (typeof namespaces === "string" ? namespaces : "").trim().replace(/\s+/g, ",").split(",").filter(Boolean);
-        for (const ns of split) {
-          if (ns[0] === "-") {
-            createDebug.skips.push(ns.slice(1));
-          } else {
-            createDebug.names.push(ns);
-          }
-        }
-      }
-      function matchesTemplate(search, template) {
-        let searchIndex = 0;
-        let templateIndex = 0;
-        let starIndex = -1;
-        let matchIndex = 0;
-        while (searchIndex < search.length) {
-          if (templateIndex < template.length && (template[templateIndex] === search[searchIndex] || template[templateIndex] === "*")) {
-            if (template[templateIndex] === "*") {
-              starIndex = templateIndex;
-              matchIndex = searchIndex;
-              templateIndex++;
-            } else {
-              searchIndex++;
-              templateIndex++;
-            }
-          } else if (starIndex !== -1) {
-            templateIndex = starIndex + 1;
-            matchIndex++;
-            searchIndex = matchIndex;
-          } else {
-            return false;
-          }
-        }
-        while (templateIndex < template.length && template[templateIndex] === "*") {
-          templateIndex++;
-        }
-        return templateIndex === template.length;
-      }
-      function disable() {
-        const namespaces = [
-          ...createDebug.names,
-          ...createDebug.skips.map((namespace) => "-" + namespace)
-        ].join(",");
-        createDebug.enable("");
-        return namespaces;
-      }
-      function enabled(name2) {
-        for (const skip2 of createDebug.skips) {
-          if (matchesTemplate(name2, skip2)) {
-            return false;
-          }
-        }
-        for (const ns of createDebug.names) {
-          if (matchesTemplate(name2, ns)) {
-            return true;
-          }
-        }
-        return false;
-      }
-      function coerce(val) {
-        if (val instanceof Error) {
-          return val.stack || val.message;
-        }
-        return val;
-      }
-      function destroy() {
-        console.warn("Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.");
-      }
-      createDebug.enable(createDebug.load());
-      return createDebug;
-    }
-    module2.exports = setup;
-  }
-});
-
-// node_modules/debug/src/browser.js
-var require_browser5 = __commonJS({
-  "node_modules/debug/src/browser.js"(exports2, module2) {
-    exports2.formatArgs = formatArgs;
-    exports2.save = save;
-    exports2.load = load;
-    exports2.useColors = useColors;
-    exports2.storage = localstorage();
-    exports2.destroy = /* @__PURE__ */ (() => {
-      let warned = false;
-      return () => {
-        if (!warned) {
-          warned = true;
-          console.warn("Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.");
-        }
-      };
-    })();
-    exports2.colors = [
-      "#0000CC",
-      "#0000FF",
-      "#0033CC",
-      "#0033FF",
-      "#0066CC",
-      "#0066FF",
-      "#0099CC",
-      "#0099FF",
-      "#00CC00",
-      "#00CC33",
-      "#00CC66",
-      "#00CC99",
-      "#00CCCC",
-      "#00CCFF",
-      "#3300CC",
-      "#3300FF",
-      "#3333CC",
-      "#3333FF",
-      "#3366CC",
-      "#3366FF",
-      "#3399CC",
-      "#3399FF",
-      "#33CC00",
-      "#33CC33",
-      "#33CC66",
-      "#33CC99",
-      "#33CCCC",
-      "#33CCFF",
-      "#6600CC",
-      "#6600FF",
-      "#6633CC",
-      "#6633FF",
-      "#66CC00",
-      "#66CC33",
-      "#9900CC",
-      "#9900FF",
-      "#9933CC",
-      "#9933FF",
-      "#99CC00",
-      "#99CC33",
-      "#CC0000",
-      "#CC0033",
-      "#CC0066",
-      "#CC0099",
-      "#CC00CC",
-      "#CC00FF",
-      "#CC3300",
-      "#CC3333",
-      "#CC3366",
-      "#CC3399",
-      "#CC33CC",
-      "#CC33FF",
-      "#CC6600",
-      "#CC6633",
-      "#CC9900",
-      "#CC9933",
-      "#CCCC00",
-      "#CCCC33",
-      "#FF0000",
-      "#FF0033",
-      "#FF0066",
-      "#FF0099",
-      "#FF00CC",
-      "#FF00FF",
-      "#FF3300",
-      "#FF3333",
-      "#FF3366",
-      "#FF3399",
-      "#FF33CC",
-      "#FF33FF",
-      "#FF6600",
-      "#FF6633",
-      "#FF9900",
-      "#FF9933",
-      "#FFCC00",
-      "#FFCC33"
-    ];
-    function useColors() {
-      if (typeof window !== "undefined" && window.process && (window.process.type === "renderer" || window.process.__nwjs)) {
-        return true;
-      }
-      if (typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/(edge|trident)\/(\d+)/)) {
-        return false;
-      }
-      let m2;
-      return typeof document !== "undefined" && document.documentElement && document.documentElement.style && document.documentElement.style.WebkitAppearance || // Is firebug? http://stackoverflow.com/a/398120/376773
-      typeof window !== "undefined" && window.console && (window.console.firebug || window.console.exception && window.console.table) || // Is firefox >= v31?
-      // https://developer.mozilla.org/en-US/docs/Tools/Web_Console#Styling_messages
-      typeof navigator !== "undefined" && navigator.userAgent && (m2 = navigator.userAgent.toLowerCase().match(/firefox\/(\d+)/)) && parseInt(m2[1], 10) >= 31 || // Double check webkit in userAgent just in case we are in a worker
-      typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/applewebkit\/(\d+)/);
-    }
-    function formatArgs(args) {
-      args[0] = (this.useColors ? "%c" : "") + this.namespace + (this.useColors ? " %c" : " ") + args[0] + (this.useColors ? "%c " : " ") + "+" + module2.exports.humanize(this.diff);
-      if (!this.useColors) {
-        return;
-      }
-      const c = "color: " + this.color;
-      args.splice(1, 0, c, "color: inherit");
-      let index = 0;
-      let lastC = 0;
-      args[0].replace(/%[a-zA-Z%]/g, (match) => {
-        if (match === "%%") {
-          return;
-        }
-        index++;
-        if (match === "%c") {
-          lastC = index;
-        }
-      });
-      args.splice(lastC, 0, c);
-    }
-    exports2.log = console.debug || console.log || (() => {
-    });
-    function save(namespaces) {
-      try {
-        if (namespaces) {
-          exports2.storage.setItem("debug", namespaces);
-        } else {
-          exports2.storage.removeItem("debug");
-        }
-      } catch (error) {
-      }
-    }
-    function load() {
-      let r2;
-      try {
-        r2 = exports2.storage.getItem("debug") || exports2.storage.getItem("DEBUG");
-      } catch (error) {
-      }
-      if (!r2 && typeof process !== "undefined" && "env" in process) {
-        r2 = process.env.DEBUG;
-      }
-      return r2;
-    }
-    function localstorage() {
-      try {
-        return localStorage;
-      } catch (error) {
-      }
-    }
-    module2.exports = require_common2()(exports2);
-    var { formatters } = module2.exports;
-    formatters.j = function(v) {
-      try {
-        return JSON.stringify(v);
-      } catch (error) {
-        return "[UnexpectedJSONParseError]: " + error.message;
-      }
-    };
-  }
-});
-
-// node_modules/debug/src/node.js
-var require_node5 = __commonJS({
-  "node_modules/debug/src/node.js"(exports2, module2) {
-    var tty = require("tty");
-    var util = require("util");
-    exports2.init = init2;
-    exports2.log = log;
-    exports2.formatArgs = formatArgs;
-    exports2.save = save;
-    exports2.load = load;
-    exports2.useColors = useColors;
-    exports2.destroy = util.deprecate(
-      () => {
-      },
-      "Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`."
-    );
-    exports2.colors = [6, 2, 3, 4, 5, 1];
-    try {
-      const supportsColor = require("supports-color");
-      if (supportsColor && (supportsColor.stderr || supportsColor).level >= 2) {
-        exports2.colors = [
-          20,
-          21,
-          26,
-          27,
-          32,
-          33,
-          38,
-          39,
-          40,
-          41,
-          42,
-          43,
-          44,
-          45,
-          56,
-          57,
-          62,
-          63,
-          68,
-          69,
-          74,
-          75,
-          76,
-          77,
-          78,
-          79,
-          80,
-          81,
-          92,
-          93,
-          98,
-          99,
-          112,
-          113,
-          128,
-          129,
-          134,
-          135,
-          148,
-          149,
-          160,
-          161,
-          162,
-          163,
-          164,
-          165,
-          166,
-          167,
-          168,
-          169,
-          170,
-          171,
-          172,
-          173,
-          178,
-          179,
-          184,
-          185,
-          196,
-          197,
-          198,
-          199,
-          200,
-          201,
-          202,
-          203,
-          204,
-          205,
-          206,
-          207,
-          208,
-          209,
-          214,
-          215,
-          220,
-          221
-        ];
-      }
-    } catch (error) {
-    }
-    exports2.inspectOpts = Object.keys(process.env).filter((key) => {
-      return /^debug_/i.test(key);
-    }).reduce((obj, key) => {
-      const prop = key.substring(6).toLowerCase().replace(/_([a-z])/g, (_, k) => {
-        return k.toUpperCase();
-      });
-      let val = process.env[key];
-      if (/^(yes|on|true|enabled)$/i.test(val)) {
-        val = true;
-      } else if (/^(no|off|false|disabled)$/i.test(val)) {
-        val = false;
-      } else if (val === "null") {
-        val = null;
-      } else {
-        val = Number(val);
-      }
-      obj[prop] = val;
-      return obj;
-    }, {});
-    function useColors() {
-      return "colors" in exports2.inspectOpts ? Boolean(exports2.inspectOpts.colors) : tty.isatty(process.stderr.fd);
-    }
-    function formatArgs(args) {
-      const { namespace: name2, useColors: useColors2 } = this;
-      if (useColors2) {
-        const c = this.color;
-        const colorCode = "\x1B[3" + (c < 8 ? c : "8;5;" + c);
-        const prefix = `  ${colorCode};1m${name2} \x1B[0m`;
-        args[0] = prefix + args[0].split("\n").join("\n" + prefix);
-        args.push(colorCode + "m+" + module2.exports.humanize(this.diff) + "\x1B[0m");
-      } else {
-        args[0] = getDate() + name2 + " " + args[0];
-      }
-    }
-    function getDate() {
-      if (exports2.inspectOpts.hideDate) {
-        return "";
-      }
-      return (/* @__PURE__ */ new Date()).toISOString() + " ";
-    }
-    function log(...args) {
-      return process.stderr.write(util.formatWithOptions(exports2.inspectOpts, ...args) + "\n");
-    }
-    function save(namespaces) {
-      if (namespaces) {
-        process.env.DEBUG = namespaces;
-      } else {
-        delete process.env.DEBUG;
-      }
-    }
-    function load() {
-      return process.env.DEBUG;
-    }
-    function init2(debug3) {
-      debug3.inspectOpts = {};
-      const keys = Object.keys(exports2.inspectOpts);
-      for (let i2 = 0; i2 < keys.length; i2++) {
-        debug3.inspectOpts[keys[i2]] = exports2.inspectOpts[keys[i2]];
-      }
-    }
-    module2.exports = require_common2()(exports2);
-    var { formatters } = module2.exports;
-    formatters.o = function(v) {
-      this.inspectOpts.colors = this.useColors;
-      return util.inspect(v, this.inspectOpts).split("\n").map((str) => str.trim()).join(" ");
-    };
-    formatters.O = function(v) {
-      this.inspectOpts.colors = this.useColors;
-      return util.inspect(v, this.inspectOpts);
-    };
-  }
-});
-
-// node_modules/debug/src/index.js
-var require_src5 = __commonJS({
-  "node_modules/debug/src/index.js"(exports2, module2) {
-    if (typeof process === "undefined" || process.type === "renderer" || process.browser === true || process.__nwjs) {
-      module2.exports = require_browser5();
-    } else {
-      module2.exports = require_node5();
-    }
-  }
-});
-
-// node_modules/agent-base/dist/helpers.js
-var require_helpers = __commonJS({
-  "node_modules/agent-base/dist/helpers.js"(exports2) {
-    "use strict";
-    var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m2, k, k2) {
-      if (k2 === void 0) k2 = k;
-      var desc = Object.getOwnPropertyDescriptor(m2, k);
-      if (!desc || ("get" in desc ? !m2.__esModule : desc.writable || desc.configurable)) {
-        desc = { enumerable: true, get: function() {
-          return m2[k];
-        } };
-      }
-      Object.defineProperty(o, k2, desc);
-    }) : (function(o, m2, k, k2) {
-      if (k2 === void 0) k2 = k;
-      o[k2] = m2[k];
-    }));
-    var __setModuleDefault = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
-      Object.defineProperty(o, "default", { enumerable: true, value: v });
-    }) : function(o, v) {
-      o["default"] = v;
-    });
-    var __importStar = exports2 && exports2.__importStar || function(mod) {
-      if (mod && mod.__esModule) return mod;
-      var result = {};
-      if (mod != null) {
-        for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-      }
-      __setModuleDefault(result, mod);
-      return result;
-    };
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.req = exports2.json = exports2.toBuffer = void 0;
-    var http3 = __importStar(require("http"));
-    var https2 = __importStar(require("https"));
-    async function toBuffer(stream) {
-      let length = 0;
-      const chunks = [];
-      for await (const chunk of stream) {
-        length += chunk.length;
-        chunks.push(chunk);
-      }
-      return Buffer.concat(chunks, length);
-    }
-    exports2.toBuffer = toBuffer;
-    async function json(stream) {
-      const buf = await toBuffer(stream);
-      const str = buf.toString("utf8");
-      try {
-        return JSON.parse(str);
-      } catch (_err) {
-        const err = _err;
-        err.message += ` (input: ${str})`;
-        throw err;
-      }
-    }
-    exports2.json = json;
-    function req(url, opts = {}) {
-      const href = typeof url === "string" ? url : url.href;
-      const req2 = (href.startsWith("https:") ? https2 : http3).request(url, opts);
-      const promise = new Promise((resolve, reject) => {
-        req2.once("response", resolve).once("error", reject).end();
-      });
-      req2.then = promise.then.bind(promise);
-      return req2;
-    }
-    exports2.req = req;
-  }
-});
-
-// node_modules/agent-base/dist/index.js
-var require_dist3 = __commonJS({
-  "node_modules/agent-base/dist/index.js"(exports2) {
-    "use strict";
-    var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m2, k, k2) {
-      if (k2 === void 0) k2 = k;
-      var desc = Object.getOwnPropertyDescriptor(m2, k);
-      if (!desc || ("get" in desc ? !m2.__esModule : desc.writable || desc.configurable)) {
-        desc = { enumerable: true, get: function() {
-          return m2[k];
-        } };
-      }
-      Object.defineProperty(o, k2, desc);
-    }) : (function(o, m2, k, k2) {
-      if (k2 === void 0) k2 = k;
-      o[k2] = m2[k];
-    }));
-    var __setModuleDefault = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
-      Object.defineProperty(o, "default", { enumerable: true, value: v });
-    }) : function(o, v) {
-      o["default"] = v;
-    });
-    var __importStar = exports2 && exports2.__importStar || function(mod) {
-      if (mod && mod.__esModule) return mod;
-      var result = {};
-      if (mod != null) {
-        for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-      }
-      __setModuleDefault(result, mod);
-      return result;
-    };
-    var __exportStar = exports2 && exports2.__exportStar || function(m2, exports3) {
-      for (var p in m2) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports3, p)) __createBinding(exports3, m2, p);
-    };
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.Agent = void 0;
-    var net = __importStar(require("net"));
-    var http3 = __importStar(require("http"));
-    var https_1 = require("https");
-    __exportStar(require_helpers(), exports2);
-    var INTERNAL = Symbol("AgentBaseInternalState");
-    var Agent = class extends http3.Agent {
-      constructor(opts) {
-        super(opts);
-        this[INTERNAL] = {};
-      }
-      /**
-       * Determine whether this is an `http` or `https` request.
-       */
-      isSecureEndpoint(options) {
-        if (options) {
-          if (typeof options.secureEndpoint === "boolean") {
-            return options.secureEndpoint;
-          }
-          if (typeof options.protocol === "string") {
-            return options.protocol === "https:";
-          }
-        }
-        const { stack } = new Error();
-        if (typeof stack !== "string")
-          return false;
-        return stack.split("\n").some((l) => l.indexOf("(https.js:") !== -1 || l.indexOf("node:https:") !== -1);
-      }
-      // In order to support async signatures in `connect()` and Node's native
-      // connection pooling in `http.Agent`, the array of sockets for each origin
-      // has to be updated synchronously. This is so the length of the array is
-      // accurate when `addRequest()` is next called. We achieve this by creating a
-      // fake socket and adding it to `sockets[origin]` and incrementing
-      // `totalSocketCount`.
-      incrementSockets(name2) {
-        if (this.maxSockets === Infinity && this.maxTotalSockets === Infinity) {
-          return null;
-        }
-        if (!this.sockets[name2]) {
-          this.sockets[name2] = [];
-        }
-        const fakeSocket = new net.Socket({ writable: false });
-        this.sockets[name2].push(fakeSocket);
-        this.totalSocketCount++;
-        return fakeSocket;
-      }
-      decrementSockets(name2, socket) {
-        if (!this.sockets[name2] || socket === null) {
-          return;
-        }
-        const sockets = this.sockets[name2];
-        const index = sockets.indexOf(socket);
-        if (index !== -1) {
-          sockets.splice(index, 1);
-          this.totalSocketCount--;
-          if (sockets.length === 0) {
-            delete this.sockets[name2];
-          }
-        }
-      }
-      // In order to properly update the socket pool, we need to call `getName()` on
-      // the core `https.Agent` if it is a secureEndpoint.
-      getName(options) {
-        const secureEndpoint = this.isSecureEndpoint(options);
-        if (secureEndpoint) {
-          return https_1.Agent.prototype.getName.call(this, options);
-        }
-        return super.getName(options);
-      }
-      createSocket(req, options, cb) {
-        const connectOpts = {
-          ...options,
-          secureEndpoint: this.isSecureEndpoint(options)
-        };
-        const name2 = this.getName(connectOpts);
-        const fakeSocket = this.incrementSockets(name2);
-        Promise.resolve().then(() => this.connect(req, connectOpts)).then((socket) => {
-          this.decrementSockets(name2, fakeSocket);
-          if (socket instanceof http3.Agent) {
-            try {
-              return socket.addRequest(req, connectOpts);
-            } catch (err) {
-              return cb(err);
-            }
-          }
-          this[INTERNAL].currentSocket = socket;
-          super.createSocket(req, options, cb);
-        }, (err) => {
-          this.decrementSockets(name2, fakeSocket);
-          cb(err);
-        });
-      }
-      createConnection() {
-        const socket = this[INTERNAL].currentSocket;
-        this[INTERNAL].currentSocket = void 0;
-        if (!socket) {
-          throw new Error("No socket was returned in the `connect()` function");
-        }
-        return socket;
-      }
-      get defaultPort() {
-        return this[INTERNAL].defaultPort ?? (this.protocol === "https:" ? 443 : 80);
-      }
-      set defaultPort(v) {
-        if (this[INTERNAL]) {
-          this[INTERNAL].defaultPort = v;
-        }
-      }
-      get protocol() {
-        return this[INTERNAL].protocol ?? (this.isSecureEndpoint() ? "https:" : "http:");
-      }
-      set protocol(v) {
-        if (this[INTERNAL]) {
-          this[INTERNAL].protocol = v;
-        }
-      }
-    };
-    exports2.Agent = Agent;
-  }
-});
-
-// node_modules/https-proxy-agent/dist/parse-proxy-response.js
-var require_parse_proxy_response = __commonJS({
-  "node_modules/https-proxy-agent/dist/parse-proxy-response.js"(exports2) {
-    "use strict";
-    var __importDefault = exports2 && exports2.__importDefault || function(mod) {
-      return mod && mod.__esModule ? mod : { "default": mod };
-    };
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.parseProxyResponse = void 0;
-    var debug_1 = __importDefault(require_src5());
-    var debug3 = (0, debug_1.default)("https-proxy-agent:parse-proxy-response");
-    function parseProxyResponse(socket) {
-      return new Promise((resolve, reject) => {
-        let buffersLength = 0;
-        const buffers = [];
-        function read2() {
-          const b = socket.read();
-          if (b)
-            ondata(b);
-          else
-            socket.once("readable", read2);
-        }
-        function cleanup() {
-          socket.removeListener("end", onend);
-          socket.removeListener("error", onerror);
-          socket.removeListener("readable", read2);
-        }
-        function onend() {
-          cleanup();
-          debug3("onend");
-          reject(new Error("Proxy connection ended before receiving CONNECT response"));
-        }
-        function onerror(err) {
-          cleanup();
-          debug3("onerror %o", err);
-          reject(err);
-        }
-        function ondata(b) {
-          buffers.push(b);
-          buffersLength += b.length;
-          const buffered = Buffer.concat(buffers, buffersLength);
-          const endOfHeaders = buffered.indexOf("\r\n\r\n");
-          if (endOfHeaders === -1) {
-            debug3("have not received end of HTTP headers yet...");
-            read2();
-            return;
-          }
-          const headerParts = buffered.slice(0, endOfHeaders).toString("ascii").split("\r\n");
-          const firstLine = headerParts.shift();
-          if (!firstLine) {
-            socket.destroy();
-            return reject(new Error("No header received from proxy CONNECT response"));
-          }
-          const firstLineParts = firstLine.split(" ");
-          const statusCode = +firstLineParts[1];
-          const statusText = firstLineParts.slice(2).join(" ");
-          const headers = {};
-          for (const header of headerParts) {
-            if (!header)
-              continue;
-            const firstColon = header.indexOf(":");
-            if (firstColon === -1) {
-              socket.destroy();
-              return reject(new Error(`Invalid header from proxy CONNECT response: "${header}"`));
-            }
-            const key = header.slice(0, firstColon).toLowerCase();
-            const value = header.slice(firstColon + 1).trimStart();
-            const current = headers[key];
-            if (typeof current === "string") {
-              headers[key] = [current, value];
-            } else if (Array.isArray(current)) {
-              current.push(value);
-            } else {
-              headers[key] = value;
-            }
-          }
-          debug3("got proxy server response: %o %o", firstLine, headers);
-          cleanup();
-          resolve({
-            connect: {
-              statusCode,
-              statusText,
-              headers
-            },
-            buffered
-          });
-        }
-        socket.on("error", onerror);
-        socket.on("end", onend);
-        read2();
-      });
-    }
-    exports2.parseProxyResponse = parseProxyResponse;
-  }
-});
-
-// node_modules/https-proxy-agent/dist/index.js
-var require_dist4 = __commonJS({
-  "node_modules/https-proxy-agent/dist/index.js"(exports2) {
-    "use strict";
-    var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m2, k, k2) {
-      if (k2 === void 0) k2 = k;
-      var desc = Object.getOwnPropertyDescriptor(m2, k);
-      if (!desc || ("get" in desc ? !m2.__esModule : desc.writable || desc.configurable)) {
-        desc = { enumerable: true, get: function() {
-          return m2[k];
-        } };
-      }
-      Object.defineProperty(o, k2, desc);
-    }) : (function(o, m2, k, k2) {
-      if (k2 === void 0) k2 = k;
-      o[k2] = m2[k];
-    }));
-    var __setModuleDefault = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
-      Object.defineProperty(o, "default", { enumerable: true, value: v });
-    }) : function(o, v) {
-      o["default"] = v;
-    });
-    var __importStar = exports2 && exports2.__importStar || function(mod) {
-      if (mod && mod.__esModule) return mod;
-      var result = {};
-      if (mod != null) {
-        for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-      }
-      __setModuleDefault(result, mod);
-      return result;
-    };
-    var __importDefault = exports2 && exports2.__importDefault || function(mod) {
-      return mod && mod.__esModule ? mod : { "default": mod };
-    };
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.HttpsProxyAgent = void 0;
-    var net = __importStar(require("net"));
-    var tls = __importStar(require("tls"));
-    var assert_1 = __importDefault(require("assert"));
-    var debug_1 = __importDefault(require_src5());
-    var agent_base_1 = require_dist3();
-    var url_1 = require("url");
-    var parse_proxy_response_1 = require_parse_proxy_response();
-    var debug3 = (0, debug_1.default)("https-proxy-agent");
-    var setServernameFromNonIpHost = (options) => {
-      if (options.servername === void 0 && options.host && !net.isIP(options.host)) {
-        return {
-          ...options,
-          servername: options.host
-        };
-      }
-      return options;
-    };
-    var HttpsProxyAgent = class extends agent_base_1.Agent {
-      constructor(proxy, opts) {
-        super(opts);
-        this.options = { path: void 0 };
-        this.proxy = typeof proxy === "string" ? new url_1.URL(proxy) : proxy;
-        this.proxyHeaders = opts?.headers ?? {};
-        debug3("Creating new HttpsProxyAgent instance: %o", this.proxy.href);
-        const host = (this.proxy.hostname || this.proxy.host).replace(/^\[|\]$/g, "");
-        const port = this.proxy.port ? parseInt(this.proxy.port, 10) : this.proxy.protocol === "https:" ? 443 : 80;
-        this.connectOpts = {
-          // Attempt to negotiate http/1.1 for proxy servers that support http/2
-          ALPNProtocols: ["http/1.1"],
-          ...opts ? omit(opts, "headers") : null,
-          host,
-          port
-        };
-      }
-      /**
-       * Called when the node-core HTTP client library is creating a
-       * new HTTP request.
-       */
-      async connect(req, opts) {
-        const { proxy } = this;
-        if (!opts.host) {
-          throw new TypeError('No "host" provided');
-        }
-        let socket;
-        if (proxy.protocol === "https:") {
-          debug3("Creating `tls.Socket`: %o", this.connectOpts);
-          socket = tls.connect(setServernameFromNonIpHost(this.connectOpts));
-        } else {
-          debug3("Creating `net.Socket`: %o", this.connectOpts);
-          socket = net.connect(this.connectOpts);
-        }
-        const headers = typeof this.proxyHeaders === "function" ? this.proxyHeaders() : { ...this.proxyHeaders };
-        const host = net.isIPv6(opts.host) ? `[${opts.host}]` : opts.host;
-        let payload = `CONNECT ${host}:${opts.port} HTTP/1.1\r
-`;
-        if (proxy.username || proxy.password) {
-          const auth = `${decodeURIComponent(proxy.username)}:${decodeURIComponent(proxy.password)}`;
-          headers["Proxy-Authorization"] = `Basic ${Buffer.from(auth).toString("base64")}`;
-        }
-        headers.Host = `${host}:${opts.port}`;
-        if (!headers["Proxy-Connection"]) {
-          headers["Proxy-Connection"] = this.keepAlive ? "Keep-Alive" : "close";
-        }
-        for (const name2 of Object.keys(headers)) {
-          payload += `${name2}: ${headers[name2]}\r
-`;
-        }
-        const proxyResponsePromise = (0, parse_proxy_response_1.parseProxyResponse)(socket);
-        socket.write(`${payload}\r
-`);
-        const { connect, buffered } = await proxyResponsePromise;
-        req.emit("proxyConnect", connect);
-        this.emit("proxyConnect", connect, req);
-        if (connect.statusCode === 200) {
-          req.once("socket", resume);
-          if (opts.secureEndpoint) {
-            debug3("Upgrading socket connection to TLS");
-            return tls.connect({
-              ...omit(setServernameFromNonIpHost(opts), "host", "path", "port"),
-              socket
-            });
-          }
-          return socket;
-        }
-        socket.destroy();
-        const fakeSocket = new net.Socket({ writable: false });
-        fakeSocket.readable = true;
-        req.once("socket", (s2) => {
-          debug3("Replaying proxy buffer for failed request");
-          (0, assert_1.default)(s2.listenerCount("data") > 0);
-          s2.push(buffered);
-          s2.push(null);
-        });
-        return fakeSocket;
-      }
-    };
-    HttpsProxyAgent.protocols = ["http", "https"];
-    exports2.HttpsProxyAgent = HttpsProxyAgent;
-    function resume(socket) {
-      socket.resume();
-    }
-    function omit(obj, ...keys) {
-      const ret = {};
-      let key;
-      for (key in obj) {
-        if (!keys.includes(key)) {
-          ret[key] = obj[key];
-        }
-      }
-      return ret;
-    }
   }
 });
 
@@ -86768,7 +92848,7 @@ var require_gaxios = __commonJS({
     exports2.Gaxios = void 0;
     var extend_1 = __importDefault(require_extend());
     var https_1 = require("https");
-    var common_js_1 = require_common();
+    var common_js_1 = require_common2();
     var retry_js_1 = require_retry();
     var stream_1 = require("stream");
     var interceptor_js_1 = require_interceptor();
@@ -87190,7 +93270,7 @@ Content-Type: ${partContentType}\r
        * @returns A proxy agent
        */
       static async #getProxyAgent() {
-        this.#proxyAgent ||= (await Promise.resolve().then(() => __toESM(require_dist4()))).HttpsProxyAgent;
+        this.#proxyAgent ||= (await Promise.resolve().then(() => __toESM(require_dist2()))).HttpsProxyAgent;
         return this.#proxyAgent;
       }
       static async #getFetch() {
@@ -87231,7 +93311,7 @@ Content-Type: ${partContentType}\r
 });
 
 // node_modules/googleapis-common/node_modules/gaxios/build/cjs/src/index.js
-var require_src6 = __commonJS({
+var require_src7 = __commonJS({
   "node_modules/googleapis-common/node_modules/gaxios/build/cjs/src/index.js"(exports2) {
     "use strict";
     var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m2, k, k2) {
@@ -87257,7 +93337,7 @@ var require_src6 = __commonJS({
     Object.defineProperty(exports2, "Gaxios", { enumerable: true, get: function() {
       return gaxios_js_1.Gaxios;
     } });
-    var common_js_1 = require_common();
+    var common_js_1 = require_common2();
     Object.defineProperty(exports2, "GaxiosError", { enumerable: true, get: function() {
       return common_js_1.GaxiosError;
     } });
@@ -88182,7 +94262,7 @@ Content-Type: ${partContentType}\r
        * @returns A proxy agent
        */
       static async #getProxyAgent() {
-        this.#proxyAgent ||= (await Promise.resolve().then(() => __toESM(require_dist4()))).HttpsProxyAgent;
+        this.#proxyAgent ||= (await Promise.resolve().then(() => __toESM(require_dist2()))).HttpsProxyAgent;
         return this.#proxyAgent;
       }
       static async #getFetch() {
@@ -88223,7 +94303,7 @@ Content-Type: ${partContentType}\r
 });
 
 // node_modules/gaxios/build/cjs/src/index.js
-var require_src7 = __commonJS({
+var require_src8 = __commonJS({
   "node_modules/gaxios/build/cjs/src/index.js"(exports2) {
     "use strict";
     var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m2, k, k2) {
@@ -90427,7 +96507,7 @@ var require_logging_utils = __commonJS({
 });
 
 // node_modules/google-logging-utils/build/src/index.js
-var require_src8 = __commonJS({
+var require_src9 = __commonJS({
   "node_modules/google-logging-utils/build/src/index.js"(exports2) {
     "use strict";
     var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m2, k, k2) {
@@ -90452,7 +96532,7 @@ var require_src8 = __commonJS({
 });
 
 // node_modules/gcp-metadata/build/src/index.js
-var require_src9 = __commonJS({
+var require_src10 = __commonJS({
   "node_modules/gcp-metadata/build/src/index.js"(exports2) {
     "use strict";
     var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m2, k, k2) {
@@ -90506,10 +96586,10 @@ var require_src9 = __commonJS({
     exports2.getGCPResidency = getGCPResidency;
     exports2.setGCPResidency = setGCPResidency;
     exports2.requestTimeout = requestTimeout;
-    var gaxios_1 = require_src7();
+    var gaxios_1 = require_src8();
     var jsonBigint = require_json_bigint();
     var gcp_residency_1 = require_gcp_residency();
-    var logger = __importStar(require_src8());
+    var logger = __importStar(require_src9());
     exports2.BASE_PATH = "/computeMetadata/v1";
     exports2.HOST_ADDRESS = "http://169.254.169.254";
     exports2.SECONDARY_HOST_ADDRESS = "http://metadata.google.internal.";
@@ -91021,170 +97101,6 @@ var require_crypto3 = __commonJS({
   }
 });
 
-// node_modules/ecdsa-sig-formatter/src/param-bytes-for-alg.js
-var require_param_bytes_for_alg = __commonJS({
-  "node_modules/ecdsa-sig-formatter/src/param-bytes-for-alg.js"(exports2, module2) {
-    "use strict";
-    function getParamSize(keySize) {
-      var result = (keySize / 8 | 0) + (keySize % 8 === 0 ? 0 : 1);
-      return result;
-    }
-    var paramBytesForAlg = {
-      ES256: getParamSize(256),
-      ES384: getParamSize(384),
-      ES512: getParamSize(521)
-    };
-    function getParamBytesForAlg(alg) {
-      var paramBytes = paramBytesForAlg[alg];
-      if (paramBytes) {
-        return paramBytes;
-      }
-      throw new Error('Unknown algorithm "' + alg + '"');
-    }
-    module2.exports = getParamBytesForAlg;
-  }
-});
-
-// node_modules/ecdsa-sig-formatter/src/ecdsa-sig-formatter.js
-var require_ecdsa_sig_formatter = __commonJS({
-  "node_modules/ecdsa-sig-formatter/src/ecdsa-sig-formatter.js"(exports2, module2) {
-    "use strict";
-    var Buffer4 = require_safe_buffer().Buffer;
-    var getParamBytesForAlg = require_param_bytes_for_alg();
-    var MAX_OCTET = 128;
-    var CLASS_UNIVERSAL = 0;
-    var PRIMITIVE_BIT = 32;
-    var TAG_SEQ = 16;
-    var TAG_INT = 2;
-    var ENCODED_TAG_SEQ = TAG_SEQ | PRIMITIVE_BIT | CLASS_UNIVERSAL << 6;
-    var ENCODED_TAG_INT = TAG_INT | CLASS_UNIVERSAL << 6;
-    function base64Url(base64) {
-      return base64.replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
-    }
-    function signatureAsBuffer(signature) {
-      if (Buffer4.isBuffer(signature)) {
-        return signature;
-      } else if ("string" === typeof signature) {
-        return Buffer4.from(signature, "base64");
-      }
-      throw new TypeError("ECDSA signature must be a Base64 string or a Buffer");
-    }
-    function derToJose(signature, alg) {
-      signature = signatureAsBuffer(signature);
-      var paramBytes = getParamBytesForAlg(alg);
-      var maxEncodedParamLength = paramBytes + 1;
-      var inputLength = signature.length;
-      var offset = 0;
-      if (signature[offset++] !== ENCODED_TAG_SEQ) {
-        throw new Error('Could not find expected "seq"');
-      }
-      var seqLength = signature[offset++];
-      if (seqLength === (MAX_OCTET | 1)) {
-        seqLength = signature[offset++];
-      }
-      if (inputLength - offset < seqLength) {
-        throw new Error('"seq" specified length of "' + seqLength + '", only "' + (inputLength - offset) + '" remaining');
-      }
-      if (signature[offset++] !== ENCODED_TAG_INT) {
-        throw new Error('Could not find expected "int" for "r"');
-      }
-      var rLength = signature[offset++];
-      if (inputLength - offset - 2 < rLength) {
-        throw new Error('"r" specified length of "' + rLength + '", only "' + (inputLength - offset - 2) + '" available');
-      }
-      if (maxEncodedParamLength < rLength) {
-        throw new Error('"r" specified length of "' + rLength + '", max of "' + maxEncodedParamLength + '" is acceptable');
-      }
-      var rOffset = offset;
-      offset += rLength;
-      if (signature[offset++] !== ENCODED_TAG_INT) {
-        throw new Error('Could not find expected "int" for "s"');
-      }
-      var sLength = signature[offset++];
-      if (inputLength - offset !== sLength) {
-        throw new Error('"s" specified length of "' + sLength + '", expected "' + (inputLength - offset) + '"');
-      }
-      if (maxEncodedParamLength < sLength) {
-        throw new Error('"s" specified length of "' + sLength + '", max of "' + maxEncodedParamLength + '" is acceptable');
-      }
-      var sOffset = offset;
-      offset += sLength;
-      if (offset !== inputLength) {
-        throw new Error('Expected to consume entire buffer, but "' + (inputLength - offset) + '" bytes remain');
-      }
-      var rPadding = paramBytes - rLength, sPadding = paramBytes - sLength;
-      var dst = Buffer4.allocUnsafe(rPadding + rLength + sPadding + sLength);
-      for (offset = 0; offset < rPadding; ++offset) {
-        dst[offset] = 0;
-      }
-      signature.copy(dst, offset, rOffset + Math.max(-rPadding, 0), rOffset + rLength);
-      offset = paramBytes;
-      for (var o = offset; offset < o + sPadding; ++offset) {
-        dst[offset] = 0;
-      }
-      signature.copy(dst, offset, sOffset + Math.max(-sPadding, 0), sOffset + sLength);
-      dst = dst.toString("base64");
-      dst = base64Url(dst);
-      return dst;
-    }
-    function countPadding(buf, start, stop) {
-      var padding = 0;
-      while (start + padding < stop && buf[start + padding] === 0) {
-        ++padding;
-      }
-      var needsSign = buf[start + padding] >= MAX_OCTET;
-      if (needsSign) {
-        --padding;
-      }
-      return padding;
-    }
-    function joseToDer(signature, alg) {
-      signature = signatureAsBuffer(signature);
-      var paramBytes = getParamBytesForAlg(alg);
-      var signatureBytes = signature.length;
-      if (signatureBytes !== paramBytes * 2) {
-        throw new TypeError('"' + alg + '" signatures must be "' + paramBytes * 2 + '" bytes, saw "' + signatureBytes + '"');
-      }
-      var rPadding = countPadding(signature, 0, paramBytes);
-      var sPadding = countPadding(signature, paramBytes, signature.length);
-      var rLength = paramBytes - rPadding;
-      var sLength = paramBytes - sPadding;
-      var rsBytes = 1 + 1 + rLength + 1 + 1 + sLength;
-      var shortLength = rsBytes < MAX_OCTET;
-      var dst = Buffer4.allocUnsafe((shortLength ? 2 : 3) + rsBytes);
-      var offset = 0;
-      dst[offset++] = ENCODED_TAG_SEQ;
-      if (shortLength) {
-        dst[offset++] = rsBytes;
-      } else {
-        dst[offset++] = MAX_OCTET | 1;
-        dst[offset++] = rsBytes & 255;
-      }
-      dst[offset++] = ENCODED_TAG_INT;
-      dst[offset++] = rLength;
-      if (rPadding < 0) {
-        dst[offset++] = 0;
-        offset += signature.copy(dst, offset, 0, paramBytes);
-      } else {
-        offset += signature.copy(dst, offset, rPadding, paramBytes);
-      }
-      dst[offset++] = ENCODED_TAG_INT;
-      dst[offset++] = sLength;
-      if (sPadding < 0) {
-        dst[offset++] = 0;
-        signature.copy(dst, offset, paramBytes);
-      } else {
-        signature.copy(dst, offset, paramBytes + sPadding);
-      }
-      return dst;
-    }
-    module2.exports = {
-      derToJose,
-      joseToDer
-    };
-  }
-});
-
 // node_modules/googleapis-common/node_modules/google-auth-library/build/src/util.js
 var require_util3 = __commonJS({
   "node_modules/googleapis-common/node_modules/google-auth-library/build/src/util.js"(exports2) {
@@ -91416,9 +97332,9 @@ var require_authclient = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthClient = exports2.DEFAULT_EAGER_REFRESH_THRESHOLD_MILLIS = exports2.DEFAULT_UNIVERSE = void 0;
     var events_1 = require("events");
-    var gaxios_1 = require_src6();
+    var gaxios_1 = require_src7();
     var util_1 = require_util3();
-    var google_logging_utils_1 = require_src8();
+    var google_logging_utils_1 = require_src9();
     var shared_cjs_1 = require_shared2();
     exports2.DEFAULT_UNIVERSE = "googleapis.com";
     exports2.DEFAULT_EAGER_REFRESH_THRESHOLD_MILLIS = 5 * 60 * 1e3;
@@ -91702,7 +97618,7 @@ var require_oauth2client = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.OAuth2Client = exports2.ClientAuthentication = exports2.CertificateFormat = exports2.CodeChallengeMethod = void 0;
-    var gaxios_1 = require_src6();
+    var gaxios_1 = require_src7();
     var querystring = require("querystring");
     var stream = require("stream");
     var formatEcdsa = require_ecdsa_sig_formatter();
@@ -92383,8 +98299,8 @@ var require_computeclient = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.Compute = void 0;
-    var gaxios_1 = require_src6();
-    var gcpMetadata = require_src9();
+    var gaxios_1 = require_src7();
+    var gcpMetadata = require_src10();
     var oauth2client_1 = require_oauth2client();
     var Compute = class extends oauth2client_1.OAuth2Client {
       serviceAccountEmail;
@@ -92523,7 +98439,7 @@ var require_envDetect = __commonJS({
     exports2.GCPEnv = void 0;
     exports2.clear = clear;
     exports2.getEnv = getEnv;
-    var gcpMetadata = require_src9();
+    var gcpMetadata = require_src10();
     var GCPEnv;
     (function(GCPEnv2) {
       GCPEnv2["APP_ENGINE"] = "APP_ENGINE";
@@ -92592,551 +98508,8 @@ var require_envDetect = __commonJS({
   }
 });
 
-// node_modules/jws/lib/data-stream.js
-var require_data_stream = __commonJS({
-  "node_modules/jws/lib/data-stream.js"(exports2, module2) {
-    var Buffer4 = require_safe_buffer().Buffer;
-    var Stream3 = require("stream");
-    var util = require("util");
-    function DataStream(data) {
-      this.buffer = null;
-      this.writable = true;
-      this.readable = true;
-      if (!data) {
-        this.buffer = Buffer4.alloc(0);
-        return this;
-      }
-      if (typeof data.pipe === "function") {
-        this.buffer = Buffer4.alloc(0);
-        data.pipe(this);
-        return this;
-      }
-      if (data.length || typeof data === "object") {
-        this.buffer = data;
-        this.writable = false;
-        process.nextTick(function() {
-          this.emit("end", data);
-          this.readable = false;
-          this.emit("close");
-        }.bind(this));
-        return this;
-      }
-      throw new TypeError("Unexpected data type (" + typeof data + ")");
-    }
-    util.inherits(DataStream, Stream3);
-    DataStream.prototype.write = function write3(data) {
-      this.buffer = Buffer4.concat([this.buffer, Buffer4.from(data)]);
-      this.emit("data", data);
-    };
-    DataStream.prototype.end = function end(data) {
-      if (data)
-        this.write(data);
-      this.emit("end", data);
-      this.emit("close");
-      this.writable = false;
-      this.readable = false;
-    };
-    module2.exports = DataStream;
-  }
-});
-
-// node_modules/buffer-equal-constant-time/index.js
-var require_buffer_equal_constant_time = __commonJS({
-  "node_modules/buffer-equal-constant-time/index.js"(exports2, module2) {
-    "use strict";
-    var Buffer4 = require("buffer").Buffer;
-    var SlowBuffer = require("buffer").SlowBuffer;
-    module2.exports = bufferEq;
-    function bufferEq(a, b) {
-      if (!Buffer4.isBuffer(a) || !Buffer4.isBuffer(b)) {
-        return false;
-      }
-      if (a.length !== b.length) {
-        return false;
-      }
-      var c = 0;
-      for (var i2 = 0; i2 < a.length; i2++) {
-        c |= a[i2] ^ b[i2];
-      }
-      return c === 0;
-    }
-    bufferEq.install = function() {
-      Buffer4.prototype.equal = SlowBuffer.prototype.equal = function equal(that) {
-        return bufferEq(this, that);
-      };
-    };
-    var origBufEqual = Buffer4.prototype.equal;
-    var origSlowBufEqual = SlowBuffer.prototype.equal;
-    bufferEq.restore = function() {
-      Buffer4.prototype.equal = origBufEqual;
-      SlowBuffer.prototype.equal = origSlowBufEqual;
-    };
-  }
-});
-
-// node_modules/jwa/index.js
-var require_jwa = __commonJS({
-  "node_modules/jwa/index.js"(exports2, module2) {
-    var Buffer4 = require_safe_buffer().Buffer;
-    var crypto5 = require("crypto");
-    var formatEcdsa = require_ecdsa_sig_formatter();
-    var util = require("util");
-    var MSG_INVALID_ALGORITHM = '"%s" is not a valid algorithm.\n  Supported algorithms are:\n  "HS256", "HS384", "HS512", "RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES384", "ES512" and "none".';
-    var MSG_INVALID_SECRET = "secret must be a string or buffer";
-    var MSG_INVALID_VERIFIER_KEY = "key must be a string or a buffer";
-    var MSG_INVALID_SIGNER_KEY = "key must be a string, a buffer or an object";
-    var supportsKeyObjects = typeof crypto5.createPublicKey === "function";
-    if (supportsKeyObjects) {
-      MSG_INVALID_VERIFIER_KEY += " or a KeyObject";
-      MSG_INVALID_SECRET += "or a KeyObject";
-    }
-    function checkIsPublicKey(key) {
-      if (Buffer4.isBuffer(key)) {
-        return;
-      }
-      if (typeof key === "string") {
-        return;
-      }
-      if (!supportsKeyObjects) {
-        throw typeError(MSG_INVALID_VERIFIER_KEY);
-      }
-      if (typeof key !== "object") {
-        throw typeError(MSG_INVALID_VERIFIER_KEY);
-      }
-      if (typeof key.type !== "string") {
-        throw typeError(MSG_INVALID_VERIFIER_KEY);
-      }
-      if (typeof key.asymmetricKeyType !== "string") {
-        throw typeError(MSG_INVALID_VERIFIER_KEY);
-      }
-      if (typeof key.export !== "function") {
-        throw typeError(MSG_INVALID_VERIFIER_KEY);
-      }
-    }
-    function checkIsPrivateKey(key) {
-      if (Buffer4.isBuffer(key)) {
-        return;
-      }
-      if (typeof key === "string") {
-        return;
-      }
-      if (typeof key === "object") {
-        return;
-      }
-      throw typeError(MSG_INVALID_SIGNER_KEY);
-    }
-    function checkIsSecretKey(key) {
-      if (Buffer4.isBuffer(key)) {
-        return;
-      }
-      if (typeof key === "string") {
-        return key;
-      }
-      if (!supportsKeyObjects) {
-        throw typeError(MSG_INVALID_SECRET);
-      }
-      if (typeof key !== "object") {
-        throw typeError(MSG_INVALID_SECRET);
-      }
-      if (key.type !== "secret") {
-        throw typeError(MSG_INVALID_SECRET);
-      }
-      if (typeof key.export !== "function") {
-        throw typeError(MSG_INVALID_SECRET);
-      }
-    }
-    function fromBase64(base64) {
-      return base64.replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
-    }
-    function toBase64(base64url) {
-      base64url = base64url.toString();
-      var padding = 4 - base64url.length % 4;
-      if (padding !== 4) {
-        for (var i2 = 0; i2 < padding; ++i2) {
-          base64url += "=";
-        }
-      }
-      return base64url.replace(/\-/g, "+").replace(/_/g, "/");
-    }
-    function typeError(template) {
-      var args = [].slice.call(arguments, 1);
-      var errMsg = util.format.bind(util, template).apply(null, args);
-      return new TypeError(errMsg);
-    }
-    function bufferOrString(obj) {
-      return Buffer4.isBuffer(obj) || typeof obj === "string";
-    }
-    function normalizeInput(thing) {
-      if (!bufferOrString(thing))
-        thing = JSON.stringify(thing);
-      return thing;
-    }
-    function createHmacSigner(bits) {
-      return function sign(thing, secret) {
-        checkIsSecretKey(secret);
-        thing = normalizeInput(thing);
-        var hmac = crypto5.createHmac("sha" + bits, secret);
-        var sig = (hmac.update(thing), hmac.digest("base64"));
-        return fromBase64(sig);
-      };
-    }
-    var bufferEqual;
-    var timingSafeEqual = "timingSafeEqual" in crypto5 ? function timingSafeEqual2(a, b) {
-      if (a.byteLength !== b.byteLength) {
-        return false;
-      }
-      return crypto5.timingSafeEqual(a, b);
-    } : function timingSafeEqual2(a, b) {
-      if (!bufferEqual) {
-        bufferEqual = require_buffer_equal_constant_time();
-      }
-      return bufferEqual(a, b);
-    };
-    function createHmacVerifier(bits) {
-      return function verify(thing, signature, secret) {
-        var computedSig = createHmacSigner(bits)(thing, secret);
-        return timingSafeEqual(Buffer4.from(signature), Buffer4.from(computedSig));
-      };
-    }
-    function createKeySigner(bits) {
-      return function sign(thing, privateKey) {
-        checkIsPrivateKey(privateKey);
-        thing = normalizeInput(thing);
-        var signer = crypto5.createSign("RSA-SHA" + bits);
-        var sig = (signer.update(thing), signer.sign(privateKey, "base64"));
-        return fromBase64(sig);
-      };
-    }
-    function createKeyVerifier(bits) {
-      return function verify(thing, signature, publicKey) {
-        checkIsPublicKey(publicKey);
-        thing = normalizeInput(thing);
-        signature = toBase64(signature);
-        var verifier = crypto5.createVerify("RSA-SHA" + bits);
-        verifier.update(thing);
-        return verifier.verify(publicKey, signature, "base64");
-      };
-    }
-    function createPSSKeySigner(bits) {
-      return function sign(thing, privateKey) {
-        checkIsPrivateKey(privateKey);
-        thing = normalizeInput(thing);
-        var signer = crypto5.createSign("RSA-SHA" + bits);
-        var sig = (signer.update(thing), signer.sign({
-          key: privateKey,
-          padding: crypto5.constants.RSA_PKCS1_PSS_PADDING,
-          saltLength: crypto5.constants.RSA_PSS_SALTLEN_DIGEST
-        }, "base64"));
-        return fromBase64(sig);
-      };
-    }
-    function createPSSKeyVerifier(bits) {
-      return function verify(thing, signature, publicKey) {
-        checkIsPublicKey(publicKey);
-        thing = normalizeInput(thing);
-        signature = toBase64(signature);
-        var verifier = crypto5.createVerify("RSA-SHA" + bits);
-        verifier.update(thing);
-        return verifier.verify({
-          key: publicKey,
-          padding: crypto5.constants.RSA_PKCS1_PSS_PADDING,
-          saltLength: crypto5.constants.RSA_PSS_SALTLEN_DIGEST
-        }, signature, "base64");
-      };
-    }
-    function createECDSASigner(bits) {
-      var inner = createKeySigner(bits);
-      return function sign() {
-        var signature = inner.apply(null, arguments);
-        signature = formatEcdsa.derToJose(signature, "ES" + bits);
-        return signature;
-      };
-    }
-    function createECDSAVerifer(bits) {
-      var inner = createKeyVerifier(bits);
-      return function verify(thing, signature, publicKey) {
-        signature = formatEcdsa.joseToDer(signature, "ES" + bits).toString("base64");
-        var result = inner(thing, signature, publicKey);
-        return result;
-      };
-    }
-    function createNoneSigner() {
-      return function sign() {
-        return "";
-      };
-    }
-    function createNoneVerifier() {
-      return function verify(thing, signature) {
-        return signature === "";
-      };
-    }
-    module2.exports = function jwa(algorithm) {
-      var signerFactories = {
-        hs: createHmacSigner,
-        rs: createKeySigner,
-        ps: createPSSKeySigner,
-        es: createECDSASigner,
-        none: createNoneSigner
-      };
-      var verifierFactories = {
-        hs: createHmacVerifier,
-        rs: createKeyVerifier,
-        ps: createPSSKeyVerifier,
-        es: createECDSAVerifer,
-        none: createNoneVerifier
-      };
-      var match = algorithm.match(/^(RS|PS|ES|HS)(256|384|512)$|^(none)$/);
-      if (!match)
-        throw typeError(MSG_INVALID_ALGORITHM, algorithm);
-      var algo = (match[1] || match[3]).toLowerCase();
-      var bits = match[2];
-      return {
-        sign: signerFactories[algo](bits),
-        verify: verifierFactories[algo](bits)
-      };
-    };
-  }
-});
-
-// node_modules/jws/lib/tostring.js
-var require_tostring = __commonJS({
-  "node_modules/jws/lib/tostring.js"(exports2, module2) {
-    var Buffer4 = require("buffer").Buffer;
-    module2.exports = function toString2(obj) {
-      if (typeof obj === "string")
-        return obj;
-      if (typeof obj === "number" || Buffer4.isBuffer(obj))
-        return obj.toString();
-      return JSON.stringify(obj);
-    };
-  }
-});
-
-// node_modules/jws/lib/sign-stream.js
-var require_sign_stream = __commonJS({
-  "node_modules/jws/lib/sign-stream.js"(exports2, module2) {
-    var Buffer4 = require_safe_buffer().Buffer;
-    var DataStream = require_data_stream();
-    var jwa = require_jwa();
-    var Stream3 = require("stream");
-    var toString2 = require_tostring();
-    var util = require("util");
-    function base64url(string, encoding) {
-      return Buffer4.from(string, encoding).toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
-    }
-    function jwsSecuredInput(header, payload, encoding) {
-      encoding = encoding || "utf8";
-      var encodedHeader = base64url(toString2(header), "binary");
-      var encodedPayload = base64url(toString2(payload), encoding);
-      return util.format("%s.%s", encodedHeader, encodedPayload);
-    }
-    function jwsSign(opts) {
-      var header = opts.header;
-      var payload = opts.payload;
-      var secretOrKey = opts.secret || opts.privateKey;
-      var encoding = opts.encoding;
-      var algo = jwa(header.alg);
-      var securedInput = jwsSecuredInput(header, payload, encoding);
-      var signature = algo.sign(securedInput, secretOrKey);
-      return util.format("%s.%s", securedInput, signature);
-    }
-    function SignStream(opts) {
-      var secret = opts.secret;
-      secret = secret == null ? opts.privateKey : secret;
-      secret = secret == null ? opts.key : secret;
-      if (/^hs/i.test(opts.header.alg) === true && secret == null) {
-        throw new TypeError("secret must be a string or buffer or a KeyObject");
-      }
-      var secretStream = new DataStream(secret);
-      this.readable = true;
-      this.header = opts.header;
-      this.encoding = opts.encoding;
-      this.secret = this.privateKey = this.key = secretStream;
-      this.payload = new DataStream(opts.payload);
-      this.secret.once("close", function() {
-        if (!this.payload.writable && this.readable)
-          this.sign();
-      }.bind(this));
-      this.payload.once("close", function() {
-        if (!this.secret.writable && this.readable)
-          this.sign();
-      }.bind(this));
-    }
-    util.inherits(SignStream, Stream3);
-    SignStream.prototype.sign = function sign() {
-      try {
-        var signature = jwsSign({
-          header: this.header,
-          payload: this.payload.buffer,
-          secret: this.secret.buffer,
-          encoding: this.encoding
-        });
-        this.emit("done", signature);
-        this.emit("data", signature);
-        this.emit("end");
-        this.readable = false;
-        return signature;
-      } catch (e2) {
-        this.readable = false;
-        this.emit("error", e2);
-        this.emit("close");
-      }
-    };
-    SignStream.sign = jwsSign;
-    module2.exports = SignStream;
-  }
-});
-
-// node_modules/jws/lib/verify-stream.js
-var require_verify_stream = __commonJS({
-  "node_modules/jws/lib/verify-stream.js"(exports2, module2) {
-    var Buffer4 = require_safe_buffer().Buffer;
-    var DataStream = require_data_stream();
-    var jwa = require_jwa();
-    var Stream3 = require("stream");
-    var toString2 = require_tostring();
-    var util = require("util");
-    var JWS_REGEX = /^[a-zA-Z0-9\-_]+?\.[a-zA-Z0-9\-_]+?\.([a-zA-Z0-9\-_]+)?$/;
-    function isObject(thing) {
-      return Object.prototype.toString.call(thing) === "[object Object]";
-    }
-    function safeJsonParse(thing) {
-      if (isObject(thing))
-        return thing;
-      try {
-        return JSON.parse(thing);
-      } catch (e2) {
-        return void 0;
-      }
-    }
-    function headerFromJWS(jwsSig) {
-      var encodedHeader = jwsSig.split(".", 1)[0];
-      return safeJsonParse(Buffer4.from(encodedHeader, "base64").toString("binary"));
-    }
-    function securedInputFromJWS(jwsSig) {
-      return jwsSig.split(".", 2).join(".");
-    }
-    function signatureFromJWS(jwsSig) {
-      return jwsSig.split(".")[2];
-    }
-    function payloadFromJWS(jwsSig, encoding) {
-      encoding = encoding || "utf8";
-      var payload = jwsSig.split(".")[1];
-      return Buffer4.from(payload, "base64").toString(encoding);
-    }
-    function isValidJws(string) {
-      return JWS_REGEX.test(string) && !!headerFromJWS(string);
-    }
-    function jwsVerify(jwsSig, algorithm, secretOrKey) {
-      if (!algorithm) {
-        var err = new Error("Missing algorithm parameter for jws.verify");
-        err.code = "MISSING_ALGORITHM";
-        throw err;
-      }
-      jwsSig = toString2(jwsSig);
-      var signature = signatureFromJWS(jwsSig);
-      var securedInput = securedInputFromJWS(jwsSig);
-      var algo = jwa(algorithm);
-      return algo.verify(securedInput, signature, secretOrKey);
-    }
-    function jwsDecode(jwsSig, opts) {
-      opts = opts || {};
-      jwsSig = toString2(jwsSig);
-      if (!isValidJws(jwsSig))
-        return null;
-      var header = headerFromJWS(jwsSig);
-      if (!header)
-        return null;
-      var payload = payloadFromJWS(jwsSig);
-      if (header.typ === "JWT" || opts.json)
-        payload = JSON.parse(payload, opts.encoding);
-      return {
-        header,
-        payload,
-        signature: signatureFromJWS(jwsSig)
-      };
-    }
-    function VerifyStream(opts) {
-      opts = opts || {};
-      var secretOrKey = opts.secret;
-      secretOrKey = secretOrKey == null ? opts.publicKey : secretOrKey;
-      secretOrKey = secretOrKey == null ? opts.key : secretOrKey;
-      if (/^hs/i.test(opts.algorithm) === true && secretOrKey == null) {
-        throw new TypeError("secret must be a string or buffer or a KeyObject");
-      }
-      var secretStream = new DataStream(secretOrKey);
-      this.readable = true;
-      this.algorithm = opts.algorithm;
-      this.encoding = opts.encoding;
-      this.secret = this.publicKey = this.key = secretStream;
-      this.signature = new DataStream(opts.signature);
-      this.secret.once("close", function() {
-        if (!this.signature.writable && this.readable)
-          this.verify();
-      }.bind(this));
-      this.signature.once("close", function() {
-        if (!this.secret.writable && this.readable)
-          this.verify();
-      }.bind(this));
-    }
-    util.inherits(VerifyStream, Stream3);
-    VerifyStream.prototype.verify = function verify() {
-      try {
-        var valid = jwsVerify(this.signature.buffer, this.algorithm, this.key.buffer);
-        var obj = jwsDecode(this.signature.buffer, this.encoding);
-        this.emit("done", valid, obj);
-        this.emit("data", valid);
-        this.emit("end");
-        this.readable = false;
-        return valid;
-      } catch (e2) {
-        this.readable = false;
-        this.emit("error", e2);
-        this.emit("close");
-      }
-    };
-    VerifyStream.decode = jwsDecode;
-    VerifyStream.isValid = isValidJws;
-    VerifyStream.verify = jwsVerify;
-    module2.exports = VerifyStream;
-  }
-});
-
-// node_modules/jws/index.js
-var require_jws = __commonJS({
-  "node_modules/jws/index.js"(exports2) {
-    var SignStream = require_sign_stream();
-    var VerifyStream = require_verify_stream();
-    var ALGORITHMS = [
-      "HS256",
-      "HS384",
-      "HS512",
-      "RS256",
-      "RS384",
-      "RS512",
-      "PS256",
-      "PS384",
-      "PS512",
-      "ES256",
-      "ES384",
-      "ES512"
-    ];
-    exports2.ALGORITHMS = ALGORITHMS;
-    exports2.sign = SignStream.sign;
-    exports2.verify = VerifyStream.verify;
-    exports2.decode = VerifyStream.decode;
-    exports2.isValid = VerifyStream.isValid;
-    exports2.createSign = function createSign(opts) {
-      return new SignStream(opts);
-    };
-    exports2.createVerify = function createVerify(opts) {
-      return new VerifyStream(opts);
-    };
-  }
-});
-
 // node_modules/gtoken/build/cjs/src/index.cjs
-var require_src10 = __commonJS({
+var require_src11 = __commonJS({
   "node_modules/gtoken/build/cjs/src/index.cjs"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", {
@@ -93144,7 +98517,7 @@ var require_src10 = __commonJS({
     });
     exports2.GoogleToken = void 0;
     var fs3 = _interopRequireWildcard(require("fs"));
-    var _gaxios = require_src7();
+    var _gaxios = require_src8();
     var jws = _interopRequireWildcard(require_jws());
     var path3 = _interopRequireWildcard(require("path"));
     var _util = require("util");
@@ -93950,7 +99323,7 @@ var require_jwtclient = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.JWT = void 0;
-    var gtoken_1 = require_src10();
+    var gtoken_1 = require_src11();
     var jwtaccess_1 = require_jwtaccess();
     var oauth2client_1 = require_oauth2client();
     var authclient_1 = require_authclient();
@@ -94349,7 +99722,7 @@ var require_impersonated = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.Impersonated = exports2.IMPERSONATED_ACCOUNT_TYPE = void 0;
     var oauth2client_1 = require_oauth2client();
-    var gaxios_1 = require_src6();
+    var gaxios_1 = require_src7();
     var util_1 = require_util3();
     exports2.IMPERSONATED_ACCOUNT_TYPE = "impersonated_service_account";
     var Impersonated = class _Impersonated extends oauth2client_1.OAuth2Client {
@@ -94528,7 +99901,7 @@ var require_oauth2common = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.OAuthClientAuthHandler = void 0;
     exports2.getErrorFromOAuthErrorResponse = getErrorFromOAuthErrorResponse;
-    var gaxios_1 = require_src6();
+    var gaxios_1 = require_src7();
     var crypto_1 = require_crypto3();
     var METHODS_SUPPORTING_REQUEST_BODY = ["PUT", "POST", "PATCH"];
     var OAuthClientAuthHandler = class {
@@ -94675,7 +100048,7 @@ var require_stscredentials = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.StsCredentials = void 0;
-    var gaxios_1 = require_src6();
+    var gaxios_1 = require_src7();
     var authclient_1 = require_authclient();
     var oauth2common_1 = require_oauth2common();
     var util_1 = require_util3();
@@ -94762,7 +100135,7 @@ var require_baseexternalclient = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.BaseExternalAccountClient = exports2.CLOUD_RESOURCE_MANAGER = exports2.EXTERNAL_ACCOUNT_TYPE = exports2.EXPIRATION_TIME_OFFSET = void 0;
-    var gaxios_1 = require_src6();
+    var gaxios_1 = require_src7();
     var stream = require("stream");
     var authclient_1 = require_authclient();
     var sts = require_stscredentials();
@@ -95451,7 +100824,7 @@ var require_identitypoolclient = __commonJS({
     var urlsubjecttokensupplier_1 = require_urlsubjecttokensupplier();
     var certificatesubjecttokensupplier_1 = require_certificatesubjecttokensupplier();
     var stscredentials_1 = require_stscredentials();
-    var gaxios_1 = require_src6();
+    var gaxios_1 = require_src7();
     var IdentityPoolClient = class _IdentityPoolClient extends baseexternalclient_1.BaseExternalAccountClient {
       subjectTokenSupplier;
       /**
@@ -95557,7 +100930,7 @@ var require_awsrequestsigner = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AwsRequestSigner = void 0;
-    var gaxios_1 = require_src6();
+    var gaxios_1 = require_src7();
     var crypto_1 = require_crypto3();
     var AWS_ALGORITHM = "AWS4-HMAC-SHA256";
     var AWS_REQUEST_TYPE = "aws4_request";
@@ -95862,7 +101235,7 @@ var require_awsclient = __commonJS({
     var baseexternalclient_1 = require_baseexternalclient();
     var defaultawssecuritycredentialssupplier_1 = require_defaultawssecuritycredentialssupplier();
     var util_1 = require_util3();
-    var gaxios_1 = require_src6();
+    var gaxios_1 = require_src7();
     var AwsClient = class _AwsClient extends baseexternalclient_1.BaseExternalAccountClient {
       environmentId;
       awsSecurityCredentialsSupplier;
@@ -96422,7 +101795,7 @@ var require_externalAccountAuthorizedUserClient = __commonJS({
     exports2.ExternalAccountAuthorizedUserClient = exports2.EXTERNAL_ACCOUNT_AUTHORIZED_USER_TYPE = void 0;
     var authclient_1 = require_authclient();
     var oauth2common_1 = require_oauth2common();
-    var gaxios_1 = require_src6();
+    var gaxios_1 = require_src7();
     var stream = require("stream");
     var baseexternalclient_1 = require_baseexternalclient();
     exports2.EXTERNAL_ACCOUNT_AUTHORIZED_USER_TYPE = "external_account_authorized_user";
@@ -96608,8 +101981,8 @@ var require_googleauth = __commonJS({
     exports2.GoogleAuth = exports2.GoogleAuthExceptionMessages = void 0;
     var child_process_1 = require("child_process");
     var fs3 = require("fs");
-    var gaxios_1 = require_src6();
-    var gcpMetadata = require_src9();
+    var gaxios_1 = require_src7();
+    var gcpMetadata = require_src10();
     var os = require("os");
     var path3 = require("path");
     var crypto_1 = require_crypto3();
@@ -97432,7 +102805,7 @@ var require_downscopedclient = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.DownscopedClient = exports2.EXPIRATION_TIME_OFFSET = exports2.MAX_ACCESS_BOUNDARY_RULES_COUNT = void 0;
-    var gaxios_1 = require_src6();
+    var gaxios_1 = require_src7();
     var stream = require("stream");
     var authclient_1 = require_authclient();
     var sts = require_stscredentials();
@@ -97657,7 +103030,7 @@ var require_passthrough = __commonJS({
 });
 
 // node_modules/googleapis-common/node_modules/google-auth-library/build/src/index.js
-var require_src11 = __commonJS({
+var require_src12 = __commonJS({
   "node_modules/googleapis-common/node_modules/google-auth-library/build/src/index.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
@@ -97666,8 +103039,8 @@ var require_src11 = __commonJS({
     Object.defineProperty(exports2, "GoogleAuth", { enumerable: true, get: function() {
       return googleauth_1.GoogleAuth;
     } });
-    exports2.gcpMetadata = require_src9();
-    exports2.gaxios = require_src6();
+    exports2.gcpMetadata = require_src10();
+    exports2.gaxios = require_src7();
     var authclient_1 = require_authclient();
     Object.defineProperty(exports2, "AuthClient", { enumerable: true, get: function() {
       return authclient_1.AuthClient;
@@ -98264,7 +103637,7 @@ var require_apirequest = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.createAPIRequest = createAPIRequest;
-    var gaxios_1 = require_src6();
+    var gaxios_1 = require_src7();
     var qs = require_lib2();
     var stream = require("stream");
     var urlTemplate = require_url_template();
@@ -98527,7 +103900,7 @@ var require_authplus = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = void 0;
-    var google_auth_library_1 = require_src11();
+    var google_auth_library_1 = require_src12();
     var AuthPlus = class extends google_auth_library_1.GoogleAuth {
       JWT = google_auth_library_1.JWT;
       Compute = google_auth_library_1.Compute;
@@ -98676,7 +104049,7 @@ var require_discovery = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.Discovery = void 0;
     var fs3 = require("fs");
-    var gaxios_1 = require_src6();
+    var gaxios_1 = require_src7();
     var resolve = require("url");
     var util = require("util");
     var apirequest_1 = require_apirequest();
@@ -98800,7 +104173,7 @@ var require_discovery = __commonJS({
 });
 
 // node_modules/googleapis-common/build/src/index.js
-var require_src12 = __commonJS({
+var require_src13 = __commonJS({
   "node_modules/googleapis-common/build/src/index.js"(exports2) {
     "use strict";
     var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m2, k, k2) {
@@ -98821,9 +104194,9 @@ var require_src12 = __commonJS({
     };
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.Endpoint = exports2.Discovery = exports2.AuthPlus = exports2.createAPIRequest = exports2.getAPI = exports2.GaxiosError = exports2.Gaxios = exports2.AwsClient = exports2.IdentityPoolClient = exports2.BaseExternalAccountClient = exports2.ExternalAccountClient = exports2.GoogleAuth = exports2.UserRefreshClient = exports2.Compute = exports2.JWT = exports2.OAuth2Client = exports2.gaxios = exports2.googleAuthLibrary = void 0;
-    exports2.googleAuthLibrary = require_src11();
-    exports2.gaxios = require_src6();
-    var google_auth_library_1 = require_src11();
+    exports2.googleAuthLibrary = require_src12();
+    exports2.gaxios = require_src7();
+    var google_auth_library_1 = require_src12();
     Object.defineProperty(exports2, "OAuth2Client", { enumerable: true, get: function() {
       return google_auth_library_1.OAuth2Client;
     } });
@@ -98851,7 +104224,7 @@ var require_src12 = __commonJS({
     Object.defineProperty(exports2, "AwsClient", { enumerable: true, get: function() {
       return google_auth_library_1.AwsClient;
     } });
-    var gaxios_1 = require_src6();
+    var gaxios_1 = require_src7();
     Object.defineProperty(exports2, "Gaxios", { enumerable: true, get: function() {
       return gaxios_1.Gaxios;
     } });
@@ -98888,7 +104261,7 @@ var require_v1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.abusiveexperiencereport_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var abusiveexperiencereport_v1;
     (function(abusiveexperiencereport_v12) {
       class Abusiveexperiencereport {
@@ -98990,7 +104363,7 @@ var require_abusiveexperiencereport = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.abusiveexperiencereport_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.abusiveexperiencereport = abusiveexperiencereport;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1();
     Object.defineProperty(exports2, "abusiveexperiencereport_v1", { enumerable: true, get: function() {
       return v1_1.abusiveexperiencereport_v1;
@@ -99003,7 +104376,7 @@ var require_abusiveexperiencereport = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -99016,7 +104389,7 @@ var require_v12 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.acceleratedmobilepageurl_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var acceleratedmobilepageurl_v1;
     (function(acceleratedmobilepageurl_v12) {
       class Acceleratedmobilepageurl {
@@ -99079,7 +104452,7 @@ var require_acceleratedmobilepageurl = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.acceleratedmobilepageurl_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.acceleratedmobilepageurl = acceleratedmobilepageurl;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v12();
     Object.defineProperty(exports2, "acceleratedmobilepageurl_v1", { enumerable: true, get: function() {
       return v1_1.acceleratedmobilepageurl_v1;
@@ -99092,7 +104465,7 @@ var require_acceleratedmobilepageurl = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -99105,7 +104478,7 @@ var require_v13 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.accessapproval_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var accessapproval_v1;
     (function(accessapproval_v12) {
       class Accessapproval {
@@ -99992,7 +105365,7 @@ var require_v1beta1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.accessapproval_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var accessapproval_v1beta1;
     (function(accessapproval_v1beta12) {
       class Accessapproval {
@@ -100679,7 +106052,7 @@ var require_accessapproval = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.accessapproval_v1beta1 = exports2.accessapproval_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.accessapproval = accessapproval;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v13();
     Object.defineProperty(exports2, "accessapproval_v1", { enumerable: true, get: function() {
       return v1_1.accessapproval_v1;
@@ -100697,7 +106070,7 @@ var require_accessapproval = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -100710,7 +106083,7 @@ var require_v14 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.accesscontextmanager_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var accesscontextmanager_v1;
     (function(accesscontextmanager_v12) {
       class Accesscontextmanager {
@@ -101975,7 +107348,7 @@ var require_v1beta = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.accesscontextmanager_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var accesscontextmanager_v1beta;
     (function(accesscontextmanager_v1beta2) {
       class Accesscontextmanager {
@@ -102499,7 +107872,7 @@ var require_accesscontextmanager = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.accesscontextmanager_v1beta = exports2.accesscontextmanager_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.accesscontextmanager = accesscontextmanager;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v14();
     Object.defineProperty(exports2, "accesscontextmanager_v1", { enumerable: true, get: function() {
       return v1_1.accesscontextmanager_v1;
@@ -102517,7 +107890,7 @@ var require_accesscontextmanager = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -102530,7 +107903,7 @@ var require_v15 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.acmedns_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var acmedns_v1;
     (function(acmedns_v12) {
       class Acmedns {
@@ -102623,7 +107996,7 @@ var require_acmedns = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.acmedns_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.acmedns = acmedns;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v15();
     Object.defineProperty(exports2, "acmedns_v1", { enumerable: true, get: function() {
       return v1_1.acmedns_v1;
@@ -102636,7 +108009,7 @@ var require_acmedns = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -102649,7 +108022,7 @@ var require_v16 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.addressvalidation_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var addressvalidation_v1;
     (function(addressvalidation_v12) {
       class Addressvalidation {
@@ -102742,7 +108115,7 @@ var require_addressvalidation = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.addressvalidation_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.addressvalidation = addressvalidation;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v16();
     Object.defineProperty(exports2, "addressvalidation_v1", { enumerable: true, get: function() {
       return v1_1.addressvalidation_v1;
@@ -102755,7 +108128,7 @@ var require_addressvalidation = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -102768,7 +108141,7 @@ var require_v1_2 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.adexchangebuyer_v1_2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var adexchangebuyer_v1_2;
     (function(adexchangebuyer_v1_22) {
       class Adexchangebuyer {
@@ -103012,7 +108385,7 @@ var require_v1_3 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.adexchangebuyer_v1_3 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var adexchangebuyer_v1_3;
     (function(adexchangebuyer_v1_32) {
       class Adexchangebuyer {
@@ -103707,7 +109080,7 @@ var require_v1_4 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.adexchangebuyer_v1_4 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var adexchangebuyer_v1_4;
     (function(adexchangebuyer_v1_42) {
       class Adexchangebuyer {
@@ -104941,7 +110314,7 @@ var require_adexchangebuyer = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.adexchangebuyer_v1_4 = exports2.adexchangebuyer_v1_3 = exports2.adexchangebuyer_v1_2 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.adexchangebuyer = adexchangebuyer;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_2_1 = require_v1_2();
     Object.defineProperty(exports2, "adexchangebuyer_v1_2", { enumerable: true, get: function() {
       return v1_2_1.adexchangebuyer_v1_2;
@@ -104964,7 +110337,7 @@ var require_adexchangebuyer = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -104977,7 +110350,7 @@ var require_v2beta1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.adexchangebuyer2_v2beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var adexchangebuyer2_v2beta1;
     (function(adexchangebuyer2_v2beta12) {
       class Adexchangebuyer2 {
@@ -107755,7 +113128,7 @@ var require_adexchangebuyer2 = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.adexchangebuyer2_v2beta1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.adexchangebuyer2 = adexchangebuyer2;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v2beta1_1 = require_v2beta1();
     Object.defineProperty(exports2, "adexchangebuyer2_v2beta1", { enumerable: true, get: function() {
       return v2beta1_1.adexchangebuyer2_v2beta1;
@@ -107768,7 +113141,7 @@ var require_adexchangebuyer2 = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -107781,7 +113154,7 @@ var require_v17 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.adexperiencereport_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var adexperiencereport_v1;
     (function(adexperiencereport_v12) {
       class Adexperiencereport {
@@ -107883,7 +113256,7 @@ var require_adexperiencereport = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.adexperiencereport_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.adexperiencereport = adexperiencereport;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v17();
     Object.defineProperty(exports2, "adexperiencereport_v1", { enumerable: true, get: function() {
       return v1_1.adexperiencereport_v1;
@@ -107896,7 +113269,7 @@ var require_adexperiencereport = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -107909,7 +113282,7 @@ var require_datatransfer_v1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.admin_datatransfer_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var admin_datatransfer_v1;
     (function(admin_datatransfer_v12) {
       class Admin {
@@ -108100,7 +113473,7 @@ var require_directory_v1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.admin_directory_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var admin_directory_v1;
     (function(admin_directory_v12) {
       class Admin {
@@ -112191,7 +117564,7 @@ var require_reports_v1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.admin_reports_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var admin_reports_v1;
     (function(admin_reports_v12) {
       class Admin {
@@ -112440,7 +117813,7 @@ var require_admin = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.admin_reports_v1 = exports2.admin_directory_v1 = exports2.admin_datatransfer_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.admin = admin;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var datatransfer_v1_1 = require_datatransfer_v1();
     Object.defineProperty(exports2, "admin_datatransfer_v1", { enumerable: true, get: function() {
       return datatransfer_v1_1.admin_datatransfer_v1;
@@ -112463,7 +117836,7 @@ var require_admin = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -112476,7 +117849,7 @@ var require_v18 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.admob_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var admob_v1;
     (function(admob_v12) {
       class Admob {
@@ -112724,7 +118097,7 @@ var require_v1beta2 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.admob_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var admob_v1beta;
     (function(admob_v1beta2) {
       class Admob {
@@ -113426,7 +118799,7 @@ var require_admob = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.admob_v1beta = exports2.admob_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.admob = admob;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v18();
     Object.defineProperty(exports2, "admob_v1", { enumerable: true, get: function() {
       return v1_1.admob_v1;
@@ -113444,7 +118817,7 @@ var require_admob = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -113457,7 +118830,7 @@ var require_v1_42 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.adsense_v1_4 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var adsense_v1_4;
     (function(adsense_v1_42) {
       class Adsense {
@@ -114845,7 +120218,7 @@ var require_v2 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.adsense_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var adsense_v2;
     (function(adsense_v22) {
       class Adsense {
@@ -115958,7 +121331,7 @@ var require_adsense = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.adsense_v2 = exports2.adsense_v1_4 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.adsense = adsense;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_4_1 = require_v1_42();
     Object.defineProperty(exports2, "adsense_v1_4", { enumerable: true, get: function() {
       return v1_4_1.adsense_v1_4;
@@ -115976,7 +121349,7 @@ var require_adsense = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -115989,7 +121362,7 @@ var require_v4_1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.adsensehost_v4_1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var adsensehost_v4_1;
     (function(adsensehost_v4_12) {
       class Adsensehost {
@@ -116874,7 +122247,7 @@ var require_adsensehost = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.adsensehost_v4_1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.adsensehost = adsensehost;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v4_1_1 = require_v4_1();
     Object.defineProperty(exports2, "adsensehost_v4_1", { enumerable: true, get: function() {
       return v4_1_1.adsensehost_v4_1;
@@ -116887,7 +122260,7 @@ var require_adsensehost = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -116900,7 +122273,7 @@ var require_v19 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.adsenseplatform_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var adsenseplatform_v1;
     (function(adsenseplatform_v12) {
       class Adsenseplatform {
@@ -117289,7 +122662,7 @@ var require_v1alpha = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.adsenseplatform_v1alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var adsenseplatform_v1alpha;
     (function(adsenseplatform_v1alpha2) {
       class Adsenseplatform {
@@ -117964,7 +123337,7 @@ var require_adsenseplatform = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.adsenseplatform_v1alpha = exports2.adsenseplatform_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.adsenseplatform = adsenseplatform;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v19();
     Object.defineProperty(exports2, "adsenseplatform_v1", { enumerable: true, get: function() {
       return v1_1.adsenseplatform_v1;
@@ -117982,7 +123355,7 @@ var require_adsenseplatform = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -117995,7 +123368,7 @@ var require_v110 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.advisorynotifications_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var advisorynotifications_v1;
     (function(advisorynotifications_v12) {
       class Advisorynotifications {
@@ -118313,7 +123686,7 @@ var require_advisorynotifications = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.advisorynotifications_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.advisorynotifications = advisorynotifications;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v110();
     Object.defineProperty(exports2, "advisorynotifications_v1", { enumerable: true, get: function() {
       return v1_1.advisorynotifications_v1;
@@ -118326,7 +123699,7 @@ var require_advisorynotifications = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -118339,7 +123712,7 @@ var require_v111 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.aiplatform_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var aiplatform_v1;
     (function(aiplatform_v12) {
       class Aiplatform {
@@ -138328,7 +143701,7 @@ var require_v1beta12 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.aiplatform_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var aiplatform_v1beta1;
     (function(aiplatform_v1beta12) {
       class Aiplatform {
@@ -163487,7 +168860,7 @@ var require_aiplatform = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.aiplatform_v1beta1 = exports2.aiplatform_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.aiplatform = aiplatform;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v111();
     Object.defineProperty(exports2, "aiplatform_v1", { enumerable: true, get: function() {
       return v1_1.aiplatform_v1;
@@ -163505,7 +168878,7 @@ var require_aiplatform = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -163518,7 +168891,7 @@ var require_v112 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.airquality_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var airquality_v1;
     (function(airquality_v12) {
       class Airquality {
@@ -163707,7 +169080,7 @@ var require_airquality = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.airquality_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.airquality = airquality;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v112();
     Object.defineProperty(exports2, "airquality_v1", { enumerable: true, get: function() {
       return v1_1.airquality_v1;
@@ -163720,7 +169093,7 @@ var require_airquality = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -163733,7 +169106,7 @@ var require_v1beta13 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.alertcenter_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var alertcenter_v1beta1;
     (function(alertcenter_v1beta12) {
       class Alertcenter {
@@ -164114,7 +169487,7 @@ var require_alertcenter = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.alertcenter_v1beta1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.alertcenter = alertcenter;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1beta1_1 = require_v1beta13();
     Object.defineProperty(exports2, "alertcenter_v1beta1", { enumerable: true, get: function() {
       return v1beta1_1.alertcenter_v1beta1;
@@ -164127,7 +169500,7 @@ var require_alertcenter = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -164140,7 +169513,7 @@ var require_v113 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.alloydb_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var alloydb_v1;
     (function(alloydb_v12) {
       class Alloydb {
@@ -165435,7 +170808,7 @@ var require_v1alpha2 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.alloydb_v1alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var alloydb_v1alpha;
     (function(alloydb_v1alpha2) {
       class Alloydb {
@@ -166730,7 +172103,7 @@ var require_v1beta3 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.alloydb_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var alloydb_v1beta;
     (function(alloydb_v1beta2) {
       class Alloydb {
@@ -168026,7 +173399,7 @@ var require_alloydb = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.alloydb_v1beta = exports2.alloydb_v1alpha = exports2.alloydb_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.alloydb = alloydb;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v113();
     Object.defineProperty(exports2, "alloydb_v1", { enumerable: true, get: function() {
       return v1_1.alloydb_v1;
@@ -168049,7 +173422,7 @@ var require_alloydb = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -168062,7 +173435,7 @@ var require_v3 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.analytics_v3 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var analytics_v3;
     (function(analytics_v32) {
       class Analytics {
@@ -171063,7 +176436,7 @@ var require_analytics = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.analytics_v3 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.analytics = analytics;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v3_1 = require_v3();
     Object.defineProperty(exports2, "analytics_v3", { enumerable: true, get: function() {
       return v3_1.analytics_v3;
@@ -171076,7 +176449,7 @@ var require_analytics = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -171089,7 +176462,7 @@ var require_v1alpha3 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.analyticsadmin_v1alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var analyticsadmin_v1alpha;
     (function(analyticsadmin_v1alpha2) {
       class Analyticsadmin {
@@ -176293,7 +181666,7 @@ var require_v1beta4 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.analyticsadmin_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var analyticsadmin_v1beta;
     (function(analyticsadmin_v1beta2) {
       class Analyticsadmin {
@@ -178066,7 +183439,7 @@ var require_analyticsadmin = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.analyticsadmin_v1beta = exports2.analyticsadmin_v1alpha = exports2.auth = exports2.VERSIONS = void 0;
     exports2.analyticsadmin = analyticsadmin;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1alpha_1 = require_v1alpha3();
     Object.defineProperty(exports2, "analyticsadmin_v1alpha", { enumerable: true, get: function() {
       return v1alpha_1.analyticsadmin_v1alpha;
@@ -178084,7 +183457,7 @@ var require_analyticsadmin = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -178097,7 +183470,7 @@ var require_v1alpha4 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.analyticsdata_v1alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var analyticsdata_v1alpha;
     (function(analyticsdata_v1alpha2) {
       class Analyticsdata {
@@ -178312,7 +183685,7 @@ var require_v1beta5 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.analyticsdata_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var analyticsdata_v1beta;
     (function(analyticsdata_v1beta2) {
       class Analyticsdata {
@@ -178684,7 +184057,7 @@ var require_analyticsdata = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.analyticsdata_v1beta = exports2.analyticsdata_v1alpha = exports2.auth = exports2.VERSIONS = void 0;
     exports2.analyticsdata = analyticsdata;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1alpha_1 = require_v1alpha4();
     Object.defineProperty(exports2, "analyticsdata_v1alpha", { enumerable: true, get: function() {
       return v1alpha_1.analyticsdata_v1alpha;
@@ -178702,7 +184075,7 @@ var require_analyticsdata = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -178715,7 +184088,7 @@ var require_v114 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.analyticshub_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var analyticshub_v1;
     (function(analyticshub_v12) {
       class Analyticshub {
@@ -179869,7 +185242,7 @@ var require_v1beta14 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.analyticshub_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var analyticshub_v1beta1;
     (function(analyticshub_v1beta12) {
       class Analyticshub {
@@ -180496,7 +185869,7 @@ var require_analyticshub = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.analyticshub_v1beta1 = exports2.analyticshub_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.analyticshub = analyticshub;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v114();
     Object.defineProperty(exports2, "analyticshub_v1", { enumerable: true, get: function() {
       return v1_1.analyticshub_v1;
@@ -180514,7 +185887,7 @@ var require_analyticshub = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -180527,7 +185900,7 @@ var require_v4 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.analyticsreporting_v4 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var analyticsreporting_v4;
     (function(analyticsreporting_v42) {
       class Analyticsreporting {
@@ -180629,7 +186002,7 @@ var require_analyticsreporting = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.analyticsreporting_v4 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.analyticsreporting = analyticsreporting;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v4_1 = require_v4();
     Object.defineProperty(exports2, "analyticsreporting_v4", { enumerable: true, get: function() {
       return v4_1.analyticsreporting_v4;
@@ -180642,7 +186015,7 @@ var require_analyticsreporting = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -180655,7 +186028,7 @@ var require_v115 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.androiddeviceprovisioning_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var androiddeviceprovisioning_v1;
     (function(androiddeviceprovisioning_v12) {
       class Androiddeviceprovisioning {
@@ -181579,7 +186952,7 @@ var require_androiddeviceprovisioning = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.androiddeviceprovisioning_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.androiddeviceprovisioning = androiddeviceprovisioning;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v115();
     Object.defineProperty(exports2, "androiddeviceprovisioning_v1", { enumerable: true, get: function() {
       return v1_1.androiddeviceprovisioning_v1;
@@ -181592,7 +186965,7 @@ var require_androiddeviceprovisioning = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -181605,7 +186978,7 @@ var require_v116 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.androidenterprise_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var androidenterprise_v1;
     (function(androidenterprise_v12) {
       class Androidenterprise {
@@ -184134,7 +189507,7 @@ var require_androidenterprise = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.androidenterprise_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.androidenterprise = androidenterprise;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v116();
     Object.defineProperty(exports2, "androidenterprise_v1", { enumerable: true, get: function() {
       return v1_1.androidenterprise_v1;
@@ -184147,7 +189520,7 @@ var require_androidenterprise = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -184160,7 +189533,7 @@ var require_v117 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.androidmanagement_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var androidmanagement_v1;
     (function(androidmanagement_v12) {
       class Androidmanagement {
@@ -185363,7 +190736,7 @@ var require_androidmanagement = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.androidmanagement_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.androidmanagement = androidmanagement;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v117();
     Object.defineProperty(exports2, "androidmanagement_v1", { enumerable: true, get: function() {
       return v1_1.androidmanagement_v1;
@@ -185376,7 +190749,7 @@ var require_androidmanagement = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -185389,7 +190762,7 @@ var require_v1_1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.androidpublisher_v1_1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var androidpublisher_v1_1;
     (function(androidpublisher_v1_12) {
       class Androidpublisher {
@@ -185472,7 +190845,7 @@ var require_v22 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.androidpublisher_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var androidpublisher_v2;
     (function(androidpublisher_v22) {
       class Androidpublisher {
@@ -185580,7 +190953,7 @@ var require_v32 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.androidpublisher_v3 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var androidpublisher_v3;
     (function(androidpublisher_v32) {
       class Androidpublisher {
@@ -190041,7 +195414,7 @@ var require_androidpublisher = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.androidpublisher_v3 = exports2.androidpublisher_v2 = exports2.androidpublisher_v1 = exports2.androidpublisher_v1_1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.androidpublisher = androidpublisher;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1_1 = require_v1_1();
     Object.defineProperty(exports2, "androidpublisher_v1_1", { enumerable: true, get: function() {
       return v1_1_1.androidpublisher_v1_1;
@@ -190069,7 +195442,7 @@ var require_androidpublisher = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -190082,7 +195455,7 @@ var require_v119 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.apigateway_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var apigateway_v1;
     (function(apigateway_v12) {
       class Apigateway {
@@ -191059,7 +196432,7 @@ var require_v1beta6 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.apigateway_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var apigateway_v1beta;
     (function(apigateway_v1beta2) {
       class Apigateway {
@@ -192037,7 +197410,7 @@ var require_apigateway = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.apigateway_v1beta = exports2.apigateway_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.apigateway = apigateway;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v119();
     Object.defineProperty(exports2, "apigateway_v1", { enumerable: true, get: function() {
       return v1_1.apigateway_v1;
@@ -192055,7 +197428,7 @@ var require_apigateway = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -192068,7 +197441,7 @@ var require_v120 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.apigeeregistry_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var apigeeregistry_v1;
     (function(apigeeregistry_v12) {
       class Apigeeregistry {
@@ -195257,7 +200630,7 @@ var require_apigeeregistry = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.apigeeregistry_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.apigeeregistry = apigeeregistry;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v120();
     Object.defineProperty(exports2, "apigeeregistry_v1", { enumerable: true, get: function() {
       return v1_1.apigeeregistry_v1;
@@ -195270,7 +200643,7 @@ var require_apigeeregistry = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -195283,7 +200656,7 @@ var require_v121 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.apihub_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var apihub_v1;
     (function(apihub_v12) {
       class Apihub {
@@ -198166,7 +203539,7 @@ var require_apihub = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.apihub_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.apihub = apihub;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v121();
     Object.defineProperty(exports2, "apihub_v1", { enumerable: true, get: function() {
       return v1_1.apihub_v1;
@@ -198179,7 +203552,7 @@ var require_apihub = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -198192,7 +203565,7 @@ var require_v23 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.apikeys_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var apikeys_v2;
     (function(apikeys_v22) {
       class Apikeys {
@@ -198531,7 +203904,7 @@ var require_apikeys = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.apikeys_v2 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.apikeys = apikeys;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v2_1 = require_v23();
     Object.defineProperty(exports2, "apikeys_v2", { enumerable: true, get: function() {
       return v2_1.apikeys_v2;
@@ -198544,7 +203917,7 @@ var require_apikeys = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -198557,7 +203930,7 @@ var require_v1alpha5 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.apim_v1alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var apim_v1alpha;
     (function(apim_v1alpha2) {
       class Apim {
@@ -199334,7 +204707,7 @@ var require_apim = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.apim_v1alpha = exports2.auth = exports2.VERSIONS = void 0;
     exports2.apim = apim;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1alpha_1 = require_v1alpha5();
     Object.defineProperty(exports2, "apim_v1alpha", { enumerable: true, get: function() {
       return v1alpha_1.apim_v1alpha;
@@ -199347,7 +204720,7 @@ var require_apim = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -199360,7 +204733,7 @@ var require_v122 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.appengine_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var appengine_v1;
     (function(appengine_v12) {
       class Appengine {
@@ -201198,7 +206571,7 @@ var require_v1alpha6 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.appengine_v1alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var appengine_v1alpha;
     (function(appengine_v1alpha2) {
       class Appengine {
@@ -202188,7 +207561,7 @@ var require_v1beta7 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.appengine_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var appengine_v1beta;
     (function(appengine_v1beta2) {
       class Appengine {
@@ -204156,7 +209529,7 @@ var require_appengine = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.appengine_v1beta = exports2.appengine_v1alpha = exports2.appengine_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.appengine = appengine;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v122();
     Object.defineProperty(exports2, "appengine_v1", { enumerable: true, get: function() {
       return v1_1.appengine_v1;
@@ -204179,7 +209552,7 @@ var require_appengine = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -204192,7 +209565,7 @@ var require_v123 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.apphub_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var apphub_v1;
     (function(apphub_v12) {
       class Apphub {
@@ -205376,7 +210749,7 @@ var require_v1alpha7 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.apphub_v1alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var apphub_v1alpha;
     (function(apphub_v1alpha2) {
       class Apphub {
@@ -206621,7 +211994,7 @@ var require_apphub = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.apphub_v1alpha = exports2.apphub_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.apphub = apphub;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v123();
     Object.defineProperty(exports2, "apphub_v1", { enumerable: true, get: function() {
       return v1_1.apphub_v1;
@@ -206639,7 +212012,7 @@ var require_apphub = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -206652,7 +212025,7 @@ var require_v124 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.appsactivity_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var appsactivity_v1;
     (function(appsactivity_v12) {
       class Appsactivity {
@@ -206714,7 +212087,7 @@ var require_appsactivity = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.appsactivity_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.appsactivity = appsactivity;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v124();
     Object.defineProperty(exports2, "appsactivity_v1", { enumerable: true, get: function() {
       return v1_1.appsactivity_v1;
@@ -206727,7 +212100,7 @@ var require_appsactivity = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -206740,7 +212113,7 @@ var require_v1alpha1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.area120tables_v1alpha1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var area120tables_v1alpha1;
     (function(area120tables_v1alpha12) {
       class Area120tables {
@@ -207151,7 +212524,7 @@ var require_area120tables = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.area120tables_v1alpha1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.area120tables = area120tables;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1alpha1_1 = require_v1alpha1();
     Object.defineProperty(exports2, "area120tables_v1alpha1", { enumerable: true, get: function() {
       return v1alpha1_1.area120tables_v1alpha1;
@@ -207164,7 +212537,7 @@ var require_area120tables = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -207177,7 +212550,7 @@ var require_v125 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.areainsights_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var areainsights_v1;
     (function(areainsights_v12) {
       class Areainsights {
@@ -207240,7 +212613,7 @@ var require_areainsights = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.areainsights_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.areainsights = areainsights;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v125();
     Object.defineProperty(exports2, "areainsights_v1", { enumerable: true, get: function() {
       return v1_1.areainsights_v1;
@@ -207253,7 +212626,7 @@ var require_areainsights = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -207266,7 +212639,7 @@ var require_v126 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.artifactregistry_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var artifactregistry_v1;
     (function(artifactregistry_v12) {
       class Artifactregistry {
@@ -209306,7 +214679,7 @@ var require_v1beta15 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.artifactregistry_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var artifactregistry_v1beta1;
     (function(artifactregistry_v1beta12) {
       class Artifactregistry {
@@ -210121,7 +215494,7 @@ var require_v1beta22 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.artifactregistry_v1beta2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var artifactregistry_v1beta2;
     (function(artifactregistry_v1beta22) {
       class Artifactregistry {
@@ -211018,7 +216391,7 @@ var require_artifactregistry = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.artifactregistry_v1beta2 = exports2.artifactregistry_v1beta1 = exports2.artifactregistry_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.artifactregistry = artifactregistry;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v126();
     Object.defineProperty(exports2, "artifactregistry_v1", { enumerable: true, get: function() {
       return v1_1.artifactregistry_v1;
@@ -211041,7 +216414,7 @@ var require_artifactregistry = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -211054,7 +216427,7 @@ var require_v127 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.assuredworkloads_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var assuredworkloads_v1;
     (function(assuredworkloads_v12) {
       class Assuredworkloads {
@@ -211641,7 +217014,7 @@ var require_v1beta16 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.assuredworkloads_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var assuredworkloads_v1beta1;
     (function(assuredworkloads_v1beta12) {
       class Assuredworkloads {
@@ -212199,7 +217572,7 @@ var require_assuredworkloads = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.assuredworkloads_v1beta1 = exports2.assuredworkloads_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.assuredworkloads = assuredworkloads;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v127();
     Object.defineProperty(exports2, "assuredworkloads_v1", { enumerable: true, get: function() {
       return v1_1.assuredworkloads_v1;
@@ -212217,7 +217590,7 @@ var require_assuredworkloads = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -212230,7 +217603,7 @@ var require_v128 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.authorizedbuyersmarketplace_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var authorizedbuyersmarketplace_v1;
     (function(authorizedbuyersmarketplace_v12) {
       class Authorizedbuyersmarketplace {
@@ -213522,7 +218895,7 @@ var require_v1alpha8 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.authorizedbuyersmarketplace_v1alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var authorizedbuyersmarketplace_v1alpha;
     (function(authorizedbuyersmarketplace_v1alpha2) {
       class Authorizedbuyersmarketplace {
@@ -215003,7 +220376,7 @@ var require_v1beta8 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.authorizedbuyersmarketplace_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var authorizedbuyersmarketplace_v1beta;
     (function(authorizedbuyersmarketplace_v1beta2) {
       class Authorizedbuyersmarketplace {
@@ -215225,7 +220598,7 @@ var require_authorizedbuyersmarketplace = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.authorizedbuyersmarketplace_v1beta = exports2.authorizedbuyersmarketplace_v1alpha = exports2.authorizedbuyersmarketplace_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.authorizedbuyersmarketplace = authorizedbuyersmarketplace;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v128();
     Object.defineProperty(exports2, "authorizedbuyersmarketplace_v1", { enumerable: true, get: function() {
       return v1_1.authorizedbuyersmarketplace_v1;
@@ -215248,7 +220621,7 @@ var require_authorizedbuyersmarketplace = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -215261,7 +220634,7 @@ var require_v129 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.backupdr_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var backupdr_v1;
     (function(backupdr_v12) {
       class Backupdr {
@@ -216992,7 +222365,7 @@ var require_backupdr = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.backupdr_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.backupdr = backupdr;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v129();
     Object.defineProperty(exports2, "backupdr_v1", { enumerable: true, get: function() {
       return v1_1.backupdr_v1;
@@ -217005,7 +222378,7 @@ var require_backupdr = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -217018,7 +222391,7 @@ var require_v130 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.baremetalsolution_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var baremetalsolution_v1;
     (function(baremetalsolution_v12) {
       class Baremetalsolution {
@@ -217166,7 +222539,7 @@ var require_v1alpha12 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.baremetalsolution_v1alpha1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var baremetalsolution_v1alpha1;
     (function(baremetalsolution_v1alpha12) {
       class Baremetalsolution {
@@ -217274,7 +222647,7 @@ var require_v24 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.baremetalsolution_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var baremetalsolution_v2;
     (function(baremetalsolution_v22) {
       class Baremetalsolution {
@@ -218720,7 +224093,7 @@ var require_baremetalsolution = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.baremetalsolution_v2 = exports2.baremetalsolution_v1alpha1 = exports2.baremetalsolution_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.baremetalsolution = baremetalsolution;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v130();
     Object.defineProperty(exports2, "baremetalsolution_v1", { enumerable: true, get: function() {
       return v1_1.baremetalsolution_v1;
@@ -218743,7 +224116,7 @@ var require_baremetalsolution = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -218756,7 +224129,7 @@ var require_v131 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.batch_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var batch_v1;
     (function(batch_v12) {
       class Batch {
@@ -219263,7 +224636,7 @@ var require_batch = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.batch_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.batch = batch;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v131();
     Object.defineProperty(exports2, "batch_v1", { enumerable: true, get: function() {
       return v1_1.batch_v1;
@@ -219276,7 +224649,7 @@ var require_batch = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -219289,7 +224662,7 @@ var require_v132 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.beyondcorp_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var beyondcorp_v1;
     (function(beyondcorp_v12) {
       class Beyondcorp {
@@ -220971,7 +226344,7 @@ var require_v1alpha9 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.beyondcorp_v1alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var beyondcorp_v1alpha;
     (function(beyondcorp_v1alpha2) {
       class Beyondcorp {
@@ -223875,7 +229248,7 @@ var require_beyondcorp = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.beyondcorp_v1alpha = exports2.beyondcorp_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.beyondcorp = beyondcorp;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v132();
     Object.defineProperty(exports2, "beyondcorp_v1", { enumerable: true, get: function() {
       return v1_1.beyondcorp_v1;
@@ -223893,7 +229266,7 @@ var require_beyondcorp = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -223906,7 +229279,7 @@ var require_v133 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.biglake_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var biglake_v1;
     (function(biglake_v12) {
       class Biglake {
@@ -224425,7 +229798,7 @@ var require_biglake = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.biglake_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.biglake = biglake;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v133();
     Object.defineProperty(exports2, "biglake_v1", { enumerable: true, get: function() {
       return v1_1.biglake_v1;
@@ -224438,7 +229811,7 @@ var require_biglake = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -224451,7 +229824,7 @@ var require_v25 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.bigquery_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var bigquery_v2;
     (function(bigquery_v22) {
       class Bigquery {
@@ -225958,7 +231331,7 @@ var require_bigquery = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.bigquery_v2 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.bigquery = bigquery;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v2_1 = require_v25();
     Object.defineProperty(exports2, "bigquery_v2", { enumerable: true, get: function() {
       return v2_1.bigquery_v2;
@@ -225971,7 +231344,7 @@ var require_bigquery = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -225984,7 +231357,7 @@ var require_v134 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.bigqueryconnection_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var bigqueryconnection_v1;
     (function(bigqueryconnection_v12) {
       class Bigqueryconnection {
@@ -226274,7 +231647,7 @@ var require_v1beta17 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.bigqueryconnection_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var bigqueryconnection_v1beta1;
     (function(bigqueryconnection_v1beta12) {
       class Bigqueryconnection {
@@ -226595,7 +231968,7 @@ var require_bigqueryconnection = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.bigqueryconnection_v1beta1 = exports2.bigqueryconnection_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.bigqueryconnection = bigqueryconnection;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v134();
     Object.defineProperty(exports2, "bigqueryconnection_v1", { enumerable: true, get: function() {
       return v1_1.bigqueryconnection_v1;
@@ -226613,7 +231986,7 @@ var require_bigqueryconnection = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -226626,7 +231999,7 @@ var require_v135 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.bigquerydatapolicy_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var bigquerydatapolicy_v1;
     (function(bigquerydatapolicy_v12) {
       class Bigquerydatapolicy {
@@ -226947,7 +232320,7 @@ var require_bigquerydatapolicy = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.bigquerydatapolicy_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.bigquerydatapolicy = bigquerydatapolicy;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v135();
     Object.defineProperty(exports2, "bigquerydatapolicy_v1", { enumerable: true, get: function() {
       return v1_1.bigquerydatapolicy_v1;
@@ -226960,7 +232333,7 @@ var require_bigquerydatapolicy = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -226973,7 +232346,7 @@ var require_v136 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.bigquerydatatransfer_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var bigquerydatatransfer_v1;
     (function(bigquerydatatransfer_v12) {
       class Bigquerydatatransfer {
@@ -228077,7 +233450,7 @@ var require_bigquerydatatransfer = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.bigquerydatatransfer_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.bigquerydatatransfer = bigquerydatatransfer;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v136();
     Object.defineProperty(exports2, "bigquerydatatransfer_v1", { enumerable: true, get: function() {
       return v1_1.bigquerydatatransfer_v1;
@@ -228090,7 +233463,7 @@ var require_bigquerydatatransfer = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -228103,7 +233476,7 @@ var require_v137 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.bigqueryreservation_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var bigqueryreservation_v1;
     (function(bigqueryreservation_v12) {
       class Bigqueryreservation {
@@ -229140,7 +234513,7 @@ var require_v1alpha22 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.bigqueryreservation_v1alpha2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var bigqueryreservation_v1alpha2;
     (function(bigqueryreservation_v1alpha22) {
       class Bigqueryreservation {
@@ -229652,7 +235025,7 @@ var require_v1beta18 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.bigqueryreservation_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var bigqueryreservation_v1beta1;
     (function(bigqueryreservation_v1beta12) {
       class Bigqueryreservation {
@@ -230301,7 +235674,7 @@ var require_bigqueryreservation = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.bigqueryreservation_v1beta1 = exports2.bigqueryreservation_v1alpha2 = exports2.bigqueryreservation_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.bigqueryreservation = bigqueryreservation;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v137();
     Object.defineProperty(exports2, "bigqueryreservation_v1", { enumerable: true, get: function() {
       return v1_1.bigqueryreservation_v1;
@@ -230324,7 +235697,7 @@ var require_bigqueryreservation = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -230359,7 +235732,7 @@ var require_v26 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.bigtableadmin_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var bigtableadmin_v2;
     (function(bigtableadmin_v22) {
       class Bigtableadmin {
@@ -232978,7 +238351,7 @@ var require_bigtableadmin = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.bigtableadmin_v2 = exports2.bigtableadmin_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.bigtableadmin = bigtableadmin;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v138();
     Object.defineProperty(exports2, "bigtableadmin_v1", { enumerable: true, get: function() {
       return v1_1.bigtableadmin_v1;
@@ -232996,7 +238369,7 @@ var require_bigtableadmin = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -233009,7 +238382,7 @@ var require_v139 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.billingbudgets_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var billingbudgets_v1;
     (function(billingbudgets_v12) {
       class Billingbudgets {
@@ -233200,7 +238573,7 @@ var require_v1beta19 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.billingbudgets_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var billingbudgets_v1beta1;
     (function(billingbudgets_v1beta12) {
       class Billingbudgets {
@@ -233392,7 +238765,7 @@ var require_billingbudgets = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.billingbudgets_v1beta1 = exports2.billingbudgets_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.billingbudgets = billingbudgets;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v139();
     Object.defineProperty(exports2, "billingbudgets_v1", { enumerable: true, get: function() {
       return v1_1.billingbudgets_v1;
@@ -233410,7 +238783,7 @@ var require_billingbudgets = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -233423,7 +238796,7 @@ var require_v140 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.binaryauthorization_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var binaryauthorization_v1;
     (function(binaryauthorization_v12) {
       class Binaryauthorization {
@@ -234148,7 +239521,7 @@ var require_v1beta110 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.binaryauthorization_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var binaryauthorization_v1beta1;
     (function(binaryauthorization_v1beta12) {
       class Binaryauthorization {
@@ -234658,7 +240031,7 @@ var require_binaryauthorization = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.binaryauthorization_v1beta1 = exports2.binaryauthorization_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.binaryauthorization = binaryauthorization;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v140();
     Object.defineProperty(exports2, "binaryauthorization_v1", { enumerable: true, get: function() {
       return v1_1.binaryauthorization_v1;
@@ -234676,7 +240049,7 @@ var require_binaryauthorization = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -234689,7 +240062,7 @@ var require_v141 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.blockchainnodeengine_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var blockchainnodeengine_v1;
     (function(blockchainnodeengine_v12) {
       class Blockchainnodeengine {
@@ -235079,7 +240452,7 @@ var require_blockchainnodeengine = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.blockchainnodeengine_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.blockchainnodeengine = blockchainnodeengine;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v141();
     Object.defineProperty(exports2, "blockchainnodeengine_v1", { enumerable: true, get: function() {
       return v1_1.blockchainnodeengine_v1;
@@ -235092,7 +240465,7 @@ var require_blockchainnodeengine = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -235105,7 +240478,7 @@ var require_v27 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.blogger_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var blogger_v2;
     (function(blogger_v22) {
       class Blogger {
@@ -235443,7 +240816,7 @@ var require_v33 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.blogger_v3 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var blogger_v3;
     (function(blogger_v32) {
       class Blogger {
@@ -236529,7 +241902,7 @@ var require_blogger = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.blogger_v3 = exports2.blogger_v2 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.blogger = blogger;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v2_1 = require_v27();
     Object.defineProperty(exports2, "blogger_v2", { enumerable: true, get: function() {
       return v2_1.blogger_v2;
@@ -236547,7 +241920,7 @@ var require_blogger = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -236560,7 +241933,7 @@ var require_v142 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.books_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var books_v1;
     (function(books_v12) {
       class Books {
@@ -238344,7 +243717,7 @@ var require_books = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.books_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.books = books;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v142();
     Object.defineProperty(exports2, "books_v1", { enumerable: true, get: function() {
       return v1_1.books_v1;
@@ -238357,7 +243730,7 @@ var require_books = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -238370,7 +243743,7 @@ var require_v143 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.businessprofileperformance_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var businessprofileperformance_v1;
     (function(businessprofileperformance_v12) {
       class Businessprofileperformance {
@@ -238520,7 +243893,7 @@ var require_businessprofileperformance = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.businessprofileperformance_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.businessprofileperformance = businessprofileperformance;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v143();
     Object.defineProperty(exports2, "businessprofileperformance_v1", { enumerable: true, get: function() {
       return v1_1.businessprofileperformance_v1;
@@ -238533,7 +243906,7 @@ var require_businessprofileperformance = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -238546,7 +243919,7 @@ var require_v34 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.calendar_v3 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var calendar_v3;
     (function(calendar_v32) {
       class Calendar {
@@ -239752,7 +245125,7 @@ var require_calendar = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.calendar_v3 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.calendar = calendar;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v3_1 = require_v34();
     Object.defineProperty(exports2, "calendar_v3", { enumerable: true, get: function() {
       return v3_1.calendar_v3;
@@ -239765,7 +245138,7 @@ var require_calendar = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -239778,7 +245151,7 @@ var require_v144 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.certificatemanager_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var certificatemanager_v1;
     (function(certificatemanager_v12) {
       class Certificatemanager {
@@ -240963,7 +246336,7 @@ var require_certificatemanager = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.certificatemanager_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.certificatemanager = certificatemanager;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v144();
     Object.defineProperty(exports2, "certificatemanager_v1", { enumerable: true, get: function() {
       return v1_1.certificatemanager_v1;
@@ -240976,7 +246349,7 @@ var require_certificatemanager = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -240989,7 +246362,7 @@ var require_v145 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.chat_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var chat_v1;
     (function(chat_v12) {
       class Chat {
@@ -242232,7 +247605,7 @@ var require_chat = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.chat_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.chat = chat;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v145();
     Object.defineProperty(exports2, "chat_v1", { enumerable: true, get: function() {
       return v1_1.chat_v1;
@@ -242245,7 +247618,7 @@ var require_chat = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -242258,7 +247631,7 @@ var require_v1alpha10 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.checks_v1alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var checks_v1alpha;
     (function(checks_v1alpha2) {
       class Checks {
@@ -242814,7 +248187,7 @@ var require_checks = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.checks_v1alpha = exports2.auth = exports2.VERSIONS = void 0;
     exports2.checks = checks;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1alpha_1 = require_v1alpha10();
     Object.defineProperty(exports2, "checks_v1alpha", { enumerable: true, get: function() {
       return v1alpha_1.checks_v1alpha;
@@ -242827,7 +248200,7 @@ var require_checks = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -242840,7 +248213,7 @@ var require_v146 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.chromemanagement_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var chromemanagement_v1;
     (function(chromemanagement_v12) {
       class Chromemanagement {
@@ -243950,7 +249323,7 @@ var require_chromemanagement = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.chromemanagement_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.chromemanagement = chromemanagement;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v146();
     Object.defineProperty(exports2, "chromemanagement_v1", { enumerable: true, get: function() {
       return v1_1.chromemanagement_v1;
@@ -243963,7 +249336,7 @@ var require_chromemanagement = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -243976,7 +249349,7 @@ var require_v147 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.chromepolicy_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var chromepolicy_v1;
     (function(chromepolicy_v12) {
       class Chromepolicy {
@@ -244484,7 +249857,7 @@ var require_chromepolicy = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.chromepolicy_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.chromepolicy = chromepolicy;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v147();
     Object.defineProperty(exports2, "chromepolicy_v1", { enumerable: true, get: function() {
       return v1_1.chromepolicy_v1;
@@ -244497,7 +249870,7 @@ var require_chromepolicy = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -244510,7 +249883,7 @@ var require_v148 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.chromeuxreport_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var chromeuxreport_v1;
     (function(chromeuxreport_v12) {
       class Chromeuxreport {
@@ -244603,7 +249976,7 @@ var require_chromeuxreport = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.chromeuxreport_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.chromeuxreport = chromeuxreport;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v148();
     Object.defineProperty(exports2, "chromeuxreport_v1", { enumerable: true, get: function() {
       return v1_1.chromeuxreport_v1;
@@ -244616,7 +249989,7 @@ var require_chromeuxreport = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -244629,7 +250002,7 @@ var require_v28 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.civicinfo_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var civicinfo_v2;
     (function(civicinfo_v22) {
       class Civicinfo {
@@ -244791,7 +250164,7 @@ var require_civicinfo = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.civicinfo_v2 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.civicinfo = civicinfo;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v2_1 = require_v28();
     Object.defineProperty(exports2, "civicinfo_v2", { enumerable: true, get: function() {
       return v2_1.civicinfo_v2;
@@ -244804,7 +250177,7 @@ var require_civicinfo = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -244817,7 +250190,7 @@ var require_v149 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.classroom_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var classroom_v1;
     (function(classroom_v12) {
       class Classroom {
@@ -247949,7 +253322,7 @@ var require_classroom = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.classroom_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.classroom = classroom;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v149();
     Object.defineProperty(exports2, "classroom_v1", { enumerable: true, get: function() {
       return v1_1.classroom_v1;
@@ -247962,7 +253335,7 @@ var require_classroom = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -247975,7 +253348,7 @@ var require_v150 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudasset_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudasset_v1;
     (function(cloudasset_v12) {
       class Cloudasset {
@@ -248772,7 +254145,7 @@ var require_v1beta111 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudasset_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudasset_v1beta1;
     (function(cloudasset_v1beta12) {
       class Cloudasset {
@@ -249089,7 +254462,7 @@ var require_v1p1beta1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudasset_v1p1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudasset_v1p1beta1;
     (function(cloudasset_v1p1beta12) {
       class Cloudasset {
@@ -249190,7 +254563,7 @@ var require_v1p4beta1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudasset_v1p4beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudasset_v1p4beta1;
     (function(cloudasset_v1p4beta12) {
       class Cloudasset {
@@ -249280,7 +254653,7 @@ var require_v1p5beta1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudasset_v1p5beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudasset_v1p5beta1;
     (function(cloudasset_v1p5beta12) {
       class Cloudasset {
@@ -249342,7 +254715,7 @@ var require_v1p7beta1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudasset_v1p7beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudasset_v1p7beta1;
     (function(cloudasset_v1p7beta12) {
       class Cloudasset {
@@ -249444,7 +254817,7 @@ var require_cloudasset = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.cloudasset_v1p7beta1 = exports2.cloudasset_v1p5beta1 = exports2.cloudasset_v1p4beta1 = exports2.cloudasset_v1p1beta1 = exports2.cloudasset_v1beta1 = exports2.cloudasset_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.cloudasset = cloudasset;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v150();
     Object.defineProperty(exports2, "cloudasset_v1", { enumerable: true, get: function() {
       return v1_1.cloudasset_v1;
@@ -249482,7 +254855,7 @@ var require_cloudasset = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -249495,7 +254868,7 @@ var require_v151 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudbilling_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudbilling_v1;
     (function(cloudbilling_v12) {
       class Cloudbilling {
@@ -250130,7 +255503,7 @@ var require_v1beta9 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudbilling_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudbilling_v1beta;
     (function(cloudbilling_v1beta2) {
       class Cloudbilling {
@@ -250742,7 +256115,7 @@ var require_cloudbilling = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.cloudbilling_v1beta = exports2.cloudbilling_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.cloudbilling = cloudbilling;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v151();
     Object.defineProperty(exports2, "cloudbilling_v1", { enumerable: true, get: function() {
       return v1_1.cloudbilling_v1;
@@ -250760,7 +256133,7 @@ var require_cloudbilling = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -250773,7 +256146,7 @@ var require_v152 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudbuild_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudbuild_v1;
     (function(cloudbuild_v12) {
       class Cloudbuild {
@@ -252926,7 +258299,7 @@ var require_v1alpha13 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudbuild_v1alpha1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudbuild_v1alpha1;
     (function(cloudbuild_v1alpha12) {
       class Cloudbuild {
@@ -253188,7 +258561,7 @@ var require_v1alpha23 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudbuild_v1alpha2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudbuild_v1alpha2;
     (function(cloudbuild_v1alpha22) {
       class Cloudbuild {
@@ -253450,7 +258823,7 @@ var require_v1beta112 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudbuild_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudbuild_v1beta1;
     (function(cloudbuild_v1beta12) {
       class Cloudbuild {
@@ -253712,7 +259085,7 @@ var require_v29 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudbuild_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudbuild_v2;
     (function(cloudbuild_v22) {
       class Cloudbuild {
@@ -254441,7 +259814,7 @@ var require_cloudbuild = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.cloudbuild_v2 = exports2.cloudbuild_v1beta1 = exports2.cloudbuild_v1alpha2 = exports2.cloudbuild_v1alpha1 = exports2.cloudbuild_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.cloudbuild = cloudbuild;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v152();
     Object.defineProperty(exports2, "cloudbuild_v1", { enumerable: true, get: function() {
       return v1_1.cloudbuild_v1;
@@ -254474,7 +259847,7 @@ var require_cloudbuild = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -254487,7 +259860,7 @@ var require_v153 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudchannel_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudchannel_v1;
     (function(cloudchannel_v12) {
       class Cloudchannel {
@@ -256605,7 +261978,7 @@ var require_cloudchannel = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.cloudchannel_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.cloudchannel = cloudchannel;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v153();
     Object.defineProperty(exports2, "cloudchannel_v1", { enumerable: true, get: function() {
       return v1_1.cloudchannel_v1;
@@ -256618,7 +261991,7 @@ var require_cloudchannel = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -256631,7 +262004,7 @@ var require_v154 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudcontrolspartner_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudcontrolspartner_v1;
     (function(cloudcontrolspartner_v12) {
       class Cloudcontrolspartner {
@@ -257098,7 +262471,7 @@ var require_v1beta10 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudcontrolspartner_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudcontrolspartner_v1beta;
     (function(cloudcontrolspartner_v1beta2) {
       class Cloudcontrolspartner {
@@ -257566,7 +262939,7 @@ var require_cloudcontrolspartner = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.cloudcontrolspartner_v1beta = exports2.cloudcontrolspartner_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.cloudcontrolspartner = cloudcontrolspartner;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v154();
     Object.defineProperty(exports2, "cloudcontrolspartner_v1", { enumerable: true, get: function() {
       return v1_1.cloudcontrolspartner_v1;
@@ -257584,7 +262957,7 @@ var require_cloudcontrolspartner = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -257597,7 +262970,7 @@ var require_v210 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.clouddebugger_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var clouddebugger_v2;
     (function(clouddebugger_v22) {
       class Clouddebugger {
@@ -257907,7 +263280,7 @@ var require_clouddebugger = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.clouddebugger_v2 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.clouddebugger = clouddebugger;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v2_1 = require_v210();
     Object.defineProperty(exports2, "clouddebugger_v2", { enumerable: true, get: function() {
       return v2_1.clouddebugger_v2;
@@ -257920,7 +263293,7 @@ var require_clouddebugger = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -257933,7 +263306,7 @@ var require_v155 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.clouddeploy_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var clouddeploy_v1;
     (function(clouddeploy_v12) {
       class Clouddeploy {
@@ -259895,7 +265268,7 @@ var require_clouddeploy = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.clouddeploy_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.clouddeploy = clouddeploy;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v155();
     Object.defineProperty(exports2, "clouddeploy_v1", { enumerable: true, get: function() {
       return v1_1.clouddeploy_v1;
@@ -259908,7 +265281,7 @@ var require_clouddeploy = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -259921,7 +265294,7 @@ var require_v1beta113 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.clouderrorreporting_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var clouderrorreporting_v1beta1;
     (function(clouderrorreporting_v1beta12) {
       class Clouderrorreporting {
@@ -260347,7 +265720,7 @@ var require_clouderrorreporting = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.clouderrorreporting_v1beta1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.clouderrorreporting = clouderrorreporting;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1beta1_1 = require_v1beta113();
     Object.defineProperty(exports2, "clouderrorreporting_v1beta1", { enumerable: true, get: function() {
       return v1beta1_1.clouderrorreporting_v1beta1;
@@ -260360,7 +265733,7 @@ var require_clouderrorreporting = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -260373,7 +265746,7 @@ var require_v156 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudfunctions_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudfunctions_v1;
     (function(cloudfunctions_v12) {
       class Cloudfunctions {
@@ -260852,7 +266225,7 @@ var require_v1beta23 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudfunctions_v1beta2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudfunctions_v1beta2;
     (function(cloudfunctions_v1beta22) {
       class Cloudfunctions {
@@ -261230,7 +266603,7 @@ var require_v211 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudfunctions_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudfunctions_v2;
     (function(cloudfunctions_v22) {
       class Cloudfunctions {
@@ -261898,7 +267271,7 @@ var require_v2alpha = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudfunctions_v2alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudfunctions_v2alpha;
     (function(cloudfunctions_v2alpha2) {
       class Cloudfunctions {
@@ -262566,7 +267939,7 @@ var require_v2beta = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudfunctions_v2beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudfunctions_v2beta;
     (function(cloudfunctions_v2beta2) {
       class Cloudfunctions {
@@ -263235,7 +268608,7 @@ var require_cloudfunctions = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.cloudfunctions_v2beta = exports2.cloudfunctions_v2alpha = exports2.cloudfunctions_v2 = exports2.cloudfunctions_v1beta2 = exports2.cloudfunctions_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.cloudfunctions = cloudfunctions;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v156();
     Object.defineProperty(exports2, "cloudfunctions_v1", { enumerable: true, get: function() {
       return v1_1.cloudfunctions_v1;
@@ -263268,7 +268641,7 @@ var require_cloudfunctions = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -263281,7 +268654,7 @@ var require_v157 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudidentity_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudidentity_v1;
     (function(cloudidentity_v12) {
       class Cloudidentity {
@@ -265302,7 +270675,7 @@ var require_v1beta114 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudidentity_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudidentity_v1beta1;
     (function(cloudidentity_v1beta12) {
       class Cloudidentity {
@@ -267372,7 +272745,7 @@ var require_cloudidentity = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.cloudidentity_v1beta1 = exports2.cloudidentity_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.cloudidentity = cloudidentity;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v157();
     Object.defineProperty(exports2, "cloudidentity_v1", { enumerable: true, get: function() {
       return v1_1.cloudidentity_v1;
@@ -267390,7 +272763,7 @@ var require_cloudidentity = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -267403,7 +272776,7 @@ var require_v158 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudiot_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudiot_v1;
     (function(cloudiot_v12) {
       class Cloudiot {
@@ -268166,7 +273539,7 @@ var require_cloudiot = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.cloudiot_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.cloudiot = cloudiot;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v158();
     Object.defineProperty(exports2, "cloudiot_v1", { enumerable: true, get: function() {
       return v1_1.cloudiot_v1;
@@ -268179,7 +273552,7 @@ var require_cloudiot = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -268192,7 +273565,7 @@ var require_v159 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudkms_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudkms_v1;
     (function(cloudkms_v12) {
       class Cloudkms {
@@ -270364,7 +275737,7 @@ var require_cloudkms = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.cloudkms_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.cloudkms = cloudkms;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v159();
     Object.defineProperty(exports2, "cloudkms_v1", { enumerable: true, get: function() {
       return v1_1.cloudkms_v1;
@@ -270377,7 +275750,7 @@ var require_cloudkms = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -270390,7 +275763,7 @@ var require_v1alpha11 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudlocationfinder_v1alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudlocationfinder_v1alpha;
     (function(cloudlocationfinder_v1alpha2) {
       class Cloudlocationfinder {
@@ -270591,7 +275964,7 @@ var require_cloudlocationfinder = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.cloudlocationfinder_v1alpha = exports2.auth = exports2.VERSIONS = void 0;
     exports2.cloudlocationfinder = cloudlocationfinder;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1alpha_1 = require_v1alpha11();
     Object.defineProperty(exports2, "cloudlocationfinder_v1alpha", { enumerable: true, get: function() {
       return v1alpha_1.cloudlocationfinder_v1alpha;
@@ -270604,7 +275977,7 @@ var require_cloudlocationfinder = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -270617,7 +275990,7 @@ var require_v212 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudprofiler_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudprofiler_v2;
     (function(cloudprofiler_v22) {
       class Cloudprofiler {
@@ -270779,7 +276152,7 @@ var require_cloudprofiler = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.cloudprofiler_v2 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.cloudprofiler = cloudprofiler;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v2_1 = require_v212();
     Object.defineProperty(exports2, "cloudprofiler_v2", { enumerable: true, get: function() {
       return v2_1.cloudprofiler_v2;
@@ -270792,7 +276165,7 @@ var require_cloudprofiler = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -270805,7 +276178,7 @@ var require_v160 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudresourcemanager_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudresourcemanager_v1;
     (function(cloudresourcemanager_v12) {
       class Cloudresourcemanager {
@@ -272013,7 +277386,7 @@ var require_v1beta115 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudresourcemanager_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudresourcemanager_v1beta1;
     (function(cloudresourcemanager_v1beta12) {
       class Cloudresourcemanager {
@@ -272534,7 +277907,7 @@ var require_v213 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudresourcemanager_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudresourcemanager_v2;
     (function(cloudresourcemanager_v22) {
       class Cloudresourcemanager {
@@ -272935,7 +278308,7 @@ var require_v2beta12 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudresourcemanager_v2beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudresourcemanager_v2beta1;
     (function(cloudresourcemanager_v2beta12) {
       class Cloudresourcemanager {
@@ -273336,7 +278709,7 @@ var require_v35 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudresourcemanager_v3 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudresourcemanager_v3;
     (function(cloudresourcemanager_v32) {
       class Cloudresourcemanager {
@@ -275346,7 +280719,7 @@ var require_cloudresourcemanager = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.cloudresourcemanager_v3 = exports2.cloudresourcemanager_v2beta1 = exports2.cloudresourcemanager_v2 = exports2.cloudresourcemanager_v1beta1 = exports2.cloudresourcemanager_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.cloudresourcemanager = cloudresourcemanager;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v160();
     Object.defineProperty(exports2, "cloudresourcemanager_v1", { enumerable: true, get: function() {
       return v1_1.cloudresourcemanager_v1;
@@ -275379,7 +280752,7 @@ var require_cloudresourcemanager = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -275392,7 +280765,7 @@ var require_v161 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudscheduler_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudscheduler_v1;
     (function(cloudscheduler_v12) {
       class Cloudscheduler {
@@ -275871,7 +281244,7 @@ var require_v1beta116 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudscheduler_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudscheduler_v1beta1;
     (function(cloudscheduler_v1beta12) {
       class Cloudscheduler {
@@ -276222,7 +281595,7 @@ var require_cloudscheduler = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.cloudscheduler_v1beta1 = exports2.cloudscheduler_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.cloudscheduler = cloudscheduler;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v161();
     Object.defineProperty(exports2, "cloudscheduler_v1", { enumerable: true, get: function() {
       return v1_1.cloudscheduler_v1;
@@ -276240,7 +281613,7 @@ var require_cloudscheduler = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -276253,7 +281626,7 @@ var require_v162 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudsearch_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudsearch_v1;
     (function(cloudsearch_v12) {
       class Cloudsearch {
@@ -278030,7 +283403,7 @@ var require_cloudsearch = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.cloudsearch_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.cloudsearch = cloudsearch;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v162();
     Object.defineProperty(exports2, "cloudsearch_v1", { enumerable: true, get: function() {
       return v1_1.cloudsearch_v1;
@@ -278043,7 +283416,7 @@ var require_cloudsearch = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -278056,7 +283429,7 @@ var require_v163 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudshell_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudshell_v1;
     (function(cloudshell_v12) {
       class Cloudshell {
@@ -278376,7 +283749,7 @@ var require_v1alpha14 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudshell_v1alpha1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudshell_v1alpha1;
     (function(cloudshell_v1alpha12) {
       class Cloudshell {
@@ -278601,7 +283974,7 @@ var require_cloudshell = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.cloudshell_v1alpha1 = exports2.cloudshell_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.cloudshell = cloudshell;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v163();
     Object.defineProperty(exports2, "cloudshell_v1", { enumerable: true, get: function() {
       return v1_1.cloudshell_v1;
@@ -278619,7 +283992,7 @@ var require_cloudshell = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -278632,7 +284005,7 @@ var require_v214 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudsupport_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudsupport_v2;
     (function(cloudsupport_v22) {
       class Cloudsupport {
@@ -279091,7 +284464,7 @@ var require_v2beta2 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudsupport_v2beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudsupport_v2beta;
     (function(cloudsupport_v2beta2) {
       class Cloudsupport {
@@ -279641,7 +285014,7 @@ var require_cloudsupport = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.cloudsupport_v2beta = exports2.cloudsupport_v2 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.cloudsupport = cloudsupport;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v2_1 = require_v214();
     Object.defineProperty(exports2, "cloudsupport_v2", { enumerable: true, get: function() {
       return v2_1.cloudsupport_v2;
@@ -279659,7 +285032,7 @@ var require_cloudsupport = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -279672,7 +285045,7 @@ var require_v215 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudtasks_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudtasks_v2;
     (function(cloudtasks_v22) {
       class Cloudtasks {
@@ -280361,7 +285734,7 @@ var require_v2beta22 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudtasks_v2beta2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudtasks_v2beta2;
     (function(cloudtasks_v2beta22) {
       class Cloudtasks {
@@ -281218,7 +286591,7 @@ var require_v2beta3 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudtasks_v2beta3 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudtasks_v2beta3;
     (function(cloudtasks_v2beta32) {
       class Cloudtasks {
@@ -281908,7 +287281,7 @@ var require_cloudtasks = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.cloudtasks_v2beta3 = exports2.cloudtasks_v2beta2 = exports2.cloudtasks_v2 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.cloudtasks = cloudtasks;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v2_1 = require_v215();
     Object.defineProperty(exports2, "cloudtasks_v2", { enumerable: true, get: function() {
       return v2_1.cloudtasks_v2;
@@ -281931,7 +287304,7 @@ var require_cloudtasks = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -281944,7 +287317,7 @@ var require_v164 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudtrace_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudtrace_v1;
     (function(cloudtrace_v12) {
       class Cloudtrace {
@@ -282075,7 +287448,7 @@ var require_v216 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudtrace_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudtrace_v2;
     (function(cloudtrace_v22) {
       class Cloudtrace {
@@ -282185,7 +287558,7 @@ var require_v2beta13 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.cloudtrace_v2beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var cloudtrace_v2beta1;
     (function(cloudtrace_v2beta12) {
       class Cloudtrace {
@@ -282377,7 +287750,7 @@ var require_cloudtrace = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.cloudtrace_v2beta1 = exports2.cloudtrace_v2 = exports2.cloudtrace_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.cloudtrace = cloudtrace;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v164();
     Object.defineProperty(exports2, "cloudtrace_v1", { enumerable: true, get: function() {
       return v1_1.cloudtrace_v1;
@@ -282400,7 +287773,7 @@ var require_cloudtrace = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -282413,7 +287786,7 @@ var require_v165 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.composer_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var composer_v1;
     (function(composer_v12) {
       class Composer {
@@ -283378,7 +288751,7 @@ var require_v1beta117 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.composer_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var composer_v1beta1;
     (function(composer_v1beta12) {
       class Composer {
@@ -284344,7 +289717,7 @@ var require_composer = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.composer_v1beta1 = exports2.composer_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.composer = composer;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v165();
     Object.defineProperty(exports2, "composer_v1", { enumerable: true, get: function() {
       return v1_1.composer_v1;
@@ -284362,7 +289735,7 @@ var require_composer = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -284375,7 +289748,7 @@ var require_alpha = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.compute_alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var compute_alpha;
     (function(compute_alpha2) {
       class Compute {
@@ -317665,7 +323038,7 @@ var require_beta = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.compute_beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var compute_beta;
     (function(compute_beta2) {
       class Compute {
@@ -347563,7 +352936,7 @@ var require_v166 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.compute_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var compute_v1;
     (function(compute_v12) {
       class Compute {
@@ -373544,7 +378917,7 @@ var require_compute = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.compute_v1 = exports2.compute_beta = exports2.compute_alpha = exports2.auth = exports2.VERSIONS = void 0;
     exports2.compute = compute;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var alpha_1 = require_alpha();
     Object.defineProperty(exports2, "compute_alpha", { enumerable: true, get: function() {
       return alpha_1.compute_alpha;
@@ -373567,7 +378940,7 @@ var require_compute = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -373580,7 +378953,7 @@ var require_v167 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.config_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var config_v1;
     (function(config_v12) {
       class Config {
@@ -374774,7 +380147,7 @@ var require_config = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.config_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.config = config;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v167();
     Object.defineProperty(exports2, "config_v1", { enumerable: true, get: function() {
       return v1_1.config_v1;
@@ -374787,7 +380160,7 @@ var require_config = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -374800,7 +380173,7 @@ var require_v168 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.connectors_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var connectors_v1;
     (function(connectors_v12) {
       class Connectors {
@@ -377283,7 +382656,7 @@ var require_v217 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.connectors_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var connectors_v2;
     (function(connectors_v22) {
       class Connectors {
@@ -377871,7 +383244,7 @@ var require_connectors = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.connectors_v2 = exports2.connectors_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.connectors = connectors;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v168();
     Object.defineProperty(exports2, "connectors_v1", { enumerable: true, get: function() {
       return v1_1.connectors_v1;
@@ -377889,7 +383262,7 @@ var require_connectors = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -377902,7 +383275,7 @@ var require_v1alpha15 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.contactcenteraiplatform_v1alpha1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var contactcenteraiplatform_v1alpha1;
     (function(contactcenteraiplatform_v1alpha12) {
       class Contactcenteraiplatform {
@@ -378322,7 +383695,7 @@ var require_contactcenteraiplatform = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.contactcenteraiplatform_v1alpha1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.contactcenteraiplatform = contactcenteraiplatform;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1alpha1_1 = require_v1alpha15();
     Object.defineProperty(exports2, "contactcenteraiplatform_v1alpha1", { enumerable: true, get: function() {
       return v1alpha1_1.contactcenteraiplatform_v1alpha1;
@@ -378335,7 +383708,7 @@ var require_contactcenteraiplatform = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -378348,7 +383721,7 @@ var require_v169 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.contactcenterinsights_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var contactcenterinsights_v1;
     (function(contactcenterinsights_v12) {
       class Contactcenterinsights {
@@ -383649,7 +389022,7 @@ var require_contactcenterinsights = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.contactcenterinsights_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.contactcenterinsights = contactcenterinsights;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v169();
     Object.defineProperty(exports2, "contactcenterinsights_v1", { enumerable: true, get: function() {
       return v1_1.contactcenterinsights_v1;
@@ -383662,7 +389035,7 @@ var require_contactcenterinsights = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -383675,7 +389048,7 @@ var require_v170 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.container_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var container_v1;
     (function(container_v12) {
       class Container {
@@ -385876,7 +391249,7 @@ var require_v1beta118 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.container_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var container_v1beta1;
     (function(container_v1beta12) {
       class Container {
@@ -388108,7 +393481,7 @@ var require_container = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.container_v1beta1 = exports2.container_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.container = container;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v170();
     Object.defineProperty(exports2, "container_v1", { enumerable: true, get: function() {
       return v1_1.container_v1;
@@ -388126,7 +393499,7 @@ var require_container = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -388139,7 +393512,7 @@ var require_v171 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.containeranalysis_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var containeranalysis_v1;
     (function(containeranalysis_v12) {
       class Containeranalysis {
@@ -389572,7 +394945,7 @@ var require_v1alpha16 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.containeranalysis_v1alpha1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var containeranalysis_v1alpha1;
     (function(containeranalysis_v1alpha12) {
       class Containeranalysis {
@@ -390666,7 +396039,7 @@ var require_v1beta119 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.containeranalysis_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var containeranalysis_v1beta1;
     (function(containeranalysis_v1beta12) {
       class Containeranalysis {
@@ -392160,7 +397533,7 @@ var require_containeranalysis = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.containeranalysis_v1beta1 = exports2.containeranalysis_v1alpha1 = exports2.containeranalysis_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.containeranalysis = containeranalysis;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v171();
     Object.defineProperty(exports2, "containeranalysis_v1", { enumerable: true, get: function() {
       return v1_1.containeranalysis_v1;
@@ -392183,7 +397556,7 @@ var require_containeranalysis = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -392196,7 +397569,7 @@ var require_v2_1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.content_v2_1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var content_v2_1;
     (function(content_v2_12) {
       class Content {
@@ -396582,7 +401955,7 @@ var require_v218 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.content_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var content_v2;
     (function(content_v22) {
       class Content {
@@ -399233,7 +404606,7 @@ var require_content = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.content_v2 = exports2.content_v2_1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.content = content;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v2_1_1 = require_v2_1();
     Object.defineProperty(exports2, "content_v2_1", { enumerable: true, get: function() {
       return v2_1_1.content_v2_1;
@@ -399251,7 +404624,7 @@ var require_content = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -399264,7 +404637,7 @@ var require_v172 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.contentwarehouse_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var contentwarehouse_v1;
     (function(contentwarehouse_v12) {
       class Contentwarehouse {
@@ -400449,7 +405822,7 @@ var require_contentwarehouse = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.contentwarehouse_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.contentwarehouse = contentwarehouse;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v172();
     Object.defineProperty(exports2, "contentwarehouse_v1", { enumerable: true, get: function() {
       return v1_1.contentwarehouse_v1;
@@ -400462,7 +405835,7 @@ var require_contentwarehouse = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -400475,7 +405848,7 @@ var require_v173 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.css_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var css_v1;
     (function(css_v12) {
       class Css {
@@ -400934,7 +406307,7 @@ var require_css = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.css_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.css = css;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v173();
     Object.defineProperty(exports2, "css_v1", { enumerable: true, get: function() {
       return v1_1.css_v1;
@@ -400947,7 +406320,7 @@ var require_css = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -400960,7 +406333,7 @@ var require_v174 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.customsearch_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var customsearch_v1;
     (function(customsearch_v12) {
       class Customsearch {
@@ -401062,7 +406435,7 @@ var require_customsearch = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.customsearch_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.customsearch = customsearch;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v174();
     Object.defineProperty(exports2, "customsearch_v1", { enumerable: true, get: function() {
       return v1_1.customsearch_v1;
@@ -401075,7 +406448,7 @@ var require_customsearch = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -401088,7 +406461,7 @@ var require_v175 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.datacatalog_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var datacatalog_v1;
     (function(datacatalog_v12) {
       class Datacatalog {
@@ -403385,7 +408758,7 @@ var require_v1beta120 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.datacatalog_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var datacatalog_v1beta1;
     (function(datacatalog_v1beta12) {
       class Datacatalog {
@@ -405176,7 +410549,7 @@ var require_datacatalog = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.datacatalog_v1beta1 = exports2.datacatalog_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.datacatalog = datacatalog;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v175();
     Object.defineProperty(exports2, "datacatalog_v1", { enumerable: true, get: function() {
       return v1_1.datacatalog_v1;
@@ -405194,7 +410567,7 @@ var require_datacatalog = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -405207,7 +410580,7 @@ var require_v1b3 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.dataflow_v1b3 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var dataflow_v1b3;
     (function(dataflow_v1b32) {
       class Dataflow {
@@ -406644,7 +412017,7 @@ var require_dataflow = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.dataflow_v1b3 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.dataflow = dataflow;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1b3_1 = require_v1b3();
     Object.defineProperty(exports2, "dataflow_v1b3", { enumerable: true, get: function() {
       return v1b3_1.dataflow_v1b3;
@@ -406657,7 +412030,7 @@ var require_dataflow = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -406670,7 +412043,7 @@ var require_v1beta121 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.dataform_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var dataform_v1beta1;
     (function(dataform_v1beta12) {
       class Dataform {
@@ -408626,7 +413999,7 @@ var require_dataform = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.dataform_v1beta1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.dataform = dataform;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1beta1_1 = require_v1beta121();
     Object.defineProperty(exports2, "dataform_v1beta1", { enumerable: true, get: function() {
       return v1beta1_1.dataform_v1beta1;
@@ -408639,7 +414012,7 @@ var require_dataform = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -408652,7 +414025,7 @@ var require_v176 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.datafusion_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var datafusion_v1;
     (function(datafusion_v12) {
       class Datafusion {
@@ -409299,7 +414672,7 @@ var require_v1beta122 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.datafusion_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var datafusion_v1beta1;
     (function(datafusion_v1beta12) {
       class Datafusion {
@@ -410136,7 +415509,7 @@ var require_datafusion = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.datafusion_v1beta1 = exports2.datafusion_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.datafusion = datafusion;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v176();
     Object.defineProperty(exports2, "datafusion_v1", { enumerable: true, get: function() {
       return v1_1.datafusion_v1;
@@ -410154,7 +415527,7 @@ var require_datafusion = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -410167,7 +415540,7 @@ var require_v1beta123 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.datalabeling_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var datalabeling_v1beta1;
     (function(datalabeling_v1beta12) {
       class Datalabeling {
@@ -411763,7 +417136,7 @@ var require_datalabeling = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.datalabeling_v1beta1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.datalabeling = datalabeling;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1beta1_1 = require_v1beta123();
     Object.defineProperty(exports2, "datalabeling_v1beta1", { enumerable: true, get: function() {
       return v1beta1_1.datalabeling_v1beta1;
@@ -411776,7 +417149,7 @@ var require_datalabeling = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -411789,7 +417162,7 @@ var require_v177 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.datalineage_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var datalineage_v1;
     (function(datalineage_v12) {
       class Datalineage {
@@ -412447,7 +417820,7 @@ var require_datalineage = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.datalineage_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.datalineage = datalineage;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v177();
     Object.defineProperty(exports2, "datalineage_v1", { enumerable: true, get: function() {
       return v1_1.datalineage_v1;
@@ -412460,7 +417833,7 @@ var require_datalineage = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -412473,7 +417846,7 @@ var require_v178 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.datamigration_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var datamigration_v1;
     (function(datamigration_v12) {
       class Datamigration {
@@ -414587,7 +419960,7 @@ var require_v1beta124 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.datamigration_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var datamigration_v1beta1;
     (function(datamigration_v1beta12) {
       class Datamigration {
@@ -415526,7 +420899,7 @@ var require_datamigration = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.datamigration_v1beta1 = exports2.datamigration_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.datamigration = datamigration;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v178();
     Object.defineProperty(exports2, "datamigration_v1", { enumerable: true, get: function() {
       return v1_1.datamigration_v1;
@@ -415544,7 +420917,7 @@ var require_datamigration = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -415557,7 +420930,7 @@ var require_v179 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.datapipelines_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var datapipelines_v1;
     (function(datapipelines_v12) {
       class Datapipelines {
@@ -415857,7 +421230,7 @@ var require_datapipelines = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.datapipelines_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.datapipelines = datapipelines;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v179();
     Object.defineProperty(exports2, "datapipelines_v1", { enumerable: true, get: function() {
       return v1_1.datapipelines_v1;
@@ -415870,7 +421243,7 @@ var require_datapipelines = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -415883,7 +421256,7 @@ var require_v180 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.dataplex_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var dataplex_v1;
     (function(dataplex_v12) {
       class Dataplex {
@@ -422318,7 +427691,7 @@ var require_dataplex = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.dataplex_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.dataplex = dataplex;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v180();
     Object.defineProperty(exports2, "dataplex_v1", { enumerable: true, get: function() {
       return v1_1.dataplex_v1;
@@ -422331,7 +427704,7 @@ var require_dataplex = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -422344,7 +427717,7 @@ var require_v181 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.dataportability_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var dataportability_v1;
     (function(dataportability_v12) {
       class Dataportability {
@@ -422583,7 +427956,7 @@ var require_v1beta11 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.dataportability_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var dataportability_v1beta;
     (function(dataportability_v1beta2) {
       class Dataportability {
@@ -422823,7 +428196,7 @@ var require_dataportability = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.dataportability_v1beta = exports2.dataportability_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.dataportability = dataportability;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v181();
     Object.defineProperty(exports2, "dataportability_v1", { enumerable: true, get: function() {
       return v1_1.dataportability_v1;
@@ -422841,7 +428214,7 @@ var require_dataportability = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -422854,7 +428227,7 @@ var require_v182 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.dataproc_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var dataproc_v1;
     (function(dataproc_v12) {
       class Dataproc {
@@ -426900,7 +432273,7 @@ var require_v1beta24 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.dataproc_v1beta2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var dataproc_v1beta2;
     (function(dataproc_v1beta22) {
       class Dataproc {
@@ -428899,7 +434272,7 @@ var require_dataproc = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.dataproc_v1beta2 = exports2.dataproc_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.dataproc = dataproc;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v182();
     Object.defineProperty(exports2, "dataproc_v1", { enumerable: true, get: function() {
       return v1_1.dataproc_v1;
@@ -428917,7 +434290,7 @@ var require_dataproc = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -428930,7 +434303,7 @@ var require_v183 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.datastore_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var datastore_v1;
     (function(datastore_v12) {
       class Datastore {
@@ -429520,7 +434893,7 @@ var require_v1beta125 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.datastore_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var datastore_v1beta1;
     (function(datastore_v1beta12) {
       class Datastore {
@@ -429612,7 +434985,7 @@ var require_v1beta32 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.datastore_v1beta3 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var datastore_v1beta3;
     (function(datastore_v1beta32) {
       class Datastore {
@@ -429885,7 +435258,7 @@ var require_datastore = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.datastore_v1beta3 = exports2.datastore_v1beta1 = exports2.datastore_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.datastore = datastore;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v183();
     Object.defineProperty(exports2, "datastore_v1", { enumerable: true, get: function() {
       return v1_1.datastore_v1;
@@ -429908,7 +435281,7 @@ var require_datastore = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -429921,7 +435294,7 @@ var require_v184 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.datastream_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var datastream_v1;
     (function(datastream_v12) {
       class Datastream {
@@ -430976,7 +436349,7 @@ var require_v1alpha17 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.datastream_v1alpha1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var datastream_v1alpha1;
     (function(datastream_v1alpha12) {
       class Datastream {
@@ -432002,7 +437375,7 @@ var require_datastream = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.datastream_v1alpha1 = exports2.datastream_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.datastream = datastream;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v184();
     Object.defineProperty(exports2, "datastream_v1", { enumerable: true, get: function() {
       return v1_1.datastream_v1;
@@ -432020,7 +437393,7 @@ var require_datastream = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -432033,7 +437406,7 @@ var require_alpha2 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.deploymentmanager_alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var deploymentmanager_alpha;
     (function(deploymentmanager_alpha2) {
       class Deploymentmanager {
@@ -433109,7 +438482,7 @@ var require_v219 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.deploymentmanager_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var deploymentmanager_v2;
     (function(deploymentmanager_v22) {
       class Deploymentmanager {
@@ -433717,7 +439090,7 @@ var require_v2beta4 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.deploymentmanager_v2beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var deploymentmanager_v2beta;
     (function(deploymentmanager_v2beta2) {
       class Deploymentmanager {
@@ -434764,7 +440137,7 @@ var require_deploymentmanager = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.deploymentmanager_v2beta = exports2.deploymentmanager_v2 = exports2.deploymentmanager_alpha = exports2.auth = exports2.VERSIONS = void 0;
     exports2.deploymentmanager = deploymentmanager;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var alpha_1 = require_alpha2();
     Object.defineProperty(exports2, "deploymentmanager_alpha", { enumerable: true, get: function() {
       return alpha_1.deploymentmanager_alpha;
@@ -434787,7 +440160,7 @@ var require_deploymentmanager = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -434800,7 +440173,7 @@ var require_v185 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.developerconnect_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var developerconnect_v1;
     (function(developerconnect_v12) {
       class Developerconnect {
@@ -436096,7 +441469,7 @@ var require_developerconnect = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.developerconnect_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.developerconnect = developerconnect;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v185();
     Object.defineProperty(exports2, "developerconnect_v1", { enumerable: true, get: function() {
       return v1_1.developerconnect_v1;
@@ -436109,7 +441482,7 @@ var require_developerconnect = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -436122,7 +441495,7 @@ var require_v3_3 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.dfareporting_v3_3 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var dfareporting_v3_3;
     (function(dfareporting_v3_32) {
       class Dfareporting {
@@ -442620,7 +447993,7 @@ var require_v3_4 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.dfareporting_v3_4 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var dfareporting_v3_4;
     (function(dfareporting_v3_42) {
       class Dfareporting {
@@ -449156,7 +454529,7 @@ var require_v3_5 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.dfareporting_v3_5 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var dfareporting_v3_5;
     (function(dfareporting_v3_52) {
       class Dfareporting {
@@ -449219,7 +454592,7 @@ var require_v42 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.dfareporting_v4 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var dfareporting_v4;
     (function(dfareporting_v42) {
       class Dfareporting {
@@ -456345,7 +461718,7 @@ var require_dfareporting = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.dfareporting_v4 = exports2.dfareporting_v3_5 = exports2.dfareporting_v3_4 = exports2.dfareporting_v3_3 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.dfareporting = dfareporting;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v3_3_1 = require_v3_3();
     Object.defineProperty(exports2, "dfareporting_v3_3", { enumerable: true, get: function() {
       return v3_3_1.dfareporting_v3_3;
@@ -456373,7 +461746,7 @@ var require_dfareporting = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -456386,7 +461759,7 @@ var require_v220 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.dialogflow_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var dialogflow_v2;
     (function(dialogflow_v22) {
       class Dialogflow {
@@ -465094,7 +470467,7 @@ var require_v2beta14 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.dialogflow_v2beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var dialogflow_v2beta1;
     (function(dialogflow_v2beta12) {
       class Dialogflow {
@@ -473376,7 +478749,7 @@ var require_v36 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.dialogflow_v3 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var dialogflow_v3;
     (function(dialogflow_v32) {
       class Dialogflow {
@@ -478418,7 +483791,7 @@ var require_v3beta1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.dialogflow_v3beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var dialogflow_v3beta1;
     (function(dialogflow_v3beta12) {
       class Dialogflow {
@@ -483590,7 +488963,7 @@ var require_dialogflow = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.dialogflow_v3beta1 = exports2.dialogflow_v3 = exports2.dialogflow_v2beta1 = exports2.dialogflow_v2 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.dialogflow = dialogflow;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v2_1 = require_v220();
     Object.defineProperty(exports2, "dialogflow_v2", { enumerable: true, get: function() {
       return v2_1.dialogflow_v2;
@@ -483618,7 +488991,7 @@ var require_dialogflow = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -483631,7 +489004,7 @@ var require_v186 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.digitalassetlinks_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var digitalassetlinks_v1;
     (function(digitalassetlinks_v12) {
       class Digitalassetlinks {
@@ -483763,7 +489136,7 @@ var require_digitalassetlinks = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.digitalassetlinks_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.digitalassetlinks = digitalassetlinks;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v186();
     Object.defineProperty(exports2, "digitalassetlinks_v1", { enumerable: true, get: function() {
       return v1_1.digitalassetlinks_v1;
@@ -483776,7 +489149,7 @@ var require_digitalassetlinks = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -483789,7 +489162,7 @@ var require_v187 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.discovery_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var discovery_v1;
     (function(discovery_v12) {
       class Discovery {
@@ -483882,7 +489255,7 @@ var require_discovery2 = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.discovery_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.discovery = discovery;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v187();
     Object.defineProperty(exports2, "discovery_v1", { enumerable: true, get: function() {
       return v1_1.discovery_v1;
@@ -483895,7 +489268,7 @@ var require_discovery2 = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -483908,7 +489281,7 @@ var require_v188 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.discoveryengine_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var discoveryengine_v1;
     (function(discoveryengine_v12) {
       class Discoveryengine {
@@ -491209,7 +496582,7 @@ var require_v1alpha18 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.discoveryengine_v1alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var discoveryengine_v1alpha;
     (function(discoveryengine_v1alpha2) {
       class Discoveryengine {
@@ -500673,7 +506046,7 @@ var require_v1beta20 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.discoveryengine_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var discoveryengine_v1beta;
     (function(discoveryengine_v1beta2) {
       class Discoveryengine {
@@ -508860,7 +514233,7 @@ var require_discoveryengine = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.discoveryengine_v1beta = exports2.discoveryengine_v1alpha = exports2.discoveryengine_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.discoveryengine = discoveryengine;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v188();
     Object.defineProperty(exports2, "discoveryengine_v1", { enumerable: true, get: function() {
       return v1_1.discoveryengine_v1;
@@ -508883,7 +514256,7 @@ var require_discoveryengine = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -508896,7 +514269,7 @@ var require_v189 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.displayvideo_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var displayvideo_v1;
     (function(displayvideo_v12) {
       class Displayvideo {
@@ -513739,7 +519112,7 @@ var require_v1beta21 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.displayvideo_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var displayvideo_v1beta;
     (function(displayvideo_v1beta2) {
       class Displayvideo {
@@ -513894,7 +519267,7 @@ var require_v1beta25 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.displayvideo_v1beta2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var displayvideo_v1beta2;
     (function(displayvideo_v1beta22) {
       class Displayvideo {
@@ -514002,7 +519375,7 @@ var require_v1dev = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.displayvideo_v1dev = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var displayvideo_v1dev;
     (function(displayvideo_v1dev2) {
       class Displayvideo {
@@ -514110,7 +519483,7 @@ var require_v221 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.displayvideo_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var displayvideo_v2;
     (function(displayvideo_v22) {
       class Displayvideo {
@@ -519399,7 +524772,7 @@ var require_v37 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.displayvideo_v3 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var displayvideo_v3;
     (function(displayvideo_v32) {
       class Displayvideo {
@@ -524793,7 +530166,7 @@ var require_v43 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.displayvideo_v4 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var displayvideo_v4;
     (function(displayvideo_v42) {
       class Displayvideo {
@@ -530236,7 +535609,7 @@ var require_displayvideo = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.displayvideo_v4 = exports2.displayvideo_v3 = exports2.displayvideo_v2 = exports2.displayvideo_v1dev = exports2.displayvideo_v1beta2 = exports2.displayvideo_v1beta = exports2.displayvideo_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.displayvideo = displayvideo;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v189();
     Object.defineProperty(exports2, "displayvideo_v1", { enumerable: true, get: function() {
       return v1_1.displayvideo_v1;
@@ -530279,7 +535652,7 @@ var require_displayvideo = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -530292,7 +535665,7 @@ var require_v222 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.dlp_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var dlp_v2;
     (function(dlp_v22) {
       class Dlp {
@@ -535053,7 +540426,7 @@ var require_dlp = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.dlp_v2 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.dlp = dlp;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v2_1 = require_v222();
     Object.defineProperty(exports2, "dlp_v2", { enumerable: true, get: function() {
       return v2_1.dlp_v2;
@@ -535066,7 +540439,7 @@ var require_dlp = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -535079,7 +540452,7 @@ var require_v190 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.dns_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var dns_v1;
     (function(dns_v12) {
       class Dns {
@@ -536383,7 +541756,7 @@ var require_v1beta26 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.dns_v1beta2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var dns_v1beta2;
     (function(dns_v1beta22) {
       class Dns {
@@ -537687,7 +543060,7 @@ var require_v223 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.dns_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var dns_v2;
     (function(dns_v22) {
       class Dns {
@@ -538904,7 +544277,7 @@ var require_v2beta15 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.dns_v2beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var dns_v2beta1;
     (function(dns_v2beta12) {
       class Dns {
@@ -539600,7 +544973,7 @@ var require_dns = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.dns_v2beta1 = exports2.dns_v2 = exports2.dns_v1beta2 = exports2.dns_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.dns = dns;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v190();
     Object.defineProperty(exports2, "dns_v1", { enumerable: true, get: function() {
       return v1_1.dns_v1;
@@ -539628,7 +545001,7 @@ var require_dns = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -539641,7 +545014,7 @@ var require_v191 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.docs_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var docs_v1;
     (function(docs_v12) {
       class Docs {
@@ -539764,7 +545137,7 @@ var require_docs = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.docs_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.docs = docs;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v191();
     Object.defineProperty(exports2, "docs_v1", { enumerable: true, get: function() {
       return v1_1.docs_v1;
@@ -539777,7 +545150,7 @@ var require_docs = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -539790,7 +545163,7 @@ var require_v192 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.documentai_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var documentai_v1;
     (function(documentai_v12) {
       class Documentai {
@@ -540833,7 +546206,7 @@ var require_v1beta27 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.documentai_v1beta2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var documentai_v1beta2;
     (function(documentai_v1beta22) {
       class Documentai {
@@ -541090,7 +546463,7 @@ var require_v1beta33 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.documentai_v1beta3 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var documentai_v1beta3;
     (function(documentai_v1beta32) {
       class Documentai {
@@ -542305,7 +547678,7 @@ var require_documentai = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.documentai_v1beta3 = exports2.documentai_v1beta2 = exports2.documentai_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.documentai = documentai;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v192();
     Object.defineProperty(exports2, "documentai_v1", { enumerable: true, get: function() {
       return v1_1.documentai_v1;
@@ -542328,7 +547701,7 @@ var require_documentai = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -542341,7 +547714,7 @@ var require_v193 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.domains_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var domains_v1;
     (function(domains_v12) {
       class Domains {
@@ -543240,7 +548613,7 @@ var require_v1alpha24 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.domains_v1alpha2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var domains_v1alpha2;
     (function(domains_v1alpha22) {
       class Domains {
@@ -544139,7 +549512,7 @@ var require_v1beta126 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.domains_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var domains_v1beta1;
     (function(domains_v1beta12) {
       class Domains {
@@ -545039,7 +550412,7 @@ var require_domains = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.domains_v1beta1 = exports2.domains_v1alpha2 = exports2.domains_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.domains = domains;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v193();
     Object.defineProperty(exports2, "domains_v1", { enumerable: true, get: function() {
       return v1_1.domains_v1;
@@ -545062,7 +550435,7 @@ var require_domains = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -545075,7 +550448,7 @@ var require_v194 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.domainsrdap_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var domainsrdap_v1;
     (function(domainsrdap_v12) {
       class Domainsrdap {
@@ -545453,7 +550826,7 @@ var require_domainsrdap = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.domainsrdap_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.domainsrdap = domainsrdap;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v194();
     Object.defineProperty(exports2, "domainsrdap_v1", { enumerable: true, get: function() {
       return v1_1.domainsrdap_v1;
@@ -545466,7 +550839,7 @@ var require_domainsrdap = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -545479,7 +550852,7 @@ var require_v1_12 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.doubleclickbidmanager_v1_1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var doubleclickbidmanager_v1_1;
     (function(doubleclickbidmanager_v1_12) {
       class Doubleclickbidmanager {
@@ -545716,7 +551089,7 @@ var require_v224 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.doubleclickbidmanager_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var doubleclickbidmanager_v2;
     (function(doubleclickbidmanager_v22) {
       class Doubleclickbidmanager {
@@ -545968,7 +551341,7 @@ var require_doubleclickbidmanager = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.doubleclickbidmanager_v2 = exports2.doubleclickbidmanager_v1 = exports2.doubleclickbidmanager_v1_1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.doubleclickbidmanager = doubleclickbidmanager;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1_1 = require_v1_12();
     Object.defineProperty(exports2, "doubleclickbidmanager_v1_1", { enumerable: true, get: function() {
       return v1_1_1.doubleclickbidmanager_v1_1;
@@ -545991,7 +551364,7 @@ var require_doubleclickbidmanager = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -546004,7 +551377,7 @@ var require_v225 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.doubleclicksearch_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var doubleclicksearch_v2;
     (function(doubleclicksearch_v22) {
       class Doubleclicksearch {
@@ -546399,7 +551772,7 @@ var require_doubleclicksearch = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.doubleclicksearch_v2 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.doubleclicksearch = doubleclicksearch;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v2_1 = require_v225();
     Object.defineProperty(exports2, "doubleclicksearch_v2", { enumerable: true, get: function() {
       return v2_1.doubleclicksearch_v2;
@@ -546412,7 +551785,7 @@ var require_doubleclicksearch = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -546425,7 +551798,7 @@ var require_v226 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.drive_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var drive_v2;
     (function(drive_v22) {
       class Drive {
@@ -548796,7 +554169,7 @@ var require_v38 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.drive_v3 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var drive_v3;
     (function(drive_v32) {
       class Drive {
@@ -550589,7 +555962,7 @@ var require_drive = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.drive_v3 = exports2.drive_v2 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.drive = drive;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v2_1 = require_v226();
     Object.defineProperty(exports2, "drive_v2", { enumerable: true, get: function() {
       return v2_1.drive_v2;
@@ -550607,7 +555980,7 @@ var require_drive = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -550620,7 +555993,7 @@ var require_v227 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.driveactivity_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var driveactivity_v2;
     (function(driveactivity_v22) {
       class Driveactivity {
@@ -550683,7 +556056,7 @@ var require_driveactivity = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.driveactivity_v2 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.driveactivity = driveactivity;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v2_1 = require_v227();
     Object.defineProperty(exports2, "driveactivity_v2", { enumerable: true, get: function() {
       return v2_1.driveactivity_v2;
@@ -550696,7 +556069,7 @@ var require_driveactivity = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -550709,7 +556082,7 @@ var require_v228 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.drivelabels_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var drivelabels_v2;
     (function(drivelabels_v22) {
       class Drivelabels {
@@ -551584,7 +556957,7 @@ var require_v2beta5 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.drivelabels_v2beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var drivelabels_v2beta;
     (function(drivelabels_v2beta2) {
       class Drivelabels {
@@ -552460,7 +557833,7 @@ var require_drivelabels = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.drivelabels_v2beta = exports2.drivelabels_v2 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.drivelabels = drivelabels;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v2_1 = require_v228();
     Object.defineProperty(exports2, "drivelabels_v2", { enumerable: true, get: function() {
       return v2_1.drivelabels_v2;
@@ -552478,7 +557851,7 @@ var require_drivelabels = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -552491,7 +557864,7 @@ var require_v196 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.essentialcontacts_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var essentialcontacts_v1;
     (function(essentialcontacts_v12) {
       class Essentialcontacts {
@@ -553199,7 +558572,7 @@ var require_essentialcontacts = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.essentialcontacts_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.essentialcontacts = essentialcontacts;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v196();
     Object.defineProperty(exports2, "essentialcontacts_v1", { enumerable: true, get: function() {
       return v1_1.essentialcontacts_v1;
@@ -553212,7 +558585,7 @@ var require_essentialcontacts = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -553225,7 +558598,7 @@ var require_v197 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.eventarc_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var eventarc_v1;
     (function(eventarc_v12) {
       class Eventarc {
@@ -555426,7 +560799,7 @@ var require_v1beta127 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.eventarc_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var eventarc_v1beta1;
     (function(eventarc_v1beta12) {
       class Eventarc {
@@ -555906,7 +561279,7 @@ var require_eventarc = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.eventarc_v1beta1 = exports2.eventarc_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.eventarc = eventarc;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v197();
     Object.defineProperty(exports2, "eventarc_v1", { enumerable: true, get: function() {
       return v1_1.eventarc_v1;
@@ -555924,7 +561297,7 @@ var require_eventarc = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -555937,7 +561310,7 @@ var require_v1alpha19 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.factchecktools_v1alpha1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var factchecktools_v1alpha1;
     (function(factchecktools_v1alpha12) {
       class Factchecktools {
@@ -556189,7 +561562,7 @@ var require_factchecktools = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.factchecktools_v1alpha1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.factchecktools = factchecktools;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1alpha1_1 = require_v1alpha19();
     Object.defineProperty(exports2, "factchecktools_v1alpha1", { enumerable: true, get: function() {
       return v1alpha1_1.factchecktools_v1alpha1;
@@ -556202,7 +561575,7 @@ var require_factchecktools = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -556215,7 +561588,7 @@ var require_v198 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.fcm_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var fcm_v1;
     (function(fcm_v12) {
       class Fcm {
@@ -556287,7 +561660,7 @@ var require_fcm = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.fcm_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.fcm = fcm;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v198();
     Object.defineProperty(exports2, "fcm_v1", { enumerable: true, get: function() {
       return v1_1.fcm_v1;
@@ -556300,7 +561673,7 @@ var require_fcm = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -556313,7 +561686,7 @@ var require_v1beta128 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.fcmdata_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var fcmdata_v1beta1;
     (function(fcmdata_v1beta12) {
       class Fcmdata {
@@ -556394,7 +561767,7 @@ var require_fcmdata = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.fcmdata_v1beta1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.fcmdata = fcmdata;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1beta1_1 = require_v1beta128();
     Object.defineProperty(exports2, "fcmdata_v1beta1", { enumerable: true, get: function() {
       return v1beta1_1.fcmdata_v1beta1;
@@ -556407,7 +561780,7 @@ var require_fcmdata = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -556420,7 +561793,7 @@ var require_v199 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.file_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var file_v1;
     (function(file_v12) {
       class File4 {
@@ -557217,7 +562590,7 @@ var require_v1beta129 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.file_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var file_v1beta1;
     (function(file_v1beta12) {
       class File4 {
@@ -558174,7 +563547,7 @@ var require_file = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.file_v1beta1 = exports2.file_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.file = file;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v199();
     Object.defineProperty(exports2, "file_v1", { enumerable: true, get: function() {
       return v1_1.file_v1;
@@ -558192,7 +563565,7 @@ var require_file = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -558205,7 +563578,7 @@ var require_v1beta130 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.firebase_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var firebase_v1beta1;
     (function(firebase_v1beta12) {
       class Firebase {
@@ -559420,7 +564793,7 @@ var require_firebase = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.firebase_v1beta1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.firebase = firebase;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1beta1_1 = require_v1beta130();
     Object.defineProperty(exports2, "firebase_v1beta1", { enumerable: true, get: function() {
       return v1beta1_1.firebase_v1beta1;
@@ -559433,7 +564806,7 @@ var require_firebase = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -559446,7 +564819,7 @@ var require_v1100 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.firebaseappcheck_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var firebaseappcheck_v1;
     (function(firebaseappcheck_v12) {
       class Firebaseappcheck {
@@ -561056,7 +566429,7 @@ var require_v1beta28 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.firebaseappcheck_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var firebaseappcheck_v1beta;
     (function(firebaseappcheck_v1beta2) {
       class Firebaseappcheck {
@@ -562826,7 +568199,7 @@ var require_firebaseappcheck = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.firebaseappcheck_v1beta = exports2.firebaseappcheck_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.firebaseappcheck = firebaseappcheck;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1100();
     Object.defineProperty(exports2, "firebaseappcheck_v1", { enumerable: true, get: function() {
       return v1_1.firebaseappcheck_v1;
@@ -562844,7 +568217,7 @@ var require_firebaseappcheck = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -562857,7 +568230,7 @@ var require_v1101 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.firebaseappdistribution_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var firebaseappdistribution_v1;
     (function(firebaseappdistribution_v12) {
       class Firebaseappdistribution {
@@ -563733,7 +569106,7 @@ var require_v1alpha20 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.firebaseappdistribution_v1alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var firebaseappdistribution_v1alpha;
     (function(firebaseappdistribution_v1alpha2) {
       class Firebaseappdistribution {
@@ -564495,7 +569868,7 @@ var require_firebaseappdistribution = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.firebaseappdistribution_v1alpha = exports2.firebaseappdistribution_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.firebaseappdistribution = firebaseappdistribution;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1101();
     Object.defineProperty(exports2, "firebaseappdistribution_v1", { enumerable: true, get: function() {
       return v1_1.firebaseappdistribution_v1;
@@ -564513,7 +569886,7 @@ var require_firebaseappdistribution = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -564526,7 +569899,7 @@ var require_v1102 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.firebaseapphosting_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var firebaseapphosting_v1;
     (function(firebaseapphosting_v12) {
       class Firebaseapphosting {
@@ -565371,7 +570744,7 @@ var require_v1beta29 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.firebaseapphosting_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var firebaseapphosting_v1beta;
     (function(firebaseapphosting_v1beta2) {
       class Firebaseapphosting {
@@ -566217,7 +571590,7 @@ var require_firebaseapphosting = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.firebaseapphosting_v1beta = exports2.firebaseapphosting_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.firebaseapphosting = firebaseapphosting;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1102();
     Object.defineProperty(exports2, "firebaseapphosting_v1", { enumerable: true, get: function() {
       return v1_1.firebaseapphosting_v1;
@@ -566235,7 +571608,7 @@ var require_firebaseapphosting = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -566248,7 +571621,7 @@ var require_v1beta30 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.firebasedatabase_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var firebasedatabase_v1beta;
     (function(firebasedatabase_v1beta2) {
       class Firebasedatabase {
@@ -566509,7 +571882,7 @@ var require_firebasedatabase = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.firebasedatabase_v1beta = exports2.auth = exports2.VERSIONS = void 0;
     exports2.firebasedatabase = firebasedatabase;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1beta_1 = require_v1beta30();
     Object.defineProperty(exports2, "firebasedatabase_v1beta", { enumerable: true, get: function() {
       return v1beta_1.firebasedatabase_v1beta;
@@ -566522,7 +571895,7 @@ var require_firebasedatabase = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -566535,7 +571908,7 @@ var require_v1103 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.firebasedataconnect_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var firebasedataconnect_v1;
     (function(firebasedataconnect_v12) {
       class Firebasedataconnect {
@@ -567362,7 +572735,7 @@ var require_v1beta31 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.firebasedataconnect_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var firebasedataconnect_v1beta;
     (function(firebasedataconnect_v1beta2) {
       class Firebasedataconnect {
@@ -568190,7 +573563,7 @@ var require_firebasedataconnect = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.firebasedataconnect_v1beta = exports2.firebasedataconnect_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.firebasedataconnect = firebasedataconnect;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1103();
     Object.defineProperty(exports2, "firebasedataconnect_v1", { enumerable: true, get: function() {
       return v1_1.firebasedataconnect_v1;
@@ -568208,7 +573581,7 @@ var require_firebasedataconnect = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -568221,7 +573594,7 @@ var require_v1104 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.firebasedynamiclinks_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var firebasedynamiclinks_v1;
     (function(firebasedynamiclinks_v12) {
       class Firebasedynamiclinks {
@@ -568422,7 +573795,7 @@ var require_firebasedynamiclinks = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.firebasedynamiclinks_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.firebasedynamiclinks = firebasedynamiclinks;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1104();
     Object.defineProperty(exports2, "firebasedynamiclinks_v1", { enumerable: true, get: function() {
       return v1_1.firebasedynamiclinks_v1;
@@ -568435,7 +573808,7 @@ var require_firebasedynamiclinks = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -568448,7 +573821,7 @@ var require_v1105 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.firebasehosting_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var firebasehosting_v1;
     (function(firebasehosting_v12) {
       class Firebasehosting {
@@ -568666,7 +574039,7 @@ var require_v1beta131 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.firebasehosting_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var firebasehosting_v1beta1;
     (function(firebasehosting_v1beta12) {
       class Firebasehosting {
@@ -570832,7 +576205,7 @@ var require_firebasehosting = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.firebasehosting_v1beta1 = exports2.firebasehosting_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.firebasehosting = firebasehosting;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1105();
     Object.defineProperty(exports2, "firebasehosting_v1", { enumerable: true, get: function() {
       return v1_1.firebasehosting_v1;
@@ -570850,7 +576223,7 @@ var require_firebasehosting = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -570863,7 +576236,7 @@ var require_v1106 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.firebaseml_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var firebaseml_v1;
     (function(firebaseml_v12) {
       class Firebaseml {
@@ -570985,7 +576358,7 @@ var require_v1beta210 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.firebaseml_v1beta2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var firebaseml_v1beta2;
     (function(firebaseml_v1beta22) {
       class Firebaseml {
@@ -571245,7 +576618,7 @@ var require_v2beta6 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.firebaseml_v2beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var firebaseml_v2beta;
     (function(firebaseml_v2beta2) {
       class Firebaseml {
@@ -571395,7 +576768,7 @@ var require_firebaseml = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.firebaseml_v2beta = exports2.firebaseml_v1beta2 = exports2.firebaseml_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.firebaseml = firebaseml;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1106();
     Object.defineProperty(exports2, "firebaseml_v1", { enumerable: true, get: function() {
       return v1_1.firebaseml_v1;
@@ -571418,7 +576791,7 @@ var require_firebaseml = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -571431,7 +576804,7 @@ var require_v1107 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.firebaserules_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var firebaserules_v1;
     (function(firebaserules_v12) {
       class Firebaserules {
@@ -571812,7 +577185,7 @@ var require_firebaserules = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.firebaserules_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.firebaserules = firebaserules;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1107();
     Object.defineProperty(exports2, "firebaserules_v1", { enumerable: true, get: function() {
       return v1_1.firebaserules_v1;
@@ -571825,7 +577198,7 @@ var require_firebaserules = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -571838,7 +577211,7 @@ var require_v1beta34 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.firebasestorage_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var firebasestorage_v1beta;
     (function(firebasestorage_v1beta2) {
       class Firebasestorage {
@@ -572099,7 +577472,7 @@ var require_firebasestorage = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.firebasestorage_v1beta = exports2.auth = exports2.VERSIONS = void 0;
     exports2.firebasestorage = firebasestorage;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1beta_1 = require_v1beta34();
     Object.defineProperty(exports2, "firebasestorage_v1beta", { enumerable: true, get: function() {
       return v1beta_1.firebasestorage_v1beta;
@@ -572112,7 +577485,7 @@ var require_firebasestorage = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -572125,7 +577498,7 @@ var require_v1108 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.firestore_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var firestore_v1;
     (function(firestore_v12) {
       class Firestore {
@@ -573897,7 +579270,7 @@ var require_v1beta132 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.firestore_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var firestore_v1beta1;
     (function(firestore_v1beta12) {
       class Firestore {
@@ -574646,7 +580019,7 @@ var require_v1beta211 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.firestore_v1beta2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var firestore_v1beta2;
     (function(firestore_v1beta22) {
       class Firestore {
@@ -574985,7 +580358,7 @@ var require_firestore = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.firestore_v1beta2 = exports2.firestore_v1beta1 = exports2.firestore_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.firestore = firestore;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1108();
     Object.defineProperty(exports2, "firestore_v1", { enumerable: true, get: function() {
       return v1_1.firestore_v1;
@@ -575008,7 +580381,7 @@ var require_firestore = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -575021,7 +580394,7 @@ var require_v1109 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.fitness_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var fitness_v1;
     (function(fitness_v12) {
       class Fitness {
@@ -575489,7 +580862,7 @@ var require_fitness = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.fitness_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.fitness = fitness;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1109();
     Object.defineProperty(exports2, "fitness_v1", { enumerable: true, get: function() {
       return v1_1.fitness_v1;
@@ -575502,7 +580875,7 @@ var require_fitness = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -575515,7 +580888,7 @@ var require_v1110 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.forms_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var forms_v1;
     (function(forms_v12) {
       class Forms {
@@ -575866,7 +581239,7 @@ var require_forms = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.forms_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.forms = forms;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1110();
     Object.defineProperty(exports2, "forms_v1", { enumerable: true, get: function() {
       return v1_1.forms_v1;
@@ -575879,7 +581252,7 @@ var require_forms = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -575892,7 +581265,7 @@ var require_v1111 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.games_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var games_v1;
     (function(games_v12) {
       class Games {
@@ -577203,7 +582576,7 @@ var require_games = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.games_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.games = games;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1111();
     Object.defineProperty(exports2, "games_v1", { enumerable: true, get: function() {
       return v1_1.games_v1;
@@ -577216,7 +582589,7 @@ var require_games = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -577229,7 +582602,7 @@ var require_v1configuration = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.gamesConfiguration_v1configuration = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var gamesConfiguration_v1configuration;
     (function(gamesConfiguration_v1configuration2) {
       class Gamesconfiguration {
@@ -577571,7 +582944,7 @@ var require_gamesConfiguration = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.gamesConfiguration_v1configuration = exports2.auth = exports2.VERSIONS = void 0;
     exports2.gamesConfiguration = gamesConfiguration;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1configuration_1 = require_v1configuration();
     Object.defineProperty(exports2, "gamesConfiguration_v1configuration", { enumerable: true, get: function() {
       return v1configuration_1.gamesConfiguration_v1configuration;
@@ -577584,7 +582957,7 @@ var require_gamesConfiguration = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -577597,7 +582970,7 @@ var require_v1management = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.gamesManagement_v1management = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var gamesManagement_v1management;
     (function(gamesManagement_v1management2) {
       class Gamesmanagement {
@@ -578206,7 +583579,7 @@ var require_gamesManagement = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.gamesManagement_v1management = exports2.auth = exports2.VERSIONS = void 0;
     exports2.gamesManagement = gamesManagement;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1management_1 = require_v1management();
     Object.defineProperty(exports2, "gamesManagement_v1management", { enumerable: true, get: function() {
       return v1management_1.gamesManagement_v1management;
@@ -578219,7 +583592,7 @@ var require_gamesManagement = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -578232,7 +583605,7 @@ var require_v1112 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.gameservices_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var gameservices_v1;
     (function(gameservices_v12) {
       class Gameservices {
@@ -578552,7 +583925,7 @@ var require_v1beta35 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.gameservices_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var gameservices_v1beta;
     (function(gameservices_v1beta2) {
       class Gameservices {
@@ -578873,7 +584246,7 @@ var require_gameservices = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.gameservices_v1beta = exports2.gameservices_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.gameservices = gameservices;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1112();
     Object.defineProperty(exports2, "gameservices_v1", { enumerable: true, get: function() {
       return v1_1.gameservices_v1;
@@ -578891,7 +584264,7 @@ var require_gameservices = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -578926,7 +584299,7 @@ var require_v1alpha25 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.genomics_v1alpha2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var genomics_v1alpha2;
     (function(genomics_v1alpha22) {
       class Genomics {
@@ -579257,7 +584630,7 @@ var require_v2alpha1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.genomics_v2alpha1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var genomics_v2alpha1;
     (function(genomics_v2alpha12) {
       class Genomics {
@@ -579500,7 +584873,7 @@ var require_genomics = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.genomics_v2alpha1 = exports2.genomics_v1alpha2 = exports2.genomics_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.genomics = genomics;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1113();
     Object.defineProperty(exports2, "genomics_v1", { enumerable: true, get: function() {
       return v1_1.genomics_v1;
@@ -579523,7 +584896,7 @@ var require_genomics = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -579536,7 +584909,7 @@ var require_v1114 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.gkebackup_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var gkebackup_v1;
     (function(gkebackup_v12) {
       class Gkebackup {
@@ -581567,7 +586940,7 @@ var require_gkebackup = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.gkebackup_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.gkebackup = gkebackup;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1114();
     Object.defineProperty(exports2, "gkebackup_v1", { enumerable: true, get: function() {
       return v1_1.gkebackup_v1;
@@ -581580,7 +586953,7 @@ var require_gkebackup = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -581593,7 +586966,7 @@ var require_v1115 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.gkehub_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var gkehub_v1;
     (function(gkehub_v12) {
       class Gkehub {
@@ -583542,7 +588915,7 @@ var require_v1alpha21 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.gkehub_v1alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var gkehub_v1alpha;
     (function(gkehub_v1alpha2) {
       class Gkehub {
@@ -585611,7 +590984,7 @@ var require_v1alpha26 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.gkehub_v1alpha2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var gkehub_v1alpha2;
     (function(gkehub_v1alpha22) {
       class Gkehub {
@@ -586152,7 +591525,7 @@ var require_v1beta36 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.gkehub_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var gkehub_v1beta;
     (function(gkehub_v1beta2) {
       class Gkehub {
@@ -588101,7 +593474,7 @@ var require_v1beta133 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.gkehub_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var gkehub_v1beta1;
     (function(gkehub_v1beta12) {
       class Gkehub {
@@ -588670,7 +594043,7 @@ var require_v229 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.gkehub_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var gkehub_v2;
     (function(gkehub_v22) {
       class Gkehub {
@@ -589038,7 +594411,7 @@ var require_v2alpha2 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.gkehub_v2alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var gkehub_v2alpha;
     (function(gkehub_v2alpha2) {
       class Gkehub {
@@ -589406,7 +594779,7 @@ var require_v2beta7 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.gkehub_v2beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var gkehub_v2beta;
     (function(gkehub_v2beta2) {
       class Gkehub {
@@ -589775,7 +595148,7 @@ var require_gkehub = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.gkehub_v2beta = exports2.gkehub_v2alpha = exports2.gkehub_v2 = exports2.gkehub_v1beta1 = exports2.gkehub_v1beta = exports2.gkehub_v1alpha2 = exports2.gkehub_v1alpha = exports2.gkehub_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.gkehub = gkehub;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1115();
     Object.defineProperty(exports2, "gkehub_v1", { enumerable: true, get: function() {
       return v1_1.gkehub_v1;
@@ -589823,7 +595196,7 @@ var require_gkehub = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -589836,7 +595209,7 @@ var require_v1116 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.gkeonprem_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var gkeonprem_v1;
     (function(gkeonprem_v12) {
       class Gkeonprem {
@@ -592365,7 +597738,7 @@ var require_gkeonprem = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.gkeonprem_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.gkeonprem = gkeonprem;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1116();
     Object.defineProperty(exports2, "gkeonprem_v1", { enumerable: true, get: function() {
       return v1_1.gkeonprem_v1;
@@ -592378,7 +597751,7 @@ var require_gkeonprem = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -592391,7 +597764,7 @@ var require_v1117 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.gmail_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var gmail_v1;
     (function(gmail_v12) {
       class Gmail {
@@ -594935,7 +600308,7 @@ var require_gmail = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.gmail_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.gmail = gmail;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1117();
     Object.defineProperty(exports2, "gmail_v1", { enumerable: true, get: function() {
       return v1_1.gmail_v1;
@@ -594948,7 +600321,7 @@ var require_gmail = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -594961,7 +600334,7 @@ var require_v1118 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.gmailpostmastertools_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var gmailpostmastertools_v1;
     (function(gmailpostmastertools_v12) {
       class Gmailpostmastertools {
@@ -595122,7 +600495,7 @@ var require_v1beta134 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.gmailpostmastertools_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var gmailpostmastertools_v1beta1;
     (function(gmailpostmastertools_v1beta12) {
       class Gmailpostmastertools {
@@ -595284,7 +600657,7 @@ var require_gmailpostmastertools = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.gmailpostmastertools_v1beta1 = exports2.gmailpostmastertools_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.gmailpostmastertools = gmailpostmastertools;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1118();
     Object.defineProperty(exports2, "gmailpostmastertools_v1", { enumerable: true, get: function() {
       return v1_1.gmailpostmastertools_v1;
@@ -595302,7 +600675,7 @@ var require_gmailpostmastertools = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -595315,7 +600688,7 @@ var require_v1119 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.groupsmigration_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var groupsmigration_v1;
     (function(groupsmigration_v12) {
       class Groupsmigration {
@@ -595379,7 +600752,7 @@ var require_groupsmigration = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.groupsmigration_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.groupsmigration = groupsmigration;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1119();
     Object.defineProperty(exports2, "groupsmigration_v1", { enumerable: true, get: function() {
       return v1_1.groupsmigration_v1;
@@ -595392,7 +600765,7 @@ var require_groupsmigration = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -595405,7 +600778,7 @@ var require_v1120 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.groupssettings_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var groupssettings_v1;
     (function(groupssettings_v12) {
       class Groupssettings {
@@ -595528,7 +600901,7 @@ var require_groupssettings = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.groupssettings_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.groupssettings = groupssettings;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1120();
     Object.defineProperty(exports2, "groupssettings_v1", { enumerable: true, get: function() {
       return v1_1.groupssettings_v1;
@@ -595541,7 +600914,7 @@ var require_groupssettings = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -595554,7 +600927,7 @@ var require_v1121 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.healthcare_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var healthcare_v1;
     (function(healthcare_v12) {
       class Healthcare {
@@ -600371,7 +605744,7 @@ var require_v1beta135 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.healthcare_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var healthcare_v1beta1;
     (function(healthcare_v1beta12) {
       class Healthcare {
@@ -605996,7 +611369,7 @@ var require_healthcare = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.healthcare_v1beta1 = exports2.healthcare_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.healthcare = healthcare;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1121();
     Object.defineProperty(exports2, "healthcare_v1", { enumerable: true, get: function() {
       return v1_1.healthcare_v1;
@@ -606014,7 +611387,7 @@ var require_healthcare = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -606027,7 +611400,7 @@ var require_v1122 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.homegraph_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var homegraph_v1;
     (function(homegraph_v12) {
       class Homegraph {
@@ -606219,7 +611592,7 @@ var require_homegraph = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.homegraph_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.homegraph = homegraph;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1122();
     Object.defineProperty(exports2, "homegraph_v1", { enumerable: true, get: function() {
       return v1_1.homegraph_v1;
@@ -606232,7 +611605,7 @@ var require_homegraph = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -606245,7 +611618,7 @@ var require_v1123 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.iam_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var iam_v1;
     (function(iam_v12) {
       class Iam {
@@ -610483,7 +615856,7 @@ var require_v230 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.iam_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var iam_v2;
     (function(iam_v22) {
       class Iam {
@@ -610704,7 +616077,7 @@ var require_v2beta8 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.iam_v2beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var iam_v2beta;
     (function(iam_v2beta2) {
       class Iam {
@@ -610926,7 +616299,7 @@ var require_iam2 = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.iam_v2beta = exports2.iam_v2 = exports2.iam_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.iam = iam;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1123();
     Object.defineProperty(exports2, "iam_v1", { enumerable: true, get: function() {
       return v1_1.iam_v1;
@@ -610949,7 +616322,7 @@ var require_iam2 = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -610962,7 +616335,7 @@ var require_v1124 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.iamcredentials_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var iamcredentials_v1;
     (function(iamcredentials_v12) {
       class Iamcredentials {
@@ -611250,7 +616623,7 @@ var require_iamcredentials = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.iamcredentials_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.iamcredentials = iamcredentials;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1124();
     Object.defineProperty(exports2, "iamcredentials_v1", { enumerable: true, get: function() {
       return v1_1.iamcredentials_v1;
@@ -611263,7 +616636,7 @@ var require_iamcredentials = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -611276,7 +616649,7 @@ var require_v1125 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.iap_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var iap_v1;
     (function(iap_v12) {
       class Iap {
@@ -611932,7 +617305,7 @@ var require_v1beta136 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.iap_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var iap_v1beta1;
     (function(iap_v1beta12) {
       class Iap {
@@ -612055,7 +617428,7 @@ var require_iap = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.iap_v1beta1 = exports2.iap_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.iap = iap;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1125();
     Object.defineProperty(exports2, "iap_v1", { enumerable: true, get: function() {
       return v1_1.iap_v1;
@@ -612073,7 +617446,7 @@ var require_iap = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -612086,7 +617459,7 @@ var require_v1alpha27 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.ideahub_v1alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var ideahub_v1alpha;
     (function(ideahub_v1alpha2) {
       class Ideahub {
@@ -612355,7 +617728,7 @@ var require_v1beta37 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.ideahub_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var ideahub_v1beta;
     (function(ideahub_v1beta2) {
       class Ideahub {
@@ -612587,7 +617960,7 @@ var require_ideahub = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.ideahub_v1beta = exports2.ideahub_v1alpha = exports2.auth = exports2.VERSIONS = void 0;
     exports2.ideahub = ideahub;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1alpha_1 = require_v1alpha27();
     Object.defineProperty(exports2, "ideahub_v1alpha", { enumerable: true, get: function() {
       return v1alpha_1.ideahub_v1alpha;
@@ -612605,7 +617978,7 @@ var require_ideahub = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -612618,7 +617991,7 @@ var require_v231 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.identitytoolkit_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var identitytoolkit_v2;
     (function(identitytoolkit_v22) {
       class Identitytoolkit {
@@ -614267,7 +619640,7 @@ var require_v39 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.identitytoolkit_v3 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var identitytoolkit_v3;
     (function(identitytoolkit_v32) {
       class Identitytoolkit {
@@ -614900,7 +620273,7 @@ var require_identitytoolkit = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.identitytoolkit_v3 = exports2.identitytoolkit_v2 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.identitytoolkit = identitytoolkit;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v2_1 = require_v231();
     Object.defineProperty(exports2, "identitytoolkit_v2", { enumerable: true, get: function() {
       return v2_1.identitytoolkit_v2;
@@ -614918,7 +620291,7 @@ var require_identitytoolkit = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -614931,7 +620304,7 @@ var require_v1126 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.ids_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var ids_v1;
     (function(ids_v12) {
       class Ids {
@@ -615321,7 +620694,7 @@ var require_ids = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.ids_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.ids = ids;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1126();
     Object.defineProperty(exports2, "ids_v1", { enumerable: true, get: function() {
       return v1_1.ids_v1;
@@ -615334,7 +620707,7 @@ var require_ids = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -615347,7 +620720,7 @@ var require_v310 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.indexing_v3 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var indexing_v3;
     (function(indexing_v32) {
       class Indexing {
@@ -615440,7 +620813,7 @@ var require_indexing = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.indexing_v3 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.indexing = indexing;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v3_1 = require_v310();
     Object.defineProperty(exports2, "indexing_v3", { enumerable: true, get: function() {
       return v3_1.indexing_v3;
@@ -615453,7 +620826,7 @@ var require_indexing = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -615466,7 +620839,7 @@ var require_v1alpha28 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.integrations_v1alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var integrations_v1alpha;
     (function(integrations_v1alpha2) {
       class Integrations {
@@ -618198,7 +623571,7 @@ var require_integrations = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.integrations_v1alpha = exports2.auth = exports2.VERSIONS = void 0;
     exports2.integrations = integrations;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1alpha_1 = require_v1alpha28();
     Object.defineProperty(exports2, "integrations_v1alpha", { enumerable: true, get: function() {
       return v1alpha_1.integrations_v1alpha;
@@ -618211,7 +623584,7 @@ var require_integrations = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -618224,7 +623597,7 @@ var require_v232 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.jobs_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var jobs_v2;
     (function(jobs_v22) {
       class Jobs {
@@ -618776,7 +624149,7 @@ var require_v311 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.jobs_v3 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var jobs_v3;
     (function(jobs_v32) {
       class Jobs {
@@ -619285,7 +624658,7 @@ var require_v3p1beta1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.jobs_v3p1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var jobs_v3p1beta1;
     (function(jobs_v3p1beta12) {
       class Jobs {
@@ -619833,7 +625206,7 @@ var require_v44 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.jobs_v4 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var jobs_v4;
     (function(jobs_v42) {
       class Jobs {
@@ -620601,7 +625974,7 @@ var require_jobs = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.jobs_v4 = exports2.jobs_v3p1beta1 = exports2.jobs_v3 = exports2.jobs_v2 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.jobs = jobs;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v2_1 = require_v232();
     Object.defineProperty(exports2, "jobs_v2", { enumerable: true, get: function() {
       return v2_1.jobs_v2;
@@ -620629,7 +626002,7 @@ var require_jobs = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -620642,7 +626015,7 @@ var require_v1127 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.keep_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var keep_v1;
     (function(keep_v12) {
       class Keep {
@@ -620903,7 +626276,7 @@ var require_keep = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.keep_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.keep = keep;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1127();
     Object.defineProperty(exports2, "keep_v1", { enumerable: true, get: function() {
       return v1_1.keep_v1;
@@ -620916,7 +626289,7 @@ var require_keep = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -620929,7 +626302,7 @@ var require_v1128 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.kgsearch_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var kgsearch_v1;
     (function(kgsearch_v12) {
       class Kgsearch {
@@ -620992,7 +626365,7 @@ var require_kgsearch = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.kgsearch_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.kgsearch = kgsearch;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1128();
     Object.defineProperty(exports2, "kgsearch_v1", { enumerable: true, get: function() {
       return v1_1.kgsearch_v1;
@@ -621005,7 +626378,7 @@ var require_kgsearch = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -621018,7 +626391,7 @@ var require_v1129 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.kmsinventory_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var kmsinventory_v1;
     (function(kmsinventory_v12) {
       class Kmsinventory {
@@ -621195,7 +626568,7 @@ var require_kmsinventory = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.kmsinventory_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.kmsinventory = kmsinventory;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1129();
     Object.defineProperty(exports2, "kmsinventory_v1", { enumerable: true, get: function() {
       return v1_1.kmsinventory_v1;
@@ -621208,7 +626581,7 @@ var require_kmsinventory = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -621221,7 +626594,7 @@ var require_v1130 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.language_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var language_v1;
     (function(language_v12) {
       class Language {
@@ -621463,7 +626836,7 @@ var require_v1beta137 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.language_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var language_v1beta1;
     (function(language_v1beta12) {
       class Language {
@@ -621611,7 +626984,7 @@ var require_v1beta212 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.language_v1beta2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var language_v1beta2;
     (function(language_v1beta22) {
       class Language {
@@ -621853,7 +627226,7 @@ var require_v233 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.language_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var language_v2;
     (function(language_v22) {
       class Language {
@@ -622036,7 +627409,7 @@ var require_language2 = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.language_v2 = exports2.language_v1beta2 = exports2.language_v1beta1 = exports2.language_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.language = language;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1130();
     Object.defineProperty(exports2, "language_v1", { enumerable: true, get: function() {
       return v1_1.language_v1;
@@ -622064,7 +627437,7 @@ var require_language2 = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -622077,7 +627450,7 @@ var require_v1131 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.libraryagent_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var libraryagent_v1;
     (function(libraryagent_v12) {
       class Libraryagent {
@@ -622299,7 +627672,7 @@ var require_libraryagent = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.libraryagent_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.libraryagent = libraryagent;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1131();
     Object.defineProperty(exports2, "libraryagent_v1", { enumerable: true, get: function() {
       return v1_1.libraryagent_v1;
@@ -622312,7 +627685,7 @@ var require_libraryagent = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -622325,7 +627698,7 @@ var require_v1132 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.licensing_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var licensing_v1;
     (function(licensing_v12) {
       class Licensing {
@@ -622568,7 +627941,7 @@ var require_licensing = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.licensing_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.licensing = licensing;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1132();
     Object.defineProperty(exports2, "licensing_v1", { enumerable: true, get: function() {
       return v1_1.licensing_v1;
@@ -622581,7 +627954,7 @@ var require_licensing = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -622594,7 +627967,7 @@ var require_v2beta9 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.lifesciences_v2beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var lifesciences_v2beta;
     (function(lifesciences_v2beta2) {
       class Lifesciences {
@@ -622834,7 +628207,7 @@ var require_lifesciences = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.lifesciences_v2beta = exports2.auth = exports2.VERSIONS = void 0;
     exports2.lifesciences = lifesciences;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v2beta_1 = require_v2beta9();
     Object.defineProperty(exports2, "lifesciences_v2beta", { enumerable: true, get: function() {
       return v2beta_1.lifesciences_v2beta;
@@ -622847,7 +628220,7 @@ var require_lifesciences = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -622860,7 +628233,7 @@ var require_v1133 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.localservices_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var localservices_v1;
     (function(localservices_v12) {
       class Localservices {
@@ -622962,7 +628335,7 @@ var require_localservices = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.localservices_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.localservices = localservices;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1133();
     Object.defineProperty(exports2, "localservices_v1", { enumerable: true, get: function() {
       return v1_1.localservices_v1;
@@ -622975,7 +628348,7 @@ var require_localservices = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -622988,7 +628361,7 @@ var require_v234 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.logging_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var logging_v2;
     (function(logging_v22) {
       class Logging {
@@ -631199,7 +636572,7 @@ var require_logging = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.logging_v2 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.logging = logging;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v2_1 = require_v234();
     Object.defineProperty(exports2, "logging_v2", { enumerable: true, get: function() {
       return v2_1.logging_v2;
@@ -631212,7 +636585,7 @@ var require_logging = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -631225,7 +636598,7 @@ var require_v1134 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.looker_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var looker_v1;
     (function(looker_v12) {
       class Looker {
@@ -631864,7 +637237,7 @@ var require_looker = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.looker_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.looker = looker;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1134();
     Object.defineProperty(exports2, "looker_v1", { enumerable: true, get: function() {
       return v1_1.looker_v1;
@@ -631877,7 +637250,7 @@ var require_looker = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -631890,7 +637263,7 @@ var require_v1135 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.managedidentities_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var managedidentities_v1;
     (function(managedidentities_v12) {
       class Managedidentities {
@@ -633335,7 +638708,7 @@ var require_v1alpha110 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.managedidentities_v1alpha1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var managedidentities_v1alpha1;
     (function(managedidentities_v1alpha12) {
       class Managedidentities {
@@ -634780,7 +640153,7 @@ var require_v1beta138 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.managedidentities_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var managedidentities_v1beta1;
     (function(managedidentities_v1beta12) {
       class Managedidentities {
@@ -636226,7 +641599,7 @@ var require_managedidentities = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.managedidentities_v1beta1 = exports2.managedidentities_v1alpha1 = exports2.managedidentities_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.managedidentities = managedidentities;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1135();
     Object.defineProperty(exports2, "managedidentities_v1", { enumerable: true, get: function() {
       return v1_1.managedidentities_v1;
@@ -636249,7 +641622,7 @@ var require_managedidentities = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -636262,7 +641635,7 @@ var require_v1136 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.managedkafka_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var managedkafka_v1;
     (function(managedkafka_v12) {
       class Managedkafka {
@@ -639235,7 +644608,7 @@ var require_managedkafka = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.managedkafka_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.managedkafka = managedkafka;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1136();
     Object.defineProperty(exports2, "managedkafka_v1", { enumerable: true, get: function() {
       return v1_1.managedkafka_v1;
@@ -639248,7 +644621,7 @@ var require_managedkafka = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -639261,7 +644634,7 @@ var require_v1137 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.manufacturers_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var manufacturers_v1;
     (function(manufacturers_v12) {
       class Manufacturers {
@@ -639561,7 +644934,7 @@ var require_manufacturers = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.manufacturers_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.manufacturers = manufacturers;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1137();
     Object.defineProperty(exports2, "manufacturers_v1", { enumerable: true, get: function() {
       return v1_1.manufacturers_v1;
@@ -639574,7 +644947,7 @@ var require_manufacturers = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -639587,7 +644960,7 @@ var require_v1alpha29 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.marketingplatformadmin_v1alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var marketingplatformadmin_v1alpha;
     (function(marketingplatformadmin_v1alpha2) {
       class Marketingplatformadmin {
@@ -639779,7 +645152,7 @@ var require_marketingplatformadmin = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.marketingplatformadmin_v1alpha = exports2.auth = exports2.VERSIONS = void 0;
     exports2.marketingplatformadmin = marketingplatformadmin;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1alpha_1 = require_v1alpha29();
     Object.defineProperty(exports2, "marketingplatformadmin_v1alpha", { enumerable: true, get: function() {
       return v1alpha_1.marketingplatformadmin_v1alpha;
@@ -639792,7 +645165,7 @@ var require_marketingplatformadmin = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -639805,7 +645178,7 @@ var require_v235 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.meet_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var meet_v2;
     (function(meet_v22) {
       class Meet {
@@ -640372,7 +645745,7 @@ var require_meet = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.meet_v2 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.meet = meet;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v2_1 = require_v235();
     Object.defineProperty(exports2, "meet_v2", { enumerable: true, get: function() {
       return v2_1.meet_v2;
@@ -640385,7 +645758,7 @@ var require_meet = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -640398,7 +645771,7 @@ var require_v1138 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.memcache_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var memcache_v1;
     (function(memcache_v12) {
       class Memcache {
@@ -640907,7 +646280,7 @@ var require_v1beta213 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.memcache_v1beta2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var memcache_v1beta2;
     (function(memcache_v1beta22) {
       class Memcache {
@@ -641447,7 +646820,7 @@ var require_memcache = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.memcache_v1beta2 = exports2.memcache_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.memcache = memcache;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1138();
     Object.defineProperty(exports2, "memcache_v1", { enumerable: true, get: function() {
       return v1_1.memcache_v1;
@@ -641465,7 +646838,7 @@ var require_memcache = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -641478,7 +646851,7 @@ var require_accounts_v1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.merchantapi_accounts_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var merchantapi_accounts_v1;
     (function(merchantapi_accounts_v12) {
       class Merchantapi {
@@ -643799,7 +649172,7 @@ var require_accounts_v1beta = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.merchantapi_accounts_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var merchantapi_accounts_v1beta;
     (function(merchantapi_accounts_v1beta2) {
       class Merchantapi {
@@ -646150,7 +651523,7 @@ var require_conversions_v1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.merchantapi_conversions_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var merchantapi_conversions_v1;
     (function(merchantapi_conversions_v12) {
       class Merchantapi {
@@ -646371,7 +651744,7 @@ var require_conversions_v1beta = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.merchantapi_conversions_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var merchantapi_conversions_v1beta;
     (function(merchantapi_conversions_v1beta2) {
       class Merchantapi {
@@ -646592,7 +651965,7 @@ var require_datasources_v1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.merchantapi_datasources_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var merchantapi_datasources_v1;
     (function(merchantapi_datasources_v12) {
       class Merchantapi {
@@ -646852,7 +652225,7 @@ var require_datasources_v1beta = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.merchantapi_datasources_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var merchantapi_datasources_v1beta;
     (function(merchantapi_datasources_v1beta2) {
       class Merchantapi {
@@ -647112,7 +652485,7 @@ var require_inventories_v1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.merchantapi_inventories_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var merchantapi_inventories_v1;
     (function(merchantapi_inventories_v12) {
       class Merchantapi {
@@ -647351,7 +652724,7 @@ var require_inventories_v1beta = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.merchantapi_inventories_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var merchantapi_inventories_v1beta;
     (function(merchantapi_inventories_v1beta2) {
       class Merchantapi {
@@ -647590,7 +652963,7 @@ var require_issueresolution_v1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.merchantapi_issueresolution_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var merchantapi_issueresolution_v1;
     (function(merchantapi_issueresolution_v12) {
       class Merchantapi {
@@ -647760,7 +653133,7 @@ var require_issueresolution_v1beta = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.merchantapi_issueresolution_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var merchantapi_issueresolution_v1beta;
     (function(merchantapi_issueresolution_v1beta2) {
       class Merchantapi {
@@ -647930,7 +653303,7 @@ var require_lfp_v1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.merchantapi_lfp_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var merchantapi_lfp_v1;
     (function(merchantapi_lfp_v12) {
       class Merchantapi {
@@ -648208,7 +653581,7 @@ var require_lfp_v1beta = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.merchantapi_lfp_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var merchantapi_lfp_v1beta;
     (function(merchantapi_lfp_v1beta2) {
       class Merchantapi {
@@ -648486,7 +653859,7 @@ var require_notifications_v1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.merchantapi_notifications_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var merchantapi_notifications_v1;
     (function(merchantapi_notifications_v12) {
       class Merchantapi {
@@ -648677,7 +654050,7 @@ var require_notifications_v1beta = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.merchantapi_notifications_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var merchantapi_notifications_v1beta;
     (function(merchantapi_notifications_v1beta2) {
       class Merchantapi {
@@ -648868,7 +654241,7 @@ var require_ordertracking_v1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.merchantapi_ordertracking_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var merchantapi_ordertracking_v1;
     (function(merchantapi_ordertracking_v12) {
       class Merchantapi {
@@ -648939,7 +654312,7 @@ var require_ordertracking_v1beta = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.merchantapi_ordertracking_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var merchantapi_ordertracking_v1beta;
     (function(merchantapi_ordertracking_v1beta2) {
       class Merchantapi {
@@ -649010,7 +654383,7 @@ var require_products_v1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.merchantapi_products_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var merchantapi_products_v1;
     (function(merchantapi_products_v12) {
       class Merchantapi {
@@ -649210,7 +654583,7 @@ var require_products_v1beta = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.merchantapi_products_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var merchantapi_products_v1beta;
     (function(merchantapi_products_v1beta2) {
       class Merchantapi {
@@ -649410,7 +654783,7 @@ var require_promotions_v1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.merchantapi_promotions_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var merchantapi_promotions_v1;
     (function(merchantapi_promotions_v12) {
       class Merchantapi {
@@ -649541,7 +654914,7 @@ var require_promotions_v1beta = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.merchantapi_promotions_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var merchantapi_promotions_v1beta;
     (function(merchantapi_promotions_v1beta2) {
       class Merchantapi {
@@ -649672,7 +655045,7 @@ var require_quota_v1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.merchantapi_quota_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var merchantapi_quota_v1;
     (function(merchantapi_quota_v12) {
       class Merchantapi {
@@ -649743,7 +655116,7 @@ var require_quota_v1beta = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.merchantapi_quota_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var merchantapi_quota_v1beta;
     (function(merchantapi_quota_v1beta2) {
       class Merchantapi {
@@ -649814,7 +655187,7 @@ var require_reports_v12 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.merchantapi_reports_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var merchantapi_reports_v1;
     (function(merchantapi_reports_v12) {
       class Merchantapi {
@@ -649885,7 +655258,7 @@ var require_reports_v1beta = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.merchantapi_reports_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var merchantapi_reports_v1beta;
     (function(merchantapi_reports_v1beta2) {
       class Merchantapi {
@@ -649956,7 +655329,7 @@ var require_reviews_v1beta = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.merchantapi_reviews_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var merchantapi_reviews_v1beta;
     (function(merchantapi_reviews_v1beta2) {
       class Merchantapi {
@@ -650247,7 +655620,7 @@ var require_merchantapi = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.merchantapi_reviews_v1beta = exports2.merchantapi_reports_v1beta = exports2.merchantapi_reports_v1 = exports2.merchantapi_quota_v1beta = exports2.merchantapi_quota_v1 = exports2.merchantapi_promotions_v1beta = exports2.merchantapi_promotions_v1 = exports2.merchantapi_products_v1beta = exports2.merchantapi_products_v1 = exports2.merchantapi_ordertracking_v1beta = exports2.merchantapi_ordertracking_v1 = exports2.merchantapi_notifications_v1beta = exports2.merchantapi_notifications_v1 = exports2.merchantapi_lfp_v1beta = exports2.merchantapi_lfp_v1 = exports2.merchantapi_issueresolution_v1beta = exports2.merchantapi_issueresolution_v1 = exports2.merchantapi_inventories_v1beta = exports2.merchantapi_inventories_v1 = exports2.merchantapi_datasources_v1beta = exports2.merchantapi_datasources_v1 = exports2.merchantapi_conversions_v1beta = exports2.merchantapi_conversions_v1 = exports2.merchantapi_accounts_v1beta = exports2.merchantapi_accounts_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.merchantapi = merchantapi;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var accounts_v1_1 = require_accounts_v1();
     Object.defineProperty(exports2, "merchantapi_accounts_v1", { enumerable: true, get: function() {
       return accounts_v1_1.merchantapi_accounts_v1;
@@ -650380,7 +655753,7 @@ var require_merchantapi = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -650393,7 +655766,7 @@ var require_v1139 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.metastore_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var metastore_v1;
     (function(metastore_v12) {
       class Metastore {
@@ -651946,7 +657319,7 @@ var require_v1alpha30 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.metastore_v1alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var metastore_v1alpha;
     (function(metastore_v1alpha2) {
       class Metastore {
@@ -653619,7 +658992,7 @@ var require_v1beta38 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.metastore_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var metastore_v1beta;
     (function(metastore_v1beta2) {
       class Metastore {
@@ -655292,7 +660665,7 @@ var require_v236 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.metastore_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var metastore_v2;
     (function(metastore_v22) {
       class Metastore {
@@ -655831,7 +661204,7 @@ var require_v2alpha3 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.metastore_v2alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var metastore_v2alpha;
     (function(metastore_v2alpha2) {
       class Metastore {
@@ -656589,7 +661962,7 @@ var require_v2beta10 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.metastore_v2beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var metastore_v2beta;
     (function(metastore_v2beta2) {
       class Metastore {
@@ -657348,7 +662721,7 @@ var require_metastore = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.metastore_v2beta = exports2.metastore_v2alpha = exports2.metastore_v2 = exports2.metastore_v1beta = exports2.metastore_v1alpha = exports2.metastore_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.metastore = metastore;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1139();
     Object.defineProperty(exports2, "metastore_v1", { enumerable: true, get: function() {
       return v1_1.metastore_v1;
@@ -657386,7 +662759,7 @@ var require_metastore = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -657399,7 +662772,7 @@ var require_v1140 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.migrationcenter_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var migrationcenter_v1;
     (function(migrationcenter_v12) {
       class Migrationcenter {
@@ -659408,7 +664781,7 @@ var require_v1alpha111 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.migrationcenter_v1alpha1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var migrationcenter_v1alpha1;
     (function(migrationcenter_v1alpha12) {
       class Migrationcenter {
@@ -661577,7 +666950,7 @@ var require_migrationcenter = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.migrationcenter_v1alpha1 = exports2.migrationcenter_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.migrationcenter = migrationcenter;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1140();
     Object.defineProperty(exports2, "migrationcenter_v1", { enumerable: true, get: function() {
       return v1_1.migrationcenter_v1;
@@ -661595,7 +666968,7 @@ var require_migrationcenter = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -661608,7 +666981,7 @@ var require_v1141 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.ml_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var ml_v1;
     (function(ml_v12) {
       class Ml {
@@ -663093,7 +668466,7 @@ var require_ml = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.ml_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.ml = ml;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1141();
     Object.defineProperty(exports2, "ml_v1", { enumerable: true, get: function() {
       return v1_1.ml_v1;
@@ -663106,7 +668479,7 @@ var require_ml = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -663119,7 +668492,7 @@ var require_v1142 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.monitoring_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var monitoring_v1;
     (function(monitoring_v12) {
       class Monitoring {
@@ -663694,7 +669067,7 @@ var require_v312 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.monitoring_v3 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var monitoring_v3;
     (function(monitoring_v32) {
       class Monitoring {
@@ -665509,7 +670882,7 @@ var require_monitoring = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.monitoring_v3 = exports2.monitoring_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.monitoring = monitoring;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1142();
     Object.defineProperty(exports2, "monitoring_v1", { enumerable: true, get: function() {
       return v1_1.monitoring_v1;
@@ -665527,7 +670900,7 @@ var require_monitoring = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -665540,7 +670913,7 @@ var require_v1143 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.mybusinessaccountmanagement_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var mybusinessaccountmanagement_v1;
     (function(mybusinessaccountmanagement_v12) {
       class Mybusinessaccountmanagement {
@@ -666089,7 +671462,7 @@ var require_mybusinessaccountmanagement = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.mybusinessaccountmanagement_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.mybusinessaccountmanagement = mybusinessaccountmanagement;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1143();
     Object.defineProperty(exports2, "mybusinessaccountmanagement_v1", { enumerable: true, get: function() {
       return v1_1.mybusinessaccountmanagement_v1;
@@ -666102,7 +671475,7 @@ var require_mybusinessaccountmanagement = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -666115,7 +671488,7 @@ var require_v1144 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.mybusinessbusinesscalls_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var mybusinessbusinesscalls_v1;
     (function(mybusinessbusinesscalls_v12) {
       class Mybusinessbusinesscalls {
@@ -666244,7 +671617,7 @@ var require_mybusinessbusinesscalls = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.mybusinessbusinesscalls_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.mybusinessbusinesscalls = mybusinessbusinesscalls;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1144();
     Object.defineProperty(exports2, "mybusinessbusinesscalls_v1", { enumerable: true, get: function() {
       return v1_1.mybusinessbusinesscalls_v1;
@@ -666257,7 +671630,7 @@ var require_mybusinessbusinesscalls = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -666270,7 +671643,7 @@ var require_v1145 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.mybusinessbusinessinformation_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var mybusinessbusinessinformation_v1;
     (function(mybusinessbusinessinformation_v12) {
       class Mybusinessbusinessinformation {
@@ -666816,7 +672189,7 @@ var require_mybusinessbusinessinformation = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.mybusinessbusinessinformation_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.mybusinessbusinessinformation = mybusinessbusinessinformation;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1145();
     Object.defineProperty(exports2, "mybusinessbusinessinformation_v1", { enumerable: true, get: function() {
       return v1_1.mybusinessbusinessinformation_v1;
@@ -666829,7 +672202,7 @@ var require_mybusinessbusinessinformation = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -666842,7 +672215,7 @@ var require_v1146 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.mybusinesslodging_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var mybusinesslodging_v1;
     (function(mybusinesslodging_v12) {
       class Mybusinesslodging {
@@ -666974,7 +672347,7 @@ var require_mybusinesslodging = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.mybusinesslodging_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.mybusinesslodging = mybusinesslodging;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1146();
     Object.defineProperty(exports2, "mybusinesslodging_v1", { enumerable: true, get: function() {
       return v1_1.mybusinesslodging_v1;
@@ -666987,7 +672360,7 @@ var require_mybusinesslodging = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -667000,7 +672373,7 @@ var require_v1147 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.mybusinessnotifications_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var mybusinessnotifications_v1;
     (function(mybusinessnotifications_v12) {
       class Mybusinessnotifications {
@@ -667093,7 +672466,7 @@ var require_mybusinessnotifications = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.mybusinessnotifications_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.mybusinessnotifications = mybusinessnotifications;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1147();
     Object.defineProperty(exports2, "mybusinessnotifications_v1", { enumerable: true, get: function() {
       return v1_1.mybusinessnotifications_v1;
@@ -667106,7 +672479,7 @@ var require_mybusinessnotifications = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -667119,7 +672492,7 @@ var require_v1148 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.mybusinessplaceactions_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var mybusinessplaceactions_v1;
     (function(mybusinessplaceactions_v12) {
       class Mybusinessplaceactions {
@@ -667350,7 +672723,7 @@ var require_mybusinessplaceactions = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.mybusinessplaceactions_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.mybusinessplaceactions = mybusinessplaceactions;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1148();
     Object.defineProperty(exports2, "mybusinessplaceactions_v1", { enumerable: true, get: function() {
       return v1_1.mybusinessplaceactions_v1;
@@ -667363,7 +672736,7 @@ var require_mybusinessplaceactions = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -667376,7 +672749,7 @@ var require_v1149 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.mybusinessqanda_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var mybusinessqanda_v1;
     (function(mybusinessqanda_v12) {
       class Mybusinessqanda {
@@ -667637,7 +673010,7 @@ var require_mybusinessqanda = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.mybusinessqanda_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.mybusinessqanda = mybusinessqanda;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1149();
     Object.defineProperty(exports2, "mybusinessqanda_v1", { enumerable: true, get: function() {
       return v1_1.mybusinessqanda_v1;
@@ -667650,7 +673023,7 @@ var require_mybusinessqanda = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -667663,7 +673036,7 @@ var require_v1150 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.mybusinessverifications_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var mybusinessverifications_v1;
     (function(mybusinessverifications_v12) {
       class Mybusinessverifications {
@@ -667894,7 +673267,7 @@ var require_mybusinessverifications = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.mybusinessverifications_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.mybusinessverifications = mybusinessverifications;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1150();
     Object.defineProperty(exports2, "mybusinessverifications_v1", { enumerable: true, get: function() {
       return v1_1.mybusinessverifications_v1;
@@ -667907,7 +673280,7 @@ var require_mybusinessverifications = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -667920,7 +673293,7 @@ var require_v1151 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.netapp_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var netapp_v1;
     (function(netapp_v12) {
       class Netapp {
@@ -670040,7 +675413,7 @@ var require_v1beta139 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.netapp_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var netapp_v1beta1;
     (function(netapp_v1beta12) {
       class Netapp {
@@ -672191,7 +677564,7 @@ var require_netapp = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.netapp_v1beta1 = exports2.netapp_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.netapp = netapp;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1151();
     Object.defineProperty(exports2, "netapp_v1", { enumerable: true, get: function() {
       return v1_1.netapp_v1;
@@ -672209,7 +677582,7 @@ var require_netapp = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -672222,7 +677595,7 @@ var require_v1152 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.networkconnectivity_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var networkconnectivity_v1;
     (function(networkconnectivity_v12) {
       class Networkconnectivity {
@@ -674909,7 +680282,7 @@ var require_v1alpha112 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.networkconnectivity_v1alpha1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var networkconnectivity_v1alpha1;
     (function(networkconnectivity_v1alpha12) {
       class Networkconnectivity {
@@ -675896,7 +681269,7 @@ var require_networkconnectivity = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.networkconnectivity_v1alpha1 = exports2.networkconnectivity_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.networkconnectivity = networkconnectivity;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1152();
     Object.defineProperty(exports2, "networkconnectivity_v1", { enumerable: true, get: function() {
       return v1_1.networkconnectivity_v1;
@@ -675914,7 +681287,7 @@ var require_networkconnectivity = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -675927,7 +681300,7 @@ var require_v1153 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.networkmanagement_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var networkmanagement_v1;
     (function(networkmanagement_v12) {
       class Networkmanagement {
@@ -677147,7 +682520,7 @@ var require_v1beta140 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.networkmanagement_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var networkmanagement_v1beta1;
     (function(networkmanagement_v1beta12) {
       class Networkmanagement {
@@ -678230,7 +683603,7 @@ var require_networkmanagement = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.networkmanagement_v1beta1 = exports2.networkmanagement_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.networkmanagement = networkmanagement;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1153();
     Object.defineProperty(exports2, "networkmanagement_v1", { enumerable: true, get: function() {
       return v1_1.networkmanagement_v1;
@@ -678248,7 +683621,7 @@ var require_networkmanagement = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -678261,7 +683634,7 @@ var require_v1154 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.networksecurity_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var networksecurity_v1;
     (function(networksecurity_v12) {
       class Networksecurity {
@@ -682985,7 +688358,7 @@ var require_v1beta141 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.networksecurity_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var networksecurity_v1beta1;
     (function(networksecurity_v1beta12) {
       class Networksecurity {
@@ -688127,7 +693500,7 @@ var require_networksecurity = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.networksecurity_v1beta1 = exports2.networksecurity_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.networksecurity = networksecurity;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1154();
     Object.defineProperty(exports2, "networksecurity_v1", { enumerable: true, get: function() {
       return v1_1.networksecurity_v1;
@@ -688145,7 +693518,7 @@ var require_networksecurity = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -688158,7 +693531,7 @@ var require_v1155 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.networkservices_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var networkservices_v1;
     (function(networkservices_v12) {
       class Networkservices {
@@ -691019,7 +696392,7 @@ var require_v1beta142 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.networkservices_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var networkservices_v1beta1;
     (function(networkservices_v1beta12) {
       class Networkservices {
@@ -693902,7 +699275,7 @@ var require_networkservices = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.networkservices_v1beta1 = exports2.networkservices_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.networkservices = networkservices;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1155();
     Object.defineProperty(exports2, "networkservices_v1", { enumerable: true, get: function() {
       return v1_1.networkservices_v1;
@@ -693920,7 +699293,7 @@ var require_networkservices = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -693933,7 +699306,7 @@ var require_v1156 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.notebooks_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var notebooks_v1;
     (function(notebooks_v12) {
       class Notebooks {
@@ -695888,7 +701261,7 @@ var require_v237 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.notebooks_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var notebooks_v2;
     (function(notebooks_v22) {
       class Notebooks {
@@ -696788,7 +702161,7 @@ var require_notebooks = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.notebooks_v2 = exports2.notebooks_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.notebooks = notebooks;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1156();
     Object.defineProperty(exports2, "notebooks_v1", { enumerable: true, get: function() {
       return v1_1.notebooks_v1;
@@ -696806,7 +702179,7 @@ var require_notebooks = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -696819,7 +702192,7 @@ var require_v238 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.oauth2_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var oauth2_v2;
     (function(oauth2_v22) {
       class Oauth2 {
@@ -696960,7 +702333,7 @@ var require_oauth2 = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.oauth2_v2 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.oauth2 = oauth2;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v2_1 = require_v238();
     Object.defineProperty(exports2, "oauth2_v2", { enumerable: true, get: function() {
       return v2_1.oauth2_v2;
@@ -696973,7 +702346,7 @@ var require_oauth2 = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -696986,7 +702359,7 @@ var require_v1157 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.observability_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var observability_v1;
     (function(observability_v12) {
       class Observability {
@@ -697286,7 +702659,7 @@ var require_observability = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.observability_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.observability = observability;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1157();
     Object.defineProperty(exports2, "observability_v1", { enumerable: true, get: function() {
       return v1_1.observability_v1;
@@ -697299,7 +702672,7 @@ var require_observability = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -697312,7 +702685,7 @@ var require_v1158 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.ondemandscanning_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var ondemandscanning_v1;
     (function(ondemandscanning_v12) {
       class Ondemandscanning {
@@ -697590,7 +702963,7 @@ var require_v1beta143 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.ondemandscanning_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var ondemandscanning_v1beta1;
     (function(ondemandscanning_v1beta12) {
       class Ondemandscanning {
@@ -697869,7 +703242,7 @@ var require_ondemandscanning = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.ondemandscanning_v1beta1 = exports2.ondemandscanning_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.ondemandscanning = ondemandscanning;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1158();
     Object.defineProperty(exports2, "ondemandscanning_v1", { enumerable: true, get: function() {
       return v1_1.ondemandscanning_v1;
@@ -697887,7 +703260,7 @@ var require_ondemandscanning = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -697900,7 +703273,7 @@ var require_v1159 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.oracledatabase_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var oracledatabase_v1;
     (function(oracledatabase_v12) {
       class Oracledatabase {
@@ -699268,7 +704641,7 @@ var require_oracledatabase = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.oracledatabase_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.oracledatabase = oracledatabase;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1159();
     Object.defineProperty(exports2, "oracledatabase_v1", { enumerable: true, get: function() {
       return v1_1.oracledatabase_v1;
@@ -699281,7 +704654,7 @@ var require_oracledatabase = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -699294,7 +704667,7 @@ var require_v239 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.orgpolicy_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var orgpolicy_v2;
     (function(orgpolicy_v22) {
       class Orgpolicy {
@@ -700188,7 +705561,7 @@ var require_orgpolicy = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.orgpolicy_v2 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.orgpolicy = orgpolicy;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v2_1 = require_v239();
     Object.defineProperty(exports2, "orgpolicy_v2", { enumerable: true, get: function() {
       return v2_1.orgpolicy_v2;
@@ -700201,7 +705574,7 @@ var require_orgpolicy = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -700214,7 +705587,7 @@ var require_v1160 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.osconfig_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var osconfig_v1;
     (function(osconfig_v12) {
       class Osconfig {
@@ -701194,7 +706567,7 @@ var require_v1alpha31 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.osconfig_v1alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var osconfig_v1alpha;
     (function(osconfig_v1alpha2) {
       class Osconfig {
@@ -701787,7 +707160,7 @@ var require_v1beta39 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.osconfig_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var osconfig_v1beta;
     (function(osconfig_v1beta2) {
       class Osconfig {
@@ -702413,7 +707786,7 @@ var require_v240 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.osconfig_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var osconfig_v2;
     (function(osconfig_v22) {
       class Osconfig {
@@ -703381,7 +708754,7 @@ var require_v2beta11 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.osconfig_v2beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var osconfig_v2beta;
     (function(osconfig_v2beta2) {
       class Osconfig {
@@ -704350,7 +709723,7 @@ var require_osconfig = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.osconfig_v2beta = exports2.osconfig_v2 = exports2.osconfig_v1beta = exports2.osconfig_v1alpha = exports2.osconfig_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.osconfig = osconfig;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1160();
     Object.defineProperty(exports2, "osconfig_v1", { enumerable: true, get: function() {
       return v1_1.osconfig_v1;
@@ -704383,7 +709756,7 @@ var require_osconfig = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -704396,7 +709769,7 @@ var require_v1161 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.oslogin_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var oslogin_v1;
     (function(oslogin_v12) {
       class Oslogin {
@@ -704656,7 +710029,7 @@ var require_v1alpha32 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.oslogin_v1alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var oslogin_v1alpha;
     (function(oslogin_v1alpha2) {
       class Oslogin {
@@ -705072,7 +710445,7 @@ var require_v1beta40 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.oslogin_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var oslogin_v1beta;
     (function(oslogin_v1beta2) {
       class Oslogin {
@@ -705489,7 +710862,7 @@ var require_oslogin = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.oslogin_v1beta = exports2.oslogin_v1alpha = exports2.oslogin_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.oslogin = oslogin;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1161();
     Object.defineProperty(exports2, "oslogin_v1", { enumerable: true, get: function() {
       return v1_1.oslogin_v1;
@@ -705512,7 +710885,7 @@ var require_oslogin = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -705525,7 +710898,7 @@ var require_v5 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.pagespeedonline_v5 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var pagespeedonline_v5;
     (function(pagespeedonline_v52) {
       class Pagespeedonline {
@@ -705588,7 +710961,7 @@ var require_pagespeedonline = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.pagespeedonline_v5 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.pagespeedonline = pagespeedonline;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v5_1 = require_v5();
     Object.defineProperty(exports2, "pagespeedonline_v5", { enumerable: true, get: function() {
       return v5_1.pagespeedonline_v5;
@@ -705601,7 +710974,7 @@ var require_pagespeedonline = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -705614,7 +710987,7 @@ var require_v1162 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.parallelstore_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var parallelstore_v1;
     (function(parallelstore_v12) {
       class Parallelstore {
@@ -706063,7 +711436,7 @@ var require_v1beta41 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.parallelstore_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var parallelstore_v1beta;
     (function(parallelstore_v1beta2) {
       class Parallelstore {
@@ -706513,7 +711886,7 @@ var require_parallelstore = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.parallelstore_v1beta = exports2.parallelstore_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.parallelstore = parallelstore;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1162();
     Object.defineProperty(exports2, "parallelstore_v1", { enumerable: true, get: function() {
       return v1_1.parallelstore_v1;
@@ -706531,7 +711904,7 @@ var require_parallelstore = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -706544,7 +711917,7 @@ var require_v1163 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.parametermanager_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var parametermanager_v1;
     (function(parametermanager_v12) {
       class Parametermanager {
@@ -706994,7 +712367,7 @@ var require_parametermanager = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.parametermanager_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.parametermanager = parametermanager;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1163();
     Object.defineProperty(exports2, "parametermanager_v1", { enumerable: true, get: function() {
       return v1_1.parametermanager_v1;
@@ -707007,7 +712380,7 @@ var require_parametermanager = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -707020,7 +712393,7 @@ var require_v1164 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.paymentsresellersubscription_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var paymentsresellersubscription_v1;
     (function(paymentsresellersubscription_v12) {
       class Paymentsresellersubscription {
@@ -707479,7 +712852,7 @@ var require_paymentsresellersubscription = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.paymentsresellersubscription_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.paymentsresellersubscription = paymentsresellersubscription;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1164();
     Object.defineProperty(exports2, "paymentsresellersubscription_v1", { enumerable: true, get: function() {
       return v1_1.paymentsresellersubscription_v1;
@@ -707492,7 +712865,7 @@ var require_paymentsresellersubscription = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -707505,7 +712878,7 @@ var require_v1165 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.people_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var people_v1;
     (function(people_v12) {
       class People {
@@ -708294,7 +713667,7 @@ var require_people = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.people_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.people = people;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1165();
     Object.defineProperty(exports2, "people_v1", { enumerable: true, get: function() {
       return v1_1.people_v1;
@@ -708307,7 +713680,7 @@ var require_people = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -708320,7 +713693,7 @@ var require_v1166 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.places_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var places_v1;
     (function(places_v12) {
       class Places {
@@ -708512,7 +713885,7 @@ var require_places = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.places_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.places = places;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1166();
     Object.defineProperty(exports2, "places_v1", { enumerable: true, get: function() {
       return v1_1.places_v1;
@@ -708525,7 +713898,7 @@ var require_places = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -708538,7 +713911,7 @@ var require_v313 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.playablelocations_v3 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var playablelocations_v3;
     (function(playablelocations_v32) {
       class Playablelocations {
@@ -708658,7 +714031,7 @@ var require_playablelocations = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.playablelocations_v3 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.playablelocations = playablelocations;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v3_1 = require_v313();
     Object.defineProperty(exports2, "playablelocations_v3", { enumerable: true, get: function() {
       return v3_1.playablelocations_v3;
@@ -708671,7 +714044,7 @@ var require_playablelocations = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -708684,7 +714057,7 @@ var require_v1167 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.playcustomapp_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var playcustomapp_v1;
     (function(playcustomapp_v12) {
       class Playcustomapp {
@@ -708757,7 +714130,7 @@ var require_playcustomapp = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.playcustomapp_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.playcustomapp = playcustomapp;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1167();
     Object.defineProperty(exports2, "playcustomapp_v1", { enumerable: true, get: function() {
       return v1_1.playcustomapp_v1;
@@ -708770,7 +714143,7 @@ var require_playcustomapp = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -708783,7 +714156,7 @@ var require_v1alpha113 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.playdeveloperreporting_v1alpha1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var playdeveloperreporting_v1alpha1;
     (function(playdeveloperreporting_v1alpha12) {
       class Playdeveloperreporting {
@@ -709562,7 +714935,7 @@ var require_v1beta144 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.playdeveloperreporting_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var playdeveloperreporting_v1beta1;
     (function(playdeveloperreporting_v1beta12) {
       class Playdeveloperreporting {
@@ -710342,7 +715715,7 @@ var require_playdeveloperreporting = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.playdeveloperreporting_v1beta1 = exports2.playdeveloperreporting_v1alpha1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.playdeveloperreporting = playdeveloperreporting;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1alpha1_1 = require_v1alpha113();
     Object.defineProperty(exports2, "playdeveloperreporting_v1alpha1", { enumerable: true, get: function() {
       return v1alpha1_1.playdeveloperreporting_v1alpha1;
@@ -710360,7 +715733,7 @@ var require_playdeveloperreporting = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -710373,7 +715746,7 @@ var require_v1alpha114 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.playgrouping_v1alpha1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var playgrouping_v1alpha1;
     (function(playgrouping_v1alpha12) {
       class Playgrouping {
@@ -710484,7 +715857,7 @@ var require_playgrouping = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.playgrouping_v1alpha1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.playgrouping = playgrouping;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1alpha1_1 = require_v1alpha114();
     Object.defineProperty(exports2, "playgrouping_v1alpha1", { enumerable: true, get: function() {
       return v1alpha1_1.playgrouping_v1alpha1;
@@ -710497,7 +715870,7 @@ var require_playgrouping = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -710510,7 +715883,7 @@ var require_v1168 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.playintegrity_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var playintegrity_v1;
     (function(playintegrity_v12) {
       class Playintegrity {
@@ -710642,7 +716015,7 @@ var require_playintegrity = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.playintegrity_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.playintegrity = playintegrity;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1168();
     Object.defineProperty(exports2, "playintegrity_v1", { enumerable: true, get: function() {
       return v1_1.playintegrity_v1;
@@ -710655,7 +716028,7 @@ var require_playintegrity = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -710668,7 +716041,7 @@ var require_v1169 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.plus_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var plus_v1;
     (function(plus_v12) {
       class Plus {
@@ -710980,7 +716353,7 @@ var require_plus = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.plus_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.plus = plus;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1169();
     Object.defineProperty(exports2, "plus_v1", { enumerable: true, get: function() {
       return v1_1.plus_v1;
@@ -710993,7 +716366,7 @@ var require_plus = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -711006,7 +716379,7 @@ var require_v1170 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.policyanalyzer_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var policyanalyzer_v1;
     (function(policyanalyzer_v12) {
       class Policyanalyzer {
@@ -711227,7 +716600,7 @@ var require_v1beta145 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.policyanalyzer_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var policyanalyzer_v1beta1;
     (function(policyanalyzer_v1beta12) {
       class Policyanalyzer {
@@ -711449,7 +716822,7 @@ var require_policyanalyzer = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.policyanalyzer_v1beta1 = exports2.policyanalyzer_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.policyanalyzer = policyanalyzer;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1170();
     Object.defineProperty(exports2, "policyanalyzer_v1", { enumerable: true, get: function() {
       return v1_1.policyanalyzer_v1;
@@ -711467,7 +716840,7 @@ var require_policyanalyzer = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -711480,7 +716853,7 @@ var require_v1171 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.policysimulator_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var policysimulator_v1;
     (function(policysimulator_v12) {
       class Policysimulator {
@@ -712574,7 +717947,7 @@ var require_v1alpha33 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.policysimulator_v1alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var policysimulator_v1alpha;
     (function(policysimulator_v1alpha2) {
       class Policysimulator {
@@ -713087,7 +718460,7 @@ var require_v1beta42 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.policysimulator_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var policysimulator_v1beta;
     (function(policysimulator_v1beta2) {
       class Policysimulator {
@@ -713600,7 +718973,7 @@ var require_v1beta146 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.policysimulator_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var policysimulator_v1beta1;
     (function(policysimulator_v1beta12) {
       class Policysimulator {
@@ -714114,7 +719487,7 @@ var require_policysimulator = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.policysimulator_v1beta1 = exports2.policysimulator_v1beta = exports2.policysimulator_v1alpha = exports2.policysimulator_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.policysimulator = policysimulator;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1171();
     Object.defineProperty(exports2, "policysimulator_v1", { enumerable: true, get: function() {
       return v1_1.policysimulator_v1;
@@ -714142,7 +719515,7 @@ var require_policysimulator = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -714155,7 +719528,7 @@ var require_v1172 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.policytroubleshooter_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var policytroubleshooter_v1;
     (function(policytroubleshooter_v12) {
       class Policytroubleshooter {
@@ -714217,7 +719590,7 @@ var require_v1beta43 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.policytroubleshooter_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var policytroubleshooter_v1beta;
     (function(policytroubleshooter_v1beta2) {
       class Policytroubleshooter {
@@ -714280,7 +719653,7 @@ var require_policytroubleshooter = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.policytroubleshooter_v1beta = exports2.policytroubleshooter_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.policytroubleshooter = policytroubleshooter;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1172();
     Object.defineProperty(exports2, "policytroubleshooter_v1", { enumerable: true, get: function() {
       return v1_1.policytroubleshooter_v1;
@@ -714298,7 +719671,7 @@ var require_policytroubleshooter = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -714311,7 +719684,7 @@ var require_v1173 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.pollen_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var pollen_v1;
     (function(pollen_v12) {
       class Pollen {
@@ -714422,7 +719795,7 @@ var require_pollen = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.pollen_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.pollen = pollen;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1173();
     Object.defineProperty(exports2, "pollen_v1", { enumerable: true, get: function() {
       return v1_1.pollen_v1;
@@ -714435,7 +719808,7 @@ var require_pollen = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -714448,7 +719821,7 @@ var require_v1174 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.poly_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var poly_v1;
     (function(poly_v12) {
       class Poly {
@@ -714628,7 +720001,7 @@ var require_poly = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.poly_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.poly = poly;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1174();
     Object.defineProperty(exports2, "poly_v1", { enumerable: true, get: function() {
       return v1_1.poly_v1;
@@ -714641,7 +720014,7 @@ var require_poly = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -714654,7 +720027,7 @@ var require_v1175 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.privateca_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var privateca_v1;
     (function(privateca_v12) {
       class Privateca {
@@ -716069,7 +721442,7 @@ var require_v1beta147 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.privateca_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var privateca_v1beta1;
     (function(privateca_v1beta12) {
       class Privateca {
@@ -716597,7 +721970,7 @@ var require_privateca = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.privateca_v1beta1 = exports2.privateca_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.privateca = privateca;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1175();
     Object.defineProperty(exports2, "privateca_v1", { enumerable: true, get: function() {
       return v1_1.privateca_v1;
@@ -716615,7 +721988,7 @@ var require_privateca = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -716628,7 +722001,7 @@ var require_v1alpha115 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.prod_tt_sasportal_v1alpha1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var prod_tt_sasportal_v1alpha1;
     (function(prod_tt_sasportal_v1alpha12) {
       class Prod_tt_sasportal {
@@ -719292,7 +724665,7 @@ var require_prod_tt_sasportal = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.prod_tt_sasportal_v1alpha1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.prod_tt_sasportal = prod_tt_sasportal;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1alpha1_1 = require_v1alpha115();
     Object.defineProperty(exports2, "prod_tt_sasportal_v1alpha1", { enumerable: true, get: function() {
       return v1alpha1_1.prod_tt_sasportal_v1alpha1;
@@ -719305,7 +724678,7 @@ var require_prod_tt_sasportal = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -719318,7 +724691,7 @@ var require_v1176 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.publicca_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var publicca_v1;
     (function(publicca_v12) {
       class Publicca {
@@ -719398,7 +724771,7 @@ var require_v1alpha116 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.publicca_v1alpha1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var publicca_v1alpha1;
     (function(publicca_v1alpha12) {
       class Publicca {
@@ -719478,7 +724851,7 @@ var require_v1beta148 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.publicca_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var publicca_v1beta1;
     (function(publicca_v1beta12) {
       class Publicca {
@@ -719559,7 +724932,7 @@ var require_publicca = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.publicca_v1beta1 = exports2.publicca_v1alpha1 = exports2.publicca_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.publicca = publicca;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1176();
     Object.defineProperty(exports2, "publicca_v1", { enumerable: true, get: function() {
       return v1_1.publicca_v1;
@@ -719582,7 +724955,7 @@ var require_publicca = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -719595,7 +724968,7 @@ var require_v1177 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.pubsub_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var pubsub_v1;
     (function(pubsub_v12) {
       class Pubsub {
@@ -721061,7 +726434,7 @@ var require_v1beta1a = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.pubsub_v1beta1a = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var pubsub_v1beta1a;
     (function(pubsub_v1beta1a2) {
       class Pubsub {
@@ -721552,7 +726925,7 @@ var require_v1beta214 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.pubsub_v1beta2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var pubsub_v1beta2;
     (function(pubsub_v1beta22) {
       class Pubsub {
@@ -722212,7 +727585,7 @@ var require_pubsub = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.pubsub_v1beta2 = exports2.pubsub_v1beta1a = exports2.pubsub_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.pubsub = pubsub;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1177();
     Object.defineProperty(exports2, "pubsub_v1", { enumerable: true, get: function() {
       return v1_1.pubsub_v1;
@@ -722235,7 +727608,7 @@ var require_pubsub = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -722248,7 +727621,7 @@ var require_v1178 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.pubsublite_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var pubsublite_v1;
     (function(pubsublite_v12) {
       class Pubsublite {
@@ -723274,7 +728647,7 @@ var require_pubsublite = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.pubsublite_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.pubsublite = pubsublite;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1178();
     Object.defineProperty(exports2, "pubsublite_v1", { enumerable: true, get: function() {
       return v1_1.pubsublite_v1;
@@ -723287,7 +728660,7 @@ var require_pubsublite = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -723300,7 +728673,7 @@ var require_v1179 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.rapidmigrationassessment_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var rapidmigrationassessment_v1;
     (function(rapidmigrationassessment_v12) {
       class Rapidmigrationassessment {
@@ -723849,7 +729222,7 @@ var require_rapidmigrationassessment = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.rapidmigrationassessment_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.rapidmigrationassessment = rapidmigrationassessment;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1179();
     Object.defineProperty(exports2, "rapidmigrationassessment_v1", { enumerable: true, get: function() {
       return v1_1.rapidmigrationassessment_v1;
@@ -723862,7 +729235,7 @@ var require_rapidmigrationassessment = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -723875,7 +729248,7 @@ var require_v1180 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.readerrevenuesubscriptionlinking_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var readerrevenuesubscriptionlinking_v1;
     (function(readerrevenuesubscriptionlinking_v12) {
       class Readerrevenuesubscriptionlinking {
@@ -724037,7 +729410,7 @@ var require_readerrevenuesubscriptionlinking = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.readerrevenuesubscriptionlinking_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.readerrevenuesubscriptionlinking = readerrevenuesubscriptionlinking;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1180();
     Object.defineProperty(exports2, "readerrevenuesubscriptionlinking_v1", { enumerable: true, get: function() {
       return v1_1.readerrevenuesubscriptionlinking_v1;
@@ -724050,7 +729423,7 @@ var require_readerrevenuesubscriptionlinking = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -724063,7 +729436,7 @@ var require_v1181 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.realtimebidding_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var realtimebidding_v1;
     (function(realtimebidding_v12) {
       class Realtimebidding {
@@ -725298,7 +730671,7 @@ var require_v1alpha34 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.realtimebidding_v1alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var realtimebidding_v1alpha;
     (function(realtimebidding_v1alpha2) {
       class Realtimebidding {
@@ -725460,7 +730833,7 @@ var require_realtimebidding = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.realtimebidding_v1alpha = exports2.realtimebidding_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.realtimebidding = realtimebidding;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1181();
     Object.defineProperty(exports2, "realtimebidding_v1", { enumerable: true, get: function() {
       return v1_1.realtimebidding_v1;
@@ -725478,7 +730851,7 @@ var require_realtimebidding = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -725491,7 +730864,7 @@ var require_v1182 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.recaptchaenterprise_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var recaptchaenterprise_v1;
     (function(recaptchaenterprise_v12) {
       class Recaptchaenterprise {
@@ -726238,7 +731611,7 @@ var require_recaptchaenterprise = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.recaptchaenterprise_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.recaptchaenterprise = recaptchaenterprise;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1182();
     Object.defineProperty(exports2, "recaptchaenterprise_v1", { enumerable: true, get: function() {
       return v1_1.recaptchaenterprise_v1;
@@ -726251,7 +731624,7 @@ var require_recaptchaenterprise = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -726264,7 +731637,7 @@ var require_v1beta149 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.recommendationengine_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var recommendationengine_v1beta1;
     (function(recommendationengine_v1beta12) {
       class Recommendationengine {
@@ -727038,7 +732411,7 @@ var require_recommendationengine = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.recommendationengine_v1beta1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.recommendationengine = recommendationengine;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1beta1_1 = require_v1beta149();
     Object.defineProperty(exports2, "recommendationengine_v1beta1", { enumerable: true, get: function() {
       return v1beta1_1.recommendationengine_v1beta1;
@@ -727051,7 +732424,7 @@ var require_recommendationengine = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -727064,7 +732437,7 @@ var require_v1183 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.recommender_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var recommender_v1;
     (function(recommender_v12) {
       class Recommender {
@@ -728743,7 +734116,7 @@ var require_v1beta150 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.recommender_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var recommender_v1beta1;
     (function(recommender_v1beta12) {
       class Recommender {
@@ -730621,7 +735994,7 @@ var require_recommender = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.recommender_v1beta1 = exports2.recommender_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.recommender = recommender;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1183();
     Object.defineProperty(exports2, "recommender_v1", { enumerable: true, get: function() {
       return v1_1.recommender_v1;
@@ -730639,7 +736012,7 @@ var require_recommender = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -730652,7 +736025,7 @@ var require_v1184 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.redis_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var redis_v1;
     (function(redis_v12) {
       class Redis {
@@ -731668,7 +737041,7 @@ var require_v1beta151 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.redis_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var redis_v1beta1;
     (function(redis_v1beta12) {
       class Redis {
@@ -732685,7 +738058,7 @@ var require_redis = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.redis_v1beta1 = exports2.redis_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.redis = redis;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1184();
     Object.defineProperty(exports2, "redis_v1", { enumerable: true, get: function() {
       return v1_1.redis_v1;
@@ -732703,7 +738076,7 @@ var require_redis = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -732716,7 +738089,7 @@ var require_v1185 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.remotebuildexecution_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var remotebuildexecution_v1;
     (function(remotebuildexecution_v12) {
       class Remotebuildexecution {
@@ -732950,7 +738323,7 @@ var require_v1alpha35 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.remotebuildexecution_v1alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var remotebuildexecution_v1alpha;
     (function(remotebuildexecution_v1alpha2) {
       class Remotebuildexecution {
@@ -733328,7 +738701,7 @@ var require_v241 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.remotebuildexecution_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var remotebuildexecution_v2;
     (function(remotebuildexecution_v22) {
       class Remotebuildexecution {
@@ -733658,7 +739031,7 @@ var require_remotebuildexecution = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.remotebuildexecution_v2 = exports2.remotebuildexecution_v1alpha = exports2.remotebuildexecution_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.remotebuildexecution = remotebuildexecution;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1185();
     Object.defineProperty(exports2, "remotebuildexecution_v1", { enumerable: true, get: function() {
       return v1_1.remotebuildexecution_v1;
@@ -733681,7 +739054,7 @@ var require_remotebuildexecution = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -733694,7 +739067,7 @@ var require_v1186 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.reseller_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var reseller_v1;
     (function(reseller_v12) {
       class Reseller {
@@ -734255,7 +739628,7 @@ var require_reseller = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.reseller_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.reseller = reseller;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1186();
     Object.defineProperty(exports2, "reseller_v1", { enumerable: true, get: function() {
       return v1_1.reseller_v1;
@@ -734268,7 +739641,7 @@ var require_reseller = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -734281,7 +739654,7 @@ var require_v1187 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.resourcesettings_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var resourcesettings_v1;
     (function(resourcesettings_v12) {
       class Resourcesettings {
@@ -734629,7 +740002,7 @@ var require_resourcesettings = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.resourcesettings_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.resourcesettings = resourcesettings;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1187();
     Object.defineProperty(exports2, "resourcesettings_v1", { enumerable: true, get: function() {
       return v1_1.resourcesettings_v1;
@@ -734642,7 +740015,7 @@ var require_resourcesettings = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -734655,7 +740028,7 @@ var require_v242 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.retail_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var retail_v2;
     (function(retail_v22) {
       class Retail {
@@ -736910,7 +742283,7 @@ var require_v2alpha4 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.retail_v2alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var retail_v2alpha;
     (function(retail_v2alpha2) {
       class Retail {
@@ -739771,7 +745144,7 @@ var require_v2beta16 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.retail_v2beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var retail_v2beta;
     (function(retail_v2beta2) {
       class Retail {
@@ -742177,7 +747550,7 @@ var require_retail = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.retail_v2beta = exports2.retail_v2alpha = exports2.retail_v2 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.retail = retail;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v2_1 = require_v242();
     Object.defineProperty(exports2, "retail_v2", { enumerable: true, get: function() {
       return v2_1.retail_v2;
@@ -742200,7 +747573,7 @@ var require_retail = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -742213,7 +747586,7 @@ var require_v1188 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.run_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var run_v1;
     (function(run_v12) {
       class Run {
@@ -744423,7 +749796,7 @@ var require_v1alpha117 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.run_v1alpha1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var run_v1alpha1;
     (function(run_v1alpha12) {
       class Run {
@@ -744580,7 +749953,7 @@ var require_v1beta152 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.run_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var run_v1beta1;
     (function(run_v1beta12) {
       class Run {
@@ -744773,7 +750146,7 @@ var require_v243 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.run_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var run_v2;
     (function(run_v22) {
       class Run {
@@ -746336,7 +751709,7 @@ var require_run = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.run_v2 = exports2.run_v1beta1 = exports2.run_v1alpha1 = exports2.run_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.run = run;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1188();
     Object.defineProperty(exports2, "run_v1", { enumerable: true, get: function() {
       return v1_1.run_v1;
@@ -746364,7 +751737,7 @@ var require_run = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -746377,7 +751750,7 @@ var require_v1189 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.runtimeconfig_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var runtimeconfig_v1;
     (function(runtimeconfig_v12) {
       class Runtimeconfig {
@@ -746499,7 +751872,7 @@ var require_v1beta153 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.runtimeconfig_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var runtimeconfig_v1beta1;
     (function(runtimeconfig_v1beta12) {
       class Runtimeconfig {
@@ -747228,7 +752601,7 @@ var require_runtimeconfig = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.runtimeconfig_v1beta1 = exports2.runtimeconfig_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.runtimeconfig = runtimeconfig;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1189();
     Object.defineProperty(exports2, "runtimeconfig_v1", { enumerable: true, get: function() {
       return v1_1.runtimeconfig_v1;
@@ -747246,7 +752619,7 @@ var require_runtimeconfig = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -747259,7 +752632,7 @@ var require_v1beta154 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.saasservicemgmt_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var saasservicemgmt_v1beta1;
     (function(saasservicemgmt_v1beta12) {
       class Saasservicemgmt {
@@ -748633,7 +754006,7 @@ var require_saasservicemgmt = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.saasservicemgmt_v1beta1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.saasservicemgmt = saasservicemgmt;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1beta1_1 = require_v1beta154();
     Object.defineProperty(exports2, "saasservicemgmt_v1beta1", { enumerable: true, get: function() {
       return v1beta1_1.saasservicemgmt_v1beta1;
@@ -748646,7 +754019,7 @@ var require_saasservicemgmt = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -748659,7 +754032,7 @@ var require_v45 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.safebrowsing_v4 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var safebrowsing_v4;
     (function(safebrowsing_v42) {
       class Safebrowsing {
@@ -748955,7 +754328,7 @@ var require_v52 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.safebrowsing_v5 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var safebrowsing_v5;
     (function(safebrowsing_v52) {
       class Safebrowsing {
@@ -749126,7 +754499,7 @@ var require_safebrowsing = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.safebrowsing_v5 = exports2.safebrowsing_v4 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.safebrowsing = safebrowsing;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v4_1 = require_v45();
     Object.defineProperty(exports2, "safebrowsing_v4", { enumerable: true, get: function() {
       return v4_1.safebrowsing_v4;
@@ -749144,7 +754517,7 @@ var require_safebrowsing = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -749157,7 +754530,7 @@ var require_v1alpha118 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.sasportal_v1alpha1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var sasportal_v1alpha1;
     (function(sasportal_v1alpha12) {
       class Sasportal {
@@ -751821,7 +757194,7 @@ var require_sasportal = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.sasportal_v1alpha1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.sasportal = sasportal;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1alpha1_1 = require_v1alpha118();
     Object.defineProperty(exports2, "sasportal_v1alpha1", { enumerable: true, get: function() {
       return v1alpha1_1.sasportal_v1alpha1;
@@ -751834,7 +757207,7 @@ var require_sasportal = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -751847,7 +757220,7 @@ var require_v1190 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.script_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var script_v1;
     (function(script_v12) {
       class Script {
@@ -752396,7 +757769,7 @@ var require_script = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.script_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.script = script;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1190();
     Object.defineProperty(exports2, "script_v1", { enumerable: true, get: function() {
       return v1_1.script_v1;
@@ -752409,7 +757782,7 @@ var require_script = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -752422,7 +757795,7 @@ var require_v0 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.searchads360_v0 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var searchads360_v0;
     (function(searchads360_v02) {
       class Searchads360 {
@@ -752662,7 +758035,7 @@ var require_searchads360 = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.searchads360_v0 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.searchads360 = searchads360;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v0_1 = require_v0();
     Object.defineProperty(exports2, "searchads360_v0", { enumerable: true, get: function() {
       return v0_1.searchads360_v0;
@@ -752675,7 +758048,7 @@ var require_searchads360 = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -752688,7 +758061,7 @@ var require_v1191 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.searchconsole_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var searchconsole_v1;
     (function(searchconsole_v12) {
       class Searchconsole {
@@ -753105,7 +758478,7 @@ var require_searchconsole = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.searchconsole_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.searchconsole = searchconsole;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1191();
     Object.defineProperty(exports2, "searchconsole_v1", { enumerable: true, get: function() {
       return v1_1.searchconsole_v1;
@@ -753118,7 +758491,7 @@ var require_searchconsole = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -753131,7 +758504,7 @@ var require_v1192 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.secretmanager_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var secretmanager_v1;
     (function(secretmanager_v12) {
       class Secretmanager {
@@ -754168,7 +759541,7 @@ var require_v1beta155 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.secretmanager_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var secretmanager_v1beta1;
     (function(secretmanager_v1beta12) {
       class Secretmanager {
@@ -754737,7 +760110,7 @@ var require_v1beta215 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.secretmanager_v1beta2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var secretmanager_v1beta2;
     (function(secretmanager_v1beta22) {
       class Secretmanager {
@@ -755775,7 +761148,7 @@ var require_secretmanager = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.secretmanager_v1beta2 = exports2.secretmanager_v1beta1 = exports2.secretmanager_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.secretmanager = secretmanager;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1192();
     Object.defineProperty(exports2, "secretmanager_v1", { enumerable: true, get: function() {
       return v1_1.secretmanager_v1;
@@ -755798,7 +761171,7 @@ var require_secretmanager = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -755811,7 +761184,7 @@ var require_v1193 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.securesourcemanager_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var securesourcemanager_v1;
     (function(securesourcemanager_v12) {
       class Securesourcemanager {
@@ -757764,7 +763137,7 @@ var require_securesourcemanager = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.securesourcemanager_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.securesourcemanager = securesourcemanager;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1193();
     Object.defineProperty(exports2, "securesourcemanager_v1", { enumerable: true, get: function() {
       return v1_1.securesourcemanager_v1;
@@ -757777,7 +763150,7 @@ var require_securesourcemanager = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -757790,7 +763163,7 @@ var require_v1194 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.securitycenter_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var securitycenter_v1;
     (function(securitycenter_v12) {
       class Securitycenter {
@@ -763531,7 +768904,7 @@ var require_v1beta156 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.securitycenter_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var securitycenter_v1beta1;
     (function(securitycenter_v1beta12) {
       class Securitycenter {
@@ -764289,7 +769662,7 @@ var require_v1beta216 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.securitycenter_v1beta2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var securitycenter_v1beta2;
     (function(securitycenter_v1beta22) {
       class Securitycenter {
@@ -766358,7 +771731,7 @@ var require_v1p1alpha1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.securitycenter_v1p1alpha1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var securitycenter_v1p1alpha1;
     (function(securitycenter_v1p1alpha12) {
       class Securitycenter {
@@ -766515,7 +771888,7 @@ var require_v1p1beta12 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.securitycenter_v1p1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var securitycenter_v1p1beta1;
     (function(securitycenter_v1p1beta12) {
       class Securitycenter {
@@ -767405,7 +772778,7 @@ var require_securitycenter = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.securitycenter_v1p1beta1 = exports2.securitycenter_v1p1alpha1 = exports2.securitycenter_v1beta2 = exports2.securitycenter_v1beta1 = exports2.securitycenter_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.securitycenter = securitycenter;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1194();
     Object.defineProperty(exports2, "securitycenter_v1", { enumerable: true, get: function() {
       return v1_1.securitycenter_v1;
@@ -767438,7 +772811,7 @@ var require_securitycenter = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -767451,7 +772824,7 @@ var require_v1195 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.securityposture_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var securityposture_v1;
     (function(securityposture_v12) {
       class Securityposture {
@@ -768246,7 +773619,7 @@ var require_securityposture = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.securityposture_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.securityposture = securityposture;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1195();
     Object.defineProperty(exports2, "securityposture_v1", { enumerable: true, get: function() {
       return v1_1.securityposture_v1;
@@ -768259,7 +773632,7 @@ var require_securityposture = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -768272,7 +773645,7 @@ var require_v1196 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.serviceconsumermanagement_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var serviceconsumermanagement_v1;
     (function(serviceconsumermanagement_v12) {
       class Serviceconsumermanagement {
@@ -768742,7 +774115,7 @@ var require_v1beta157 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.serviceconsumermanagement_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var serviceconsumermanagement_v1beta1;
     (function(serviceconsumermanagement_v1beta12) {
       class Serviceconsumermanagement {
@@ -769240,7 +774613,7 @@ var require_serviceconsumermanagement = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.serviceconsumermanagement_v1beta1 = exports2.serviceconsumermanagement_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.serviceconsumermanagement = serviceconsumermanagement;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1196();
     Object.defineProperty(exports2, "serviceconsumermanagement_v1", { enumerable: true, get: function() {
       return v1_1.serviceconsumermanagement_v1;
@@ -769258,7 +774631,7 @@ var require_serviceconsumermanagement = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -769271,7 +774644,7 @@ var require_v1197 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.servicecontrol_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var servicecontrol_v1;
     (function(servicecontrol_v12) {
       class Servicecontrol {
@@ -769393,7 +774766,7 @@ var require_v244 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.servicecontrol_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var servicecontrol_v2;
     (function(servicecontrol_v22) {
       class Servicecontrol {
@@ -769486,7 +774859,7 @@ var require_servicecontrol = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.servicecontrol_v2 = exports2.servicecontrol_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.servicecontrol = servicecontrol;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1197();
     Object.defineProperty(exports2, "servicecontrol_v1", { enumerable: true, get: function() {
       return v1_1.servicecontrol_v1;
@@ -769504,7 +774877,7 @@ var require_servicecontrol = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -769517,7 +774890,7 @@ var require_v1198 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.servicedirectory_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var servicedirectory_v1;
     (function(servicedirectory_v12) {
       class Servicedirectory {
@@ -770305,7 +775678,7 @@ var require_v1beta158 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.servicedirectory_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var servicedirectory_v1beta1;
     (function(servicedirectory_v1beta12) {
       class Servicedirectory {
@@ -771193,7 +776566,7 @@ var require_servicedirectory = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.servicedirectory_v1beta1 = exports2.servicedirectory_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.servicedirectory = servicedirectory;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1198();
     Object.defineProperty(exports2, "servicedirectory_v1", { enumerable: true, get: function() {
       return v1_1.servicedirectory_v1;
@@ -771211,7 +776584,7 @@ var require_servicedirectory = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -771224,7 +776597,7 @@ var require_v1199 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.servicemanagement_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var servicemanagement_v1;
     (function(servicemanagement_v12) {
       class Servicemanagement {
@@ -771953,7 +777326,7 @@ var require_servicemanagement = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.servicemanagement_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.servicemanagement = servicemanagement;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1199();
     Object.defineProperty(exports2, "servicemanagement_v1", { enumerable: true, get: function() {
       return v1_1.servicemanagement_v1;
@@ -771966,7 +777339,7 @@ var require_servicemanagement = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -771979,7 +777352,7 @@ var require_v1200 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.servicenetworking_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var servicenetworking_v1;
     (function(servicenetworking_v12) {
       class Servicenetworking {
@@ -772971,7 +778344,7 @@ var require_v1beta44 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.servicenetworking_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var servicenetworking_v1beta;
     (function(servicenetworking_v1beta2) {
       class Servicenetworking {
@@ -773202,7 +778575,7 @@ var require_servicenetworking = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.servicenetworking_v1beta = exports2.servicenetworking_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.servicenetworking = servicenetworking;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1200();
     Object.defineProperty(exports2, "servicenetworking_v1", { enumerable: true, get: function() {
       return v1_1.servicenetworking_v1;
@@ -773220,7 +778593,7 @@ var require_servicenetworking = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -773233,7 +778606,7 @@ var require_v1201 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.serviceusage_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var serviceusage_v1;
     (function(serviceusage_v12) {
       class Serviceusage {
@@ -773574,7 +778947,7 @@ var require_v1beta159 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.serviceusage_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var serviceusage_v1beta1;
     (function(serviceusage_v1beta12) {
       class Serviceusage {
@@ -774282,7 +779655,7 @@ var require_serviceusage = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.serviceusage_v1beta1 = exports2.serviceusage_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.serviceusage = serviceusage;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1201();
     Object.defineProperty(exports2, "serviceusage_v1", { enumerable: true, get: function() {
       return v1_1.serviceusage_v1;
@@ -774300,7 +779673,7 @@ var require_serviceusage = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -774313,7 +779686,7 @@ var require_v46 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.sheets_v4 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var sheets_v4;
     (function(sheets_v42) {
       class Sheets {
@@ -774883,7 +780256,7 @@ var require_sheets = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.sheets_v4 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.sheets = sheets;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v4_1 = require_v46();
     Object.defineProperty(exports2, "sheets_v4", { enumerable: true, get: function() {
       return v4_1.sheets_v4;
@@ -774896,7 +780269,7 @@ var require_sheets = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -774909,7 +780282,7 @@ var require_v1202 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.siteVerification_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var siteVerification_v1;
     (function(siteVerification_v12) {
       class Siteverification {
@@ -775152,7 +780525,7 @@ var require_siteVerification = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.siteVerification_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.siteVerification = siteVerification;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1202();
     Object.defineProperty(exports2, "siteVerification_v1", { enumerable: true, get: function() {
       return v1_1.siteVerification_v1;
@@ -775165,7 +780538,7 @@ var require_siteVerification = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -775178,7 +780551,7 @@ var require_v1203 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.slides_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var slides_v1;
     (function(slides_v12) {
       class Slides {
@@ -775370,7 +780743,7 @@ var require_slides = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.slides_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.slides = slides;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1203();
     Object.defineProperty(exports2, "slides_v1", { enumerable: true, get: function() {
       return v1_1.slides_v1;
@@ -775383,7 +780756,7 @@ var require_slides = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -775396,7 +780769,7 @@ var require_v1204 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.smartdevicemanagement_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var smartdevicemanagement_v1;
     (function(smartdevicemanagement_v12) {
       class Smartdevicemanagement {
@@ -775666,7 +781039,7 @@ var require_smartdevicemanagement = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.smartdevicemanagement_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.smartdevicemanagement = smartdevicemanagement;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1204();
     Object.defineProperty(exports2, "smartdevicemanagement_v1", { enumerable: true, get: function() {
       return v1_1.smartdevicemanagement_v1;
@@ -775679,7 +781052,7 @@ var require_smartdevicemanagement = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -775692,7 +781065,7 @@ var require_v1205 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.solar_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var solar_v1;
     (function(solar_v12) {
       class Solar {
@@ -775833,7 +781206,7 @@ var require_solar = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.solar_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.solar = solar;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1205();
     Object.defineProperty(exports2, "solar_v1", { enumerable: true, get: function() {
       return v1_1.solar_v1;
@@ -775846,7 +781219,7 @@ var require_solar = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -775859,7 +781232,7 @@ var require_v1206 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.sourcerepo_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var sourcerepo_v1;
     (function(sourcerepo_v12) {
       class Sourcerepo {
@@ -776231,7 +781604,7 @@ var require_sourcerepo = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.sourcerepo_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.sourcerepo = sourcerepo;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1206();
     Object.defineProperty(exports2, "sourcerepo_v1", { enumerable: true, get: function() {
       return v1_1.sourcerepo_v1;
@@ -776244,7 +781617,7 @@ var require_sourcerepo = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -776257,7 +781630,7 @@ var require_v1207 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.spanner_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var spanner_v1;
     (function(spanner_v12) {
       class Spanner {
@@ -779440,7 +784813,7 @@ var require_spanner = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.spanner_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.spanner = spanner;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1207();
     Object.defineProperty(exports2, "spanner_v1", { enumerable: true, get: function() {
       return v1_1.spanner_v1;
@@ -779453,7 +784826,7 @@ var require_spanner = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -779466,7 +784839,7 @@ var require_v1208 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.speech_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var speech_v1;
     (function(speech_v12) {
       class Speech {
@@ -779963,7 +785336,7 @@ var require_v1p1beta13 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.speech_v1p1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var speech_v1p1beta1;
     (function(speech_v1p1beta12) {
       class Speech {
@@ -780460,7 +785833,7 @@ var require_v2beta17 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.speech_v2beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var speech_v2beta1;
     (function(speech_v2beta12) {
       class Speech {
@@ -780569,7 +785942,7 @@ var require_speech = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.speech_v2beta1 = exports2.speech_v1p1beta1 = exports2.speech_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.speech = speech;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1208();
     Object.defineProperty(exports2, "speech_v1", { enumerable: true, get: function() {
       return v1_1.speech_v1;
@@ -780592,7 +785965,7 @@ var require_speech = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -780605,7 +785978,7 @@ var require_v1beta45 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.sql_v1beta4 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var sql_v1beta4;
     (function(sql_v1beta42) {
       class Sql2 {
@@ -782082,7 +787455,7 @@ var require_sql = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.sql_v1beta4 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.sql = sql;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1beta4_1 = require_v1beta45();
     Object.defineProperty(exports2, "sql_v1beta4", { enumerable: true, get: function() {
       return v1beta4_1.sql_v1beta4;
@@ -782095,7 +787468,7 @@ var require_sql = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -782108,7 +787481,7 @@ var require_v1209 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.sqladmin_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var sqladmin_v1;
     (function(sqladmin_v12) {
       class Sqladmin {
@@ -784309,7 +789682,7 @@ var require_v1beta46 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.sqladmin_v1beta4 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var sqladmin_v1beta4;
     (function(sqladmin_v1beta42) {
       class Sqladmin {
@@ -786511,7 +791884,7 @@ var require_sqladmin = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.sqladmin_v1beta4 = exports2.sqladmin_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.sqladmin = sqladmin;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1209();
     Object.defineProperty(exports2, "sqladmin_v1", { enumerable: true, get: function() {
       return v1_1.sqladmin_v1;
@@ -786529,7 +791902,7 @@ var require_sqladmin = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -786542,7 +791915,7 @@ var require_v1210 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.storage_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var storage_v1;
     (function(storage_v12) {
       class Storage {
@@ -789142,7 +794515,7 @@ var require_v1beta217 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.storage_v1beta2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var storage_v1beta2;
     (function(storage_v1beta22) {
       class Storage {
@@ -790217,7 +795590,7 @@ var require_storage = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.storage_v1beta2 = exports2.storage_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.storage = storage;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1210();
     Object.defineProperty(exports2, "storage_v1", { enumerable: true, get: function() {
       return v1_1.storage_v1;
@@ -790235,7 +795608,7 @@ var require_storage = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -790248,7 +795621,7 @@ var require_v1211 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.storagebatchoperations_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var storagebatchoperations_v1;
     (function(storagebatchoperations_v12) {
       class Storagebatchoperations {
@@ -790638,7 +796011,7 @@ var require_storagebatchoperations = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.storagebatchoperations_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.storagebatchoperations = storagebatchoperations;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1211();
     Object.defineProperty(exports2, "storagebatchoperations_v1", { enumerable: true, get: function() {
       return v1_1.storagebatchoperations_v1;
@@ -790651,7 +796024,7 @@ var require_storagebatchoperations = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -790664,7 +796037,7 @@ var require_v1212 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.storagetransfer_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var storagetransfer_v1;
     (function(storagetransfer_v12) {
       class Storagetransfer {
@@ -791243,7 +796616,7 @@ var require_storagetransfer = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.storagetransfer_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.storagetransfer = storagetransfer;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1212();
     Object.defineProperty(exports2, "storagetransfer_v1", { enumerable: true, get: function() {
       return v1_1.storagetransfer_v1;
@@ -791256,7 +796629,7 @@ var require_storagetransfer = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -791269,7 +796642,7 @@ var require_v1213 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.streetviewpublish_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var streetviewpublish_v1;
     (function(streetviewpublish_v12) {
       class Streetviewpublish {
@@ -791749,7 +797122,7 @@ var require_streetviewpublish = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.streetviewpublish_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.streetviewpublish = streetviewpublish;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1213();
     Object.defineProperty(exports2, "streetviewpublish_v1", { enumerable: true, get: function() {
       return v1_1.streetviewpublish_v1;
@@ -791762,7 +797135,7 @@ var require_streetviewpublish = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -791775,7 +797148,7 @@ var require_v1214 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.sts_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var sts_v1;
     (function(sts_v12) {
       class Sts {
@@ -791837,7 +797210,7 @@ var require_v1beta47 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.sts_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var sts_v1beta;
     (function(sts_v1beta2) {
       class Sts {
@@ -791900,7 +797273,7 @@ var require_sts = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.sts_v1beta = exports2.sts_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.sts = sts;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1214();
     Object.defineProperty(exports2, "sts_v1", { enumerable: true, get: function() {
       return v1_1.sts_v1;
@@ -791918,7 +797291,7 @@ var require_sts = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -791931,7 +797304,7 @@ var require_v1215 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.tagmanager_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var tagmanager_v1;
     (function(tagmanager_v12) {
       class Tagmanager {
@@ -793532,7 +798905,7 @@ var require_v245 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.tagmanager_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var tagmanager_v2;
     (function(tagmanager_v22) {
       class Tagmanager {
@@ -796868,7 +802241,7 @@ var require_tagmanager = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.tagmanager_v2 = exports2.tagmanager_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.tagmanager = tagmanager;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1215();
     Object.defineProperty(exports2, "tagmanager_v1", { enumerable: true, get: function() {
       return v1_1.tagmanager_v1;
@@ -796886,7 +802259,7 @@ var require_tagmanager = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -796899,7 +802272,7 @@ var require_v1216 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.tasks_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var tasks_v1;
     (function(tasks_v12) {
       class Tasks {
@@ -797361,7 +802734,7 @@ var require_tasks = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.tasks_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.tasks = tasks;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1216();
     Object.defineProperty(exports2, "tasks_v1", { enumerable: true, get: function() {
       return v1_1.tasks_v1;
@@ -797374,7 +802747,7 @@ var require_tasks = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -797387,7 +802760,7 @@ var require_v1217 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.testing_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var testing_v1;
     (function(testing_v12) {
       class Testing {
@@ -797756,7 +803129,7 @@ var require_testing = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.testing_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.testing = testing;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1217();
     Object.defineProperty(exports2, "testing_v1", { enumerable: true, get: function() {
       return v1_1.testing_v1;
@@ -797769,7 +803142,7 @@ var require_testing = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -797782,7 +803155,7 @@ var require_v1218 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.texttospeech_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var texttospeech_v1;
     (function(texttospeech_v12) {
       class Texttospeech {
@@ -798069,7 +803442,7 @@ var require_v1beta160 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.texttospeech_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var texttospeech_v1beta1;
     (function(texttospeech_v1beta12) {
       class Texttospeech {
@@ -798288,7 +803661,7 @@ var require_texttospeech = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.texttospeech_v1beta1 = exports2.texttospeech_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.texttospeech = texttospeech;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1218();
     Object.defineProperty(exports2, "texttospeech_v1", { enumerable: true, get: function() {
       return v1_1.texttospeech_v1;
@@ -798306,7 +803679,7 @@ var require_texttospeech = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -798319,7 +803692,7 @@ var require_v1beta310 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.toolresults_v1beta3 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var toolresults_v1beta3;
     (function(toolresults_v1beta32) {
       class Toolresults {
@@ -799365,7 +804738,7 @@ var require_toolresults = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.toolresults_v1beta3 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.toolresults = toolresults;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1beta3_1 = require_v1beta310();
     Object.defineProperty(exports2, "toolresults_v1beta3", { enumerable: true, get: function() {
       return v1beta3_1.toolresults_v1beta3;
@@ -799378,7 +804751,7 @@ var require_toolresults = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -799391,7 +804764,7 @@ var require_v1219 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.tpu_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var tpu_v1;
     (function(tpu_v12) {
       class Tpu {
@@ -799978,7 +805351,7 @@ var require_v1alpha119 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.tpu_v1alpha1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var tpu_v1alpha1;
     (function(tpu_v1alpha12) {
       class Tpu {
@@ -800565,7 +805938,7 @@ var require_v246 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.tpu_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var tpu_v2;
     (function(tpu_v22) {
       class Tpu {
@@ -801371,7 +806744,7 @@ var require_v2alpha12 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.tpu_v2alpha1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var tpu_v2alpha1;
     (function(tpu_v2alpha12) {
       class Tpu {
@@ -802307,7 +807680,7 @@ var require_tpu = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.tpu_v2alpha1 = exports2.tpu_v2 = exports2.tpu_v1alpha1 = exports2.tpu_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.tpu = tpu;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1219();
     Object.defineProperty(exports2, "tpu_v1", { enumerable: true, get: function() {
       return v1_1.tpu_v1;
@@ -802335,7 +807708,7 @@ var require_tpu = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -802348,7 +807721,7 @@ var require_v247 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.trafficdirector_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var trafficdirector_v2;
     (function(trafficdirector_v22) {
       class Trafficdirector {
@@ -802410,7 +807783,7 @@ var require_v314 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.trafficdirector_v3 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var trafficdirector_v3;
     (function(trafficdirector_v32) {
       class Trafficdirector {
@@ -802473,7 +807846,7 @@ var require_trafficdirector = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.trafficdirector_v3 = exports2.trafficdirector_v2 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.trafficdirector = trafficdirector;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v2_1 = require_v247();
     Object.defineProperty(exports2, "trafficdirector_v2", { enumerable: true, get: function() {
       return v2_1.trafficdirector_v2;
@@ -802491,7 +807864,7 @@ var require_trafficdirector = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -802504,7 +807877,7 @@ var require_v1220 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.transcoder_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var transcoder_v1;
     (function(transcoder_v12) {
       class Transcoder {
@@ -802803,7 +808176,7 @@ var require_v1beta161 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.transcoder_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var transcoder_v1beta1;
     (function(transcoder_v1beta12) {
       class Transcoder {
@@ -803095,7 +808468,7 @@ var require_transcoder = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.transcoder_v1beta1 = exports2.transcoder_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.transcoder = transcoder;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1220();
     Object.defineProperty(exports2, "transcoder_v1", { enumerable: true, get: function() {
       return v1_1.transcoder_v1;
@@ -803113,7 +808486,7 @@ var require_transcoder = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -803126,7 +808499,7 @@ var require_v248 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.translate_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var translate_v2;
     (function(translate_v22) {
       class Translate {
@@ -803326,7 +808699,7 @@ var require_v315 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.translate_v3 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var translate_v3;
     (function(translate_v32) {
       class Translate {
@@ -804957,7 +810330,7 @@ var require_v3beta12 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.translate_v3beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var translate_v3beta1;
     (function(translate_v3beta12) {
       class Translate {
@@ -805617,7 +810990,7 @@ var require_translate = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.translate_v3beta1 = exports2.translate_v3 = exports2.translate_v2 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.translate = translate;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v2_1 = require_v248();
     Object.defineProperty(exports2, "translate_v2", { enumerable: true, get: function() {
       return v2_1.translate_v2;
@@ -805640,7 +811013,7 @@ var require_translate = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -805653,7 +811026,7 @@ var require_v1221 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.travelimpactmodel_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var travelimpactmodel_v1;
     (function(travelimpactmodel_v12) {
       class Travelimpactmodel {
@@ -805746,7 +811119,7 @@ var require_travelimpactmodel = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.travelimpactmodel_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.travelimpactmodel = travelimpactmodel;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1221();
     Object.defineProperty(exports2, "travelimpactmodel_v1", { enumerable: true, get: function() {
       return v1_1.travelimpactmodel_v1;
@@ -805759,7 +811132,7 @@ var require_travelimpactmodel = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -805772,7 +811145,7 @@ var require_v1222 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.vault_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var vault_v1;
     (function(vault_v12) {
       class Vault {
@@ -806840,7 +812213,7 @@ var require_vault = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.vault_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.vault = vault;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1222();
     Object.defineProperty(exports2, "vault_v1", { enumerable: true, get: function() {
       return v1_1.vault_v1;
@@ -806853,7 +812226,7 @@ var require_vault = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -806866,7 +812239,7 @@ var require_v1223 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.vectortile_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var vectortile_v1;
     (function(vectortile_v12) {
       class Vectortile {
@@ -806966,7 +812339,7 @@ var require_vectortile = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.vectortile_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.vectortile = vectortile;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1223();
     Object.defineProperty(exports2, "vectortile_v1", { enumerable: true, get: function() {
       return v1_1.vectortile_v1;
@@ -806979,7 +812352,7 @@ var require_vectortile = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -806992,7 +812365,7 @@ var require_v1224 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.verifiedaccess_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var verifiedaccess_v1;
     (function(verifiedaccess_v12) {
       class Verifiedaccess {
@@ -807084,7 +812457,7 @@ var require_v249 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.verifiedaccess_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var verifiedaccess_v2;
     (function(verifiedaccess_v22) {
       class Verifiedaccess {
@@ -807177,7 +812550,7 @@ var require_verifiedaccess = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.verifiedaccess_v2 = exports2.verifiedaccess_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.verifiedaccess = verifiedaccess;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1224();
     Object.defineProperty(exports2, "verifiedaccess_v1", { enumerable: true, get: function() {
       return v1_1.verifiedaccess_v1;
@@ -807195,7 +812568,7 @@ var require_verifiedaccess = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -807208,7 +812581,7 @@ var require_v1225 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.versionhistory_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var versionhistory_v1;
     (function(versionhistory_v12) {
       class Versionhistory {
@@ -807388,7 +812761,7 @@ var require_versionhistory = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.versionhistory_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.versionhistory = versionhistory;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1225();
     Object.defineProperty(exports2, "versionhistory_v1", { enumerable: true, get: function() {
       return v1_1.versionhistory_v1;
@@ -807401,7 +812774,7 @@ var require_versionhistory = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -807414,7 +812787,7 @@ var require_v1226 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.videointelligence_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var videointelligence_v1;
     (function(videointelligence_v12) {
       class Videointelligence {
@@ -807749,7 +813122,7 @@ var require_v1beta218 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.videointelligence_v1beta2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var videointelligence_v1beta2;
     (function(videointelligence_v1beta22) {
       class Videointelligence {
@@ -807811,7 +813184,7 @@ var require_v1p1beta14 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.videointelligence_v1p1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var videointelligence_v1p1beta1;
     (function(videointelligence_v1p1beta12) {
       class Videointelligence {
@@ -807873,7 +813246,7 @@ var require_v1p2beta1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.videointelligence_v1p2beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var videointelligence_v1p2beta1;
     (function(videointelligence_v1p2beta12) {
       class Videointelligence {
@@ -807935,7 +813308,7 @@ var require_v1p3beta1 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.videointelligence_v1p3beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var videointelligence_v1p3beta1;
     (function(videointelligence_v1p3beta12) {
       class Videointelligence {
@@ -807998,7 +813371,7 @@ var require_videointelligence = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.videointelligence_v1p3beta1 = exports2.videointelligence_v1p2beta1 = exports2.videointelligence_v1p1beta1 = exports2.videointelligence_v1beta2 = exports2.videointelligence_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.videointelligence = videointelligence;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1226();
     Object.defineProperty(exports2, "videointelligence_v1", { enumerable: true, get: function() {
       return v1_1.videointelligence_v1;
@@ -808031,7 +813404,7 @@ var require_videointelligence = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -808044,7 +813417,7 @@ var require_v1227 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.vision_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var vision_v1;
     (function(vision_v12) {
       class Vision {
@@ -809360,7 +814733,7 @@ var require_v1p1beta15 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.vision_v1p1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var vision_v1p1beta1;
     (function(vision_v1p1beta12) {
       class Vision {
@@ -809815,7 +815188,7 @@ var require_v1p2beta12 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.vision_v1p2beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var vision_v1p2beta1;
     (function(vision_v1p2beta12) {
       class Vision {
@@ -810271,7 +815644,7 @@ var require_vision = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.vision_v1p2beta1 = exports2.vision_v1p1beta1 = exports2.vision_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.vision = vision;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1227();
     Object.defineProperty(exports2, "vision_v1", { enumerable: true, get: function() {
       return v1_1.vision_v1;
@@ -810294,7 +815667,7 @@ var require_vision = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -810307,7 +815680,7 @@ var require_v1228 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.vmmigration_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var vmmigration_v1;
     (function(vmmigration_v12) {
       class Vmmigration {
@@ -812256,7 +817629,7 @@ var require_v1alpha120 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.vmmigration_v1alpha1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var vmmigration_v1alpha1;
     (function(vmmigration_v1alpha12) {
       class Vmmigration {
@@ -814206,7 +819579,7 @@ var require_vmmigration = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.vmmigration_v1alpha1 = exports2.vmmigration_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.vmmigration = vmmigration;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1228();
     Object.defineProperty(exports2, "vmmigration_v1", { enumerable: true, get: function() {
       return v1_1.vmmigration_v1;
@@ -814224,7 +819597,7 @@ var require_vmmigration = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -814237,7 +819610,7 @@ var require_v1229 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.vmwareengine_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var vmwareengine_v1;
     (function(vmwareengine_v12) {
       class Vmwareengine {
@@ -817249,7 +822622,7 @@ var require_vmwareengine = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.vmwareengine_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.vmwareengine = vmwareengine;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1229();
     Object.defineProperty(exports2, "vmwareengine_v1", { enumerable: true, get: function() {
       return v1_1.vmwareengine_v1;
@@ -817262,7 +822635,7 @@ var require_vmwareengine = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -817275,7 +822648,7 @@ var require_v1230 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.vpcaccess_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var vpcaccess_v1;
     (function(vpcaccess_v12) {
       class Vpcaccess {
@@ -817574,7 +822947,7 @@ var require_v1beta162 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.vpcaccess_v1beta1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var vpcaccess_v1beta1;
     (function(vpcaccess_v1beta12) {
       class Vpcaccess {
@@ -817874,7 +823247,7 @@ var require_vpcaccess = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.vpcaccess_v1beta1 = exports2.vpcaccess_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.vpcaccess = vpcaccess;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1230();
     Object.defineProperty(exports2, "vpcaccess_v1", { enumerable: true, get: function() {
       return v1_1.vpcaccess_v1;
@@ -817892,7 +823265,7 @@ var require_vpcaccess = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -817905,7 +823278,7 @@ var require_v1231 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.walletobjects_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var walletobjects_v1;
     (function(walletobjects_v12) {
       class Walletobjects {
@@ -821068,7 +826441,7 @@ var require_walletobjects = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.walletobjects_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.walletobjects = walletobjects;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1231();
     Object.defineProperty(exports2, "walletobjects_v1", { enumerable: true, get: function() {
       return v1_1.walletobjects_v1;
@@ -821081,7 +826454,7 @@ var require_walletobjects = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -821094,7 +826467,7 @@ var require_v1232 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.webfonts_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var webfonts_v1;
     (function(webfonts_v12) {
       class Webfonts {
@@ -821157,7 +826530,7 @@ var require_webfonts = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.webfonts_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.webfonts = webfonts;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1232();
     Object.defineProperty(exports2, "webfonts_v1", { enumerable: true, get: function() {
       return v1_1.webfonts_v1;
@@ -821170,7 +826543,7 @@ var require_webfonts = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -821183,7 +826556,7 @@ var require_v316 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.webmasters_v3 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var webmasters_v3;
     (function(webmasters_v32) {
       class Webmasters {
@@ -821495,7 +826868,7 @@ var require_webmasters = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.webmasters_v3 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.webmasters = webmasters;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v3_1 = require_v316();
     Object.defineProperty(exports2, "webmasters_v3", { enumerable: true, get: function() {
       return v3_1.webmasters_v3;
@@ -821508,7 +826881,7 @@ var require_webmasters = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -821521,7 +826894,7 @@ var require_v1233 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.webrisk_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var webrisk_v1;
     (function(webrisk_v12) {
       class Webrisk {
@@ -821839,7 +827212,7 @@ var require_webrisk = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.webrisk_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.webrisk = webrisk;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1233();
     Object.defineProperty(exports2, "webrisk_v1", { enumerable: true, get: function() {
       return v1_1.webrisk_v1;
@@ -821852,7 +827225,7 @@ var require_webrisk = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -821865,7 +827238,7 @@ var require_v1234 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.websecurityscanner_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var websecurityscanner_v1;
     (function(websecurityscanner_v12) {
       class Websecurityscanner {
@@ -822332,7 +827705,7 @@ var require_v1alpha36 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.websecurityscanner_v1alpha = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var websecurityscanner_v1alpha;
     (function(websecurityscanner_v1alpha2) {
       class Websecurityscanner {
@@ -822799,7 +828172,7 @@ var require_v1beta48 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.websecurityscanner_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var websecurityscanner_v1beta;
     (function(websecurityscanner_v1beta2) {
       class Websecurityscanner {
@@ -823267,7 +828640,7 @@ var require_websecurityscanner = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.websecurityscanner_v1beta = exports2.websecurityscanner_v1alpha = exports2.websecurityscanner_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.websecurityscanner = websecurityscanner;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1234();
     Object.defineProperty(exports2, "websecurityscanner_v1", { enumerable: true, get: function() {
       return v1_1.websecurityscanner_v1;
@@ -823290,7 +828663,7 @@ var require_websecurityscanner = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -823303,7 +828676,7 @@ var require_v1235 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.workflowexecutions_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var workflowexecutions_v1;
     (function(workflowexecutions_v12) {
       class Workflowexecutions {
@@ -823680,7 +829053,7 @@ var require_v1beta49 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.workflowexecutions_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var workflowexecutions_v1beta;
     (function(workflowexecutions_v1beta2) {
       class Workflowexecutions {
@@ -823860,7 +829233,7 @@ var require_workflowexecutions = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.workflowexecutions_v1beta = exports2.workflowexecutions_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.workflowexecutions = workflowexecutions;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1235();
     Object.defineProperty(exports2, "workflowexecutions_v1", { enumerable: true, get: function() {
       return v1_1.workflowexecutions_v1;
@@ -823878,7 +829251,7 @@ var require_workflowexecutions = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -823891,7 +829264,7 @@ var require_v1236 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.workflows_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var workflows_v1;
     (function(workflows_v12) {
       class Workflows {
@@ -824280,7 +829653,7 @@ var require_v1beta50 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.workflows_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var workflows_v1beta;
     (function(workflows_v1beta2) {
       class Workflows {
@@ -824640,7 +830013,7 @@ var require_workflows = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.workflows_v1beta = exports2.workflows_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.workflows = workflows;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1236();
     Object.defineProperty(exports2, "workflows_v1", { enumerable: true, get: function() {
       return v1_1.workflows_v1;
@@ -824658,7 +830031,7 @@ var require_workflows = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -824671,7 +830044,7 @@ var require_v1237 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.workloadmanager_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var workloadmanager_v1;
     (function(workloadmanager_v12) {
       class Workloadmanager {
@@ -825385,7 +830758,7 @@ var require_workloadmanager = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.workloadmanager_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.workloadmanager = workloadmanager;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1237();
     Object.defineProperty(exports2, "workloadmanager_v1", { enumerable: true, get: function() {
       return v1_1.workloadmanager_v1;
@@ -825398,7 +830771,7 @@ var require_workloadmanager = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -825411,7 +830784,7 @@ var require_v1238 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.workspaceevents_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var workspaceevents_v1;
     (function(workspaceevents_v12) {
       class Workspaceevents {
@@ -825663,7 +831036,7 @@ var require_workspaceevents = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.workspaceevents_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.workspaceevents = workspaceevents;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1238();
     Object.defineProperty(exports2, "workspaceevents_v1", { enumerable: true, get: function() {
       return v1_1.workspaceevents_v1;
@@ -825676,7 +831049,7 @@ var require_workspaceevents = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -825689,7 +831062,7 @@ var require_v1239 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.workstations_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var workstations_v1;
     (function(workstations_v12) {
       class Workstations {
@@ -826726,7 +832099,7 @@ var require_v1beta51 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.workstations_v1beta = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var workstations_v1beta;
     (function(workstations_v1beta2) {
       class Workstations {
@@ -827704,7 +833077,7 @@ var require_workstations = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.workstations_v1beta = exports2.workstations_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.workstations = workstations;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1239();
     Object.defineProperty(exports2, "workstations_v1", { enumerable: true, get: function() {
       return v1_1.workstations_v1;
@@ -827722,7 +833095,7 @@ var require_workstations = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -827735,7 +833108,7 @@ var require_v317 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.youtube_v3 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var youtube_v3;
     (function(youtube_v32) {
       class Youtube {
@@ -830572,7 +835945,7 @@ var require_youtube = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.youtube_v3 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.youtube = youtube;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v3_1 = require_v317();
     Object.defineProperty(exports2, "youtube_v3", { enumerable: true, get: function() {
       return v3_1.youtube_v3;
@@ -830585,7 +835958,7 @@ var require_youtube = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -830620,7 +835993,7 @@ var require_v250 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.youtubeAnalytics_v2 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var youtubeAnalytics_v2;
     (function(youtubeAnalytics_v22) {
       class Youtubeanalytics {
@@ -830911,7 +836284,7 @@ var require_youtubeAnalytics = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.youtubeAnalytics_v2 = exports2.youtubeAnalytics_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.youtubeAnalytics = youtubeAnalytics;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1240();
     Object.defineProperty(exports2, "youtubeAnalytics_v1", { enumerable: true, get: function() {
       return v1_1.youtubeAnalytics_v1;
@@ -830929,7 +836302,7 @@ var require_youtubeAnalytics = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -830942,7 +836315,7 @@ var require_v1241 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.youtubereporting_v1 = void 0;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var youtubereporting_v1;
     (function(youtubereporting_v12) {
       class Youtubereporting {
@@ -831242,7 +836615,7 @@ var require_youtubereporting = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthPlus = exports2.youtubereporting_v1 = exports2.auth = exports2.VERSIONS = void 0;
     exports2.youtubereporting = youtubereporting;
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     var v1_1 = require_v1241();
     Object.defineProperty(exports2, "youtubereporting_v1", { enumerable: true, get: function() {
       return v1_1.youtubereporting_v1;
@@ -831255,7 +836628,7 @@ var require_youtubereporting = __commonJS({
     }
     var auth = new googleapis_common_1.AuthPlus();
     exports2.auth = auth;
-    var googleapis_common_2 = require_src12();
+    var googleapis_common_2 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_2.AuthPlus;
     } });
@@ -832228,7 +837601,7 @@ var require_googleapis = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.GoogleApis = exports2.AuthPlus = void 0;
     var apis_1 = require_apis();
-    var googleapis_common_1 = require_src12();
+    var googleapis_common_1 = require_src13();
     Object.defineProperty(exports2, "AuthPlus", { enumerable: true, get: function() {
       return googleapis_common_1.AuthPlus;
     } });
@@ -832762,9 +838135,9 @@ var require_authclient2 = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AuthClient = exports2.DEFAULT_EAGER_REFRESH_THRESHOLD_MILLIS = exports2.DEFAULT_UNIVERSE = void 0;
     var events_1 = require("events");
-    var gaxios_1 = require_src7();
+    var gaxios_1 = require_src8();
     var util_1 = require_util5();
-    var google_logging_utils_1 = require_src8();
+    var google_logging_utils_1 = require_src9();
     var shared_cjs_1 = require_shared4();
     exports2.DEFAULT_UNIVERSE = "googleapis.com";
     exports2.DEFAULT_EAGER_REFRESH_THRESHOLD_MILLIS = 5 * 60 * 1e3;
@@ -833048,7 +838421,7 @@ var require_oauth2client2 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.OAuth2Client = exports2.ClientAuthentication = exports2.CertificateFormat = exports2.CodeChallengeMethod = void 0;
-    var gaxios_1 = require_src7();
+    var gaxios_1 = require_src8();
     var querystring = require("querystring");
     var stream = require("stream");
     var formatEcdsa = require_ecdsa_sig_formatter();
@@ -833729,8 +839102,8 @@ var require_computeclient2 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.Compute = void 0;
-    var gaxios_1 = require_src7();
-    var gcpMetadata = require_src9();
+    var gaxios_1 = require_src8();
+    var gcpMetadata = require_src10();
     var oauth2client_1 = require_oauth2client2();
     var Compute = class extends oauth2client_1.OAuth2Client {
       serviceAccountEmail;
@@ -833869,7 +839242,7 @@ var require_envDetect2 = __commonJS({
     exports2.GCPEnv = void 0;
     exports2.clear = clear;
     exports2.getEnv = getEnv;
-    var gcpMetadata = require_src9();
+    var gcpMetadata = require_src10();
     var GCPEnv;
     (function(GCPEnv2) {
       GCPEnv2["APP_ENGINE"] = "APP_ENGINE";
@@ -834249,7 +839622,7 @@ var require_googleToken = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.GoogleToken = void 0;
-    var gaxios_1 = require_src7();
+    var gaxios_1 = require_src8();
     var tokenHandler_1 = require_tokenHandler();
     var revokeToken_1 = require_revokeToken();
     var GoogleToken = class {
@@ -834926,7 +840299,7 @@ var require_impersonated2 = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.Impersonated = exports2.IMPERSONATED_ACCOUNT_TYPE = void 0;
     var oauth2client_1 = require_oauth2client2();
-    var gaxios_1 = require_src7();
+    var gaxios_1 = require_src8();
     var util_1 = require_util5();
     exports2.IMPERSONATED_ACCOUNT_TYPE = "impersonated_service_account";
     var Impersonated = class _Impersonated extends oauth2client_1.OAuth2Client {
@@ -835105,7 +840478,7 @@ var require_oauth2common2 = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.OAuthClientAuthHandler = void 0;
     exports2.getErrorFromOAuthErrorResponse = getErrorFromOAuthErrorResponse;
-    var gaxios_1 = require_src7();
+    var gaxios_1 = require_src8();
     var crypto_1 = require_crypto6();
     var METHODS_SUPPORTING_REQUEST_BODY = ["PUT", "POST", "PATCH"];
     var OAuthClientAuthHandler = class {
@@ -835252,7 +840625,7 @@ var require_stscredentials2 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.StsCredentials = void 0;
-    var gaxios_1 = require_src7();
+    var gaxios_1 = require_src8();
     var authclient_1 = require_authclient2();
     var oauth2common_1 = require_oauth2common2();
     var util_1 = require_util5();
@@ -835340,7 +840713,7 @@ var require_baseexternalclient2 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.BaseExternalAccountClient = exports2.CLOUD_RESOURCE_MANAGER = exports2.EXTERNAL_ACCOUNT_TYPE = exports2.EXPIRATION_TIME_OFFSET = void 0;
-    var gaxios_1 = require_src7();
+    var gaxios_1 = require_src8();
     var stream = require("stream");
     var authclient_1 = require_authclient2();
     var sts = require_stscredentials2();
@@ -836032,7 +841405,7 @@ var require_identitypoolclient2 = __commonJS({
     var urlsubjecttokensupplier_1 = require_urlsubjecttokensupplier2();
     var certificatesubjecttokensupplier_1 = require_certificatesubjecttokensupplier2();
     var stscredentials_1 = require_stscredentials2();
-    var gaxios_1 = require_src7();
+    var gaxios_1 = require_src8();
     var IdentityPoolClient = class _IdentityPoolClient extends baseexternalclient_1.BaseExternalAccountClient {
       subjectTokenSupplier;
       /**
@@ -836138,7 +841511,7 @@ var require_awsrequestsigner2 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.AwsRequestSigner = void 0;
-    var gaxios_1 = require_src7();
+    var gaxios_1 = require_src8();
     var crypto_1 = require_crypto6();
     var AWS_ALGORITHM = "AWS4-HMAC-SHA256";
     var AWS_REQUEST_TYPE = "aws4_request";
@@ -836447,7 +841820,7 @@ var require_awsclient2 = __commonJS({
     var baseexternalclient_1 = require_baseexternalclient2();
     var defaultawssecuritycredentialssupplier_1 = require_defaultawssecuritycredentialssupplier2();
     var util_1 = require_util5();
-    var gaxios_1 = require_src7();
+    var gaxios_1 = require_src8();
     var AwsClient = class _AwsClient extends baseexternalclient_1.BaseExternalAccountClient {
       environmentId;
       awsSecurityCredentialsSupplier;
@@ -837007,7 +842380,7 @@ var require_externalAccountAuthorizedUserClient2 = __commonJS({
     exports2.ExternalAccountAuthorizedUserClient = exports2.EXTERNAL_ACCOUNT_AUTHORIZED_USER_TYPE = void 0;
     var authclient_1 = require_authclient2();
     var oauth2common_1 = require_oauth2common2();
-    var gaxios_1 = require_src7();
+    var gaxios_1 = require_src8();
     var stream = require("stream");
     var baseexternalclient_1 = require_baseexternalclient2();
     exports2.EXTERNAL_ACCOUNT_AUTHORIZED_USER_TYPE = "external_account_authorized_user";
@@ -837477,8 +842850,8 @@ var require_googleauth2 = __commonJS({
     exports2.GoogleAuth = exports2.GoogleAuthExceptionMessages = void 0;
     var child_process_1 = require("child_process");
     var fs3 = require("fs");
-    var gaxios_1 = require_src7();
-    var gcpMetadata = require_src9();
+    var gaxios_1 = require_src8();
+    var gcpMetadata = require_src10();
     var os = require("os");
     var path3 = require("path");
     var crypto_1 = require_crypto6();
@@ -838317,7 +843690,7 @@ var require_downscopedclient2 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.DownscopedClient = exports2.EXPIRATION_TIME_OFFSET = exports2.MAX_ACCESS_BOUNDARY_RULES_COUNT = void 0;
-    var gaxios_1 = require_src7();
+    var gaxios_1 = require_src8();
     var stream = require("stream");
     var authclient_1 = require_authclient2();
     var sts = require_stscredentials2();
@@ -838542,7 +843915,7 @@ var require_passthrough2 = __commonJS({
 });
 
 // node_modules/google-auth-library/build/src/index.js
-var require_src13 = __commonJS({
+var require_src14 = __commonJS({
   "node_modules/google-auth-library/build/src/index.js"(exports2) {
     "use strict";
     var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m2, k, k2) {
@@ -838567,8 +843940,8 @@ var require_src13 = __commonJS({
     Object.defineProperty(exports2, "GoogleAuth", { enumerable: true, get: function() {
       return googleauth_1.GoogleAuth;
     } });
-    exports2.gcpMetadata = require_src9();
-    exports2.gaxios = require_src7();
+    exports2.gcpMetadata = require_src10();
+    exports2.gaxios = require_src8();
     var authclient_1 = require_authclient2();
     Object.defineProperty(exports2, "AuthClient", { enumerable: true, get: function() {
       return authclient_1.AuthClient;
@@ -838678,7 +844051,7 @@ var require_src13 = __commonJS({
 });
 
 // node_modules/googleapis/build/src/index.js
-var require_src14 = __commonJS({
+var require_src15 = __commonJS({
   "node_modules/googleapis/build/src/index.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
@@ -838700,8 +844073,8 @@ var require_src14 = __commonJS({
     } });
     var google2 = new googleapis_1.GoogleApis();
     exports2.google = google2;
-    exports2.Common = require_src12();
-    exports2.Auth = require_src13();
+    exports2.Common = require_src13();
+    exports2.Auth = require_src14();
     var v1_1 = require_v1();
     Object.defineProperty(exports2, "abusiveexperiencereport_v1", { enumerable: true, get: function() {
       return v1_1.abusiveexperiencereport_v1;
@@ -841352,6 +846725,7 @@ var import_express = __toESM(require_express2(), 1);
 var import_path2 = __toESM(require("path"), 1);
 var import_fs = __toESM(require("fs"), 1);
 var import_crypto3 = __toESM(require("crypto"), 1);
+var import_web_push = __toESM(require_src6(), 1);
 
 // node_modules/@prisma/debug/dist/index.mjs
 var __defProp2 = Object.defineProperty;
@@ -844488,7 +849862,7 @@ var import_crypto2 = __toESM(require("crypto"), 1);
 var import_path = __toESM(require("path"), 1);
 var import_stream = require("stream");
 var import_multer = __toESM(require_multer(), 1);
-var import_googleapis = __toESM(require_src14(), 1);
+var import_googleapis = __toESM(require_src15(), 1);
 var import_connectors_sdk = __toESM(require_connectors_sdk(), 1);
 var XLSX2 = __toESM(require_xlsx(), 1);
 var API = "/api/v1/diklat";
@@ -845805,6 +851179,12 @@ function registerDiklatRoutes(app2, requireAuth2) {
 // server.ts
 var app = (0, import_express.default)();
 var PORT = parseInt(process.env.PORT || "5000", 10);
+var PUSH_SUBSCRIPTIONS_SETTING = "push-subscriptions";
+var VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY?.trim() || "";
+var VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY?.trim() || "";
+var VAPID_SUBJECT = process.env.VAPID_SUBJECT?.trim() || "mailto:smkn1wonogiri@gmail.com";
+var webPushConfigured = false;
+var pushConfigWarningLogged = false;
 var LOG_DIR = import_path2.default.join(process.cwd(), "logs");
 var SERVER_LOG = import_path2.default.join(LOG_DIR, "server.log");
 var MAX_LOG_SIZE = 512 * 1024;
@@ -845826,6 +851206,14 @@ function serverLog(level, message) {
     }
     import_fs.default.appendFileSync(SERVER_LOG, line, "utf-8");
   } catch {
+  }
+}
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  try {
+    import_web_push.default.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+    webPushConfigured = true;
+  } catch {
+    serverLog("ERROR", "Web Push is disabled because the VAPID configuration is invalid.");
   }
 }
 serverLog("INFO", `server.ts loaded \u2014 PORT=${PORT}  NODE_ENV=${process.env.NODE_ENV}  BASE_PATH=${process.env.BASE_PATH}`);
@@ -845920,6 +851308,90 @@ async function setSetting(key, value) {
     update: { value },
     create: { key, value }
   });
+}
+var PUBLIC_UPDATE_LABELS = {
+  competencies: "Program keahlian",
+  milestones: "Prestasi dan tonggak sekolah",
+  gallery: "Galeri kegiatan",
+  alumni: "Cerita alumni",
+  news: "Warta sekolah",
+  partners: "Mitra industri"
+};
+function isTrustedPushEndpoint(endpoint) {
+  try {
+    const url = new URL(endpoint);
+    const host = url.hostname.toLowerCase();
+    const trustedHost = host === "fcm.googleapis.com" || host === "web.push.apple.com" || host === "push.services.mozilla.com" || host === "updates.push.services.mozilla.com" || host.endsWith(".push.services.mozilla.com") || host.endsWith(".notify.windows.com");
+    return url.protocol === "https:" && trustedHost;
+  } catch {
+    return false;
+  }
+}
+function isValidPushSubscription(value) {
+  return Boolean(
+    value && typeof value.endpoint === "string" && isTrustedPushEndpoint(value.endpoint) && value.keys && typeof value.keys.p256dh === "string" && value.keys.p256dh.length <= 256 && typeof value.keys.auth === "string" && value.keys.auth.length <= 256
+  );
+}
+async function sendSchoolUpdatePush(title, body) {
+  if (!webPushConfigured) {
+    if (!pushConfigWarningLogged) {
+      serverLog("WARN", "Web Push update skipped: VAPID keys are not configured.");
+      pushConfigWarningLogged = true;
+    }
+    return;
+  }
+  try {
+    const subscriptions = await getSetting(PUSH_SUBSCRIPTIONS_SETTING, []);
+    if (!Array.isArray(subscriptions) || subscriptions.length === 0) return;
+    const payload = JSON.stringify({
+      title: title.slice(0, 90),
+      body: body.slice(0, 180),
+      url: "./",
+      tag: "smkn1-school-update",
+      icon: "icons/icon-192.png",
+      badge: "icons/icon-192.png"
+    });
+    const expiredEndpoints = /* @__PURE__ */ new Set();
+    await Promise.all(
+      subscriptions.filter(isValidPushSubscription).map(async (subscription) => {
+        try {
+          await import_web_push.default.sendNotification(subscription, payload, { TTL: 60 * 60, urgency: "normal" });
+        } catch (error) {
+          const statusCode = error?.statusCode;
+          if (statusCode === 404 || statusCode === 410) expiredEndpoints.add(subscription.endpoint);
+          serverLog("WARN", `Web Push delivery failed (${statusCode || "unknown"}).`);
+        }
+      })
+    );
+    if (expiredEndpoints.size > 0) {
+      await setSetting(
+        PUSH_SUBSCRIPTIONS_SETTING,
+        subscriptions.filter((subscription) => !expiredEndpoints.has(subscription.endpoint))
+      );
+    }
+  } catch {
+    serverLog("ERROR", "Web Push update delivery failed.");
+  }
+}
+function notifySchoolUpdate(title, body) {
+  void sendSchoolUpdatePush(title, body);
+}
+function getPublicItemIdentity(item, index) {
+  const identifier = item?.id ?? item?.code ?? item?.slug ?? item?.name ?? item?.title ?? item?.year;
+  return typeof identifier === "string" || typeof identifier === "number" ? String(identifier) : `item-${index}`;
+}
+function getPublicItemTitle(item) {
+  const title = item?.title ?? item?.nama ?? item?.judul ?? item?.name ?? item?.code ?? item?.year;
+  return typeof title === "string" || typeof title === "number" ? String(title) : "Konten baru";
+}
+function notifyNewSettingItems(key, previous, next) {
+  const label = PUBLIC_UPDATE_LABELS[key];
+  if (!label || !Array.isArray(previous) || !Array.isArray(next)) return;
+  const knownItems = new Set(previous.map(getPublicItemIdentity));
+  const addedItems = next.filter((item, index) => !knownItems.has(getPublicItemIdentity(item, index)));
+  if (addedItems.length === 0) return;
+  const body = addedItems.length === 1 ? `${label}: ${getPublicItemTitle(addedItems[0])}` : `${addedItems.length} konten baru di bagian ${label.toLowerCase()}.`;
+  notifySchoolUpdate("Pembaruan baru SMKN 1 Wonogiri", body);
 }
 function validateImageFields(obj, fields, maxKB) {
   for (const field of fields) {
@@ -846038,6 +851510,8 @@ app.use((req, res, next) => {
   if (!writeMethods.includes(req.method)) return next();
   const publicExact = [
     "/api/auth/login",
+    "/api/push/subscribe",
+    "/api/push/unsubscribe",
     "/api/tracer",
     "/api/contact",
     "/api/suara",
@@ -846273,6 +851747,7 @@ function settingRoutes(key, defaultValue, opts = {}) {
       if (opts.validateArray && !Array.isArray(data)) {
         return res.status(400).json({ error: `Data must be an array` });
       }
+      const previousData = opts.validateArray && PUBLIC_UPDATE_LABELS[key] ? await getSetting(key, defaultValue) : null;
       if (opts.imageFields) {
         const err = validateImageFields(data, opts.imageFields, opts.maxImgKB ?? 800);
         if (err) return res.status(413).json({ error: err });
@@ -846284,6 +851759,7 @@ function settingRoutes(key, defaultValue, opts = {}) {
         }
       }
       await setSetting(key, data);
+      if (previousData) notifyNewSettingItems(key, previousData, data);
       res.json({ success: true, count: Array.isArray(data) ? data.length : void 0 });
     } catch (e2) {
       res.status(500).json({ error: `Failed to save ${key}: ` + e2.message });
@@ -846305,6 +851781,53 @@ settingRoutes("manajemen-sekolah", DEFAULT_MANAJEMEN, {
 settingRoutes("visi-misi", DEFAULT_VISI_MISI);
 settingRoutes("social-media", DEFAULT_SOCIAL_MEDIA);
 settingRoutes("about", DEFAULT_ABOUT, { imageFields: ["foto"], maxImgKB: 800 });
+app.get("/api/push/vapid-public-key", (_req, res) => {
+  if (!webPushConfigured || !VAPID_PUBLIC_KEY) {
+    return res.status(503).json({ error: "Notifikasi push belum dikonfigurasi." });
+  }
+  res.json({ publicKey: VAPID_PUBLIC_KEY });
+});
+app.post("/api/push/subscribe", async (req, res) => {
+  if (!webPushConfigured) {
+    return res.status(503).json({ error: "Notifikasi push belum dikonfigurasi." });
+  }
+  const subscription = req.body?.subscription ?? req.body;
+  if (!isValidPushSubscription(subscription)) {
+    return res.status(400).json({ error: "Data langganan notifikasi tidak valid." });
+  }
+  try {
+    const subscriptions = await getSetting(PUSH_SUBSCRIPTIONS_SETTING, []);
+    const current = Array.isArray(subscriptions) ? subscriptions : [];
+    const alreadySubscribed = current.some((item) => item.endpoint === subscription.endpoint);
+    if (!alreadySubscribed && current.length >= 5e3) {
+      return res.status(429).json({ error: "Batas langganan notifikasi telah tercapai." });
+    }
+    await setSetting(PUSH_SUBSCRIPTIONS_SETTING, [
+      ...current.filter((item) => item.endpoint !== subscription.endpoint),
+      subscription
+    ]);
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: "Gagal menyimpan langganan notifikasi." });
+  }
+});
+app.post("/api/push/unsubscribe", async (req, res) => {
+  const endpoint = req.body?.endpoint;
+  if (typeof endpoint !== "string" || !isTrustedPushEndpoint(endpoint)) {
+    return res.status(400).json({ error: "Alamat langganan notifikasi tidak valid." });
+  }
+  try {
+    const subscriptions = await getSetting(PUSH_SUBSCRIPTIONS_SETTING, []);
+    const current = Array.isArray(subscriptions) ? subscriptions : [];
+    await setSetting(
+      PUSH_SUBSCRIPTIONS_SETTING,
+      current.filter((item) => item.endpoint !== endpoint)
+    );
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: "Gagal menghapus langganan notifikasi." });
+  }
+});
 app.get("/api/branding", async (_req, res) => {
   try {
     res.json(await getSetting("branding", DEFAULT_BRANDING));
@@ -846706,6 +852229,9 @@ app.patch("/api/suara/:id/approve", requireAuth, async (req, res) => {
       where: { id: req.params.id },
       data: { status: "PUBLISHED", feedback: null, publishedAt: existing.publishedAt ?? /* @__PURE__ */ new Date() }
     });
+    if (existing.status !== "PUBLISHED") {
+      notifySchoolUpdate("Karya siswa baru di Suara Skansagiri", existing.title);
+    }
     res.json({ success: true });
   } catch (e2) {
     res.status(500).json({ error: e2.message });
@@ -846885,6 +852411,7 @@ app.post("/api/osis/pengurus", requireAuth, async (req, res) => {
     const item = await db.osisPengurus.create({
       data: { nama: nama.trim(), jabatan: jabatan.trim(), bidang: String(bidang || "").trim(), foto: foto || null, tugasPokok: String(tugasPokok || "").trim(), instagram: String(instagram || "").trim(), email: String(email || "").trim(), urutan: parseInt(urutan) || 0 }
     });
+    notifySchoolUpdate("Pengurus OSIS baru", item.nama);
     res.json(item);
   } catch (e2) {
     res.status(500).json({ error: e2.message });
@@ -846928,6 +852455,7 @@ app.post("/api/osis/proker", requireAuth, async (req, res) => {
     const item = await db.osisProgramKerja.create({
       data: { nama: nama.trim(), bidang: bidang.trim(), deskripsi: String(deskripsi || "").trim(), status: status || "DIRENCANAKAN", progress: Math.min(100, Math.max(0, parseInt(progress) || 0)), targetDate: String(targetDate || "").trim(), penanggungJawab: String(penanggungJawab || "").trim(), urutan: parseInt(urutan) || 0 }
     });
+    notifySchoolUpdate("Program kerja OSIS baru", item.nama);
     res.json(item);
   } catch (e2) {
     res.status(500).json({ error: e2.message });
@@ -846971,6 +852499,7 @@ app.post("/api/osis/agenda", requireAuth, async (req, res) => {
     const item = await db.osisAgenda.create({
       data: { nama: nama.trim(), tanggal: String(tanggal).trim(), waktu: String(waktu || "").trim(), tempat: String(tempat || "").trim(), deskripsi: String(deskripsi || "").trim(), jenis: ["RUTIN", "BESAR", "KOLABORASI"].includes(jenis) ? jenis : "RUTIN" }
     });
+    notifySchoolUpdate("Agenda sekolah baru", item.nama);
     res.json(item);
   } catch (e2) {
     res.status(500).json({ error: e2.message });
@@ -847015,6 +852544,7 @@ app.post("/api/osis/ekskul", requireAuth, async (req, res) => {
     const item = await db.osisEkskul.create({
       data: { nama: nama.trim(), kategori: validKat.includes(kategori) ? kategori : "AKADEMIK", deskripsi: String(deskripsi || "").trim(), jadwal: String(jadwal || "").trim(), pembina: String(pembina || "").trim(), jumlahAnggota: parseInt(jumlahAnggota) || 0, foto: foto || null, urutan: parseInt(urutan) || 0 }
     });
+    notifySchoolUpdate("Ekstrakurikuler baru", item.nama);
     res.json(item);
   } catch (e2) {
     res.status(500).json({ error: e2.message });
@@ -847060,6 +852590,7 @@ app.post("/api/osis/galeri", requireAuth, async (req, res) => {
     const item = await db.osisGaleri.create({
       data: { judul: String(judul).trim(), kategori: String(kategori || "KEGIATAN").trim(), foto: String(foto) }
     });
+    notifySchoolUpdate("Foto kegiatan sekolah baru", item.judul);
     res.json(item);
   } catch (e2) {
     res.status(500).json({ error: e2.message });
@@ -847090,6 +852621,7 @@ app.post("/api/osis/prestasi", requireAuth, async (req, res) => {
     const item = await db.osisPrestasi.create({
       data: { judul: String(judul).trim(), deskripsi: String(deskripsi || "").trim(), tingkat: validTingkat.includes(tingkat) ? tingkat : "SEKOLAH", tanggal: String(tanggal).trim(), foto: foto || null }
     });
+    notifySchoolUpdate("Prestasi siswa baru", item.judul);
     res.json(item);
   } catch (e2) {
     res.status(500).json({ error: e2.message });

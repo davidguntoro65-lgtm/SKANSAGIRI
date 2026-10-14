@@ -1,7 +1,7 @@
 // Service Worker – SMKN 1 Wonogiri
 // Caches the app shell for fast loads and basic offline support.
 
-const CACHE_NAME = "smkn1wng-v2";
+const CACHE_NAME = "smkn1wng-v3";
 
 // Assets to pre-cache on install (app shell)
 const PRECACHE_URLS = [
@@ -30,6 +30,48 @@ self.addEventListener("activate", (event) => {
     )
   );
   self.clients.claim();
+});
+
+// ─── Push: show school updates even while the app is closed ───────────────────
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    payload = { body: event.data?.text() || "Ada informasi baru dari sekolah." };
+  }
+
+  const scopeUrl = self.registration.scope;
+  event.waitUntil(
+    self.registration.showNotification(payload.title || "Pembaruan SMKN 1 Wonogiri", {
+      body: payload.body || "Ada informasi baru dari sekolah.",
+      icon: new URL(payload.icon || "icons/icon-192.png", scopeUrl).href,
+      badge: new URL(payload.badge || "icons/icon-192.png", scopeUrl).href,
+      tag: payload.tag || "smkn1-school-update",
+      data: { url: payload.url || "./" },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const destination = new URL(event.notification.data?.url || "./", self.registration.scope).href;
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (windowClients) => {
+      for (const client of windowClients) {
+        if (!client.url.startsWith(self.registration.scope)) continue;
+        try {
+          const focusedClient = await client.navigate(destination);
+          if (focusedClient) return focusedClient.focus();
+          return client.focus();
+        } catch {
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(destination);
+    }),
+  );
 });
 
 // ─── Fetch: network-first for API, cache-first for static assets ──────────────

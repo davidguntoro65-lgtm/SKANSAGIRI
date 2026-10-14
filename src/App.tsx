@@ -21,6 +21,7 @@ import Footer from "./components/Footer";
 import AdminPanel from "./components/AdminPanel";
 import WhatsNewNotification from "./components/WhatsNewNotification";
 import InstallAppPrompt from "./components/InstallAppPrompt";
+import PushNotificationPrompt from "./components/PushNotificationPrompt";
 import KepalaSokolah from "./pages/KepalaSokolah";
 import ManajemenSekolah from "./pages/ManajemenSekolah";
 import VisiMisi from "./pages/VisiMisi";
@@ -355,6 +356,7 @@ export default function App() {
       <GlobalPageBg theme={theme} />
       <Navbar theme={theme} toggleTheme={toggleTheme} />
       <InstallAppPrompt />
+      <PushNotificationPrompt />
 
       <main className="relative" id="main-content-flow">
         <Hero theme={theme} />

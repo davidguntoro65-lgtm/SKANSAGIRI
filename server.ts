@@ -3,6 +3,7 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
+import webpush from "web-push";
 import { db } from "./src/db";
 import {
   COMPETENCY_DATA,
@@ -17,6 +18,12 @@ import { registerDiklatRoutes } from "./src/diklatRoutes";
 
 const app = express();
 const PORT = parseInt(process.env.PORT || "5000", 10);
+const PUSH_SUBSCRIPTIONS_SETTING = "push-subscriptions";
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY?.trim() || "";
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY?.trim() || "";
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT?.trim() || "mailto:smkn1wonogiri@gmail.com";
+let webPushConfigured = false;
+let pushConfigWarningLogged = false;
 
 // ─── Server-side file logger ─────────────────────────────────────────────────
 const LOG_DIR      = path.join(process.cwd(), "logs");
@@ -35,6 +42,15 @@ function serverLog(level: "INFO" | "WARN" | "ERROR", message: string) {
     }
     fs.appendFileSync(SERVER_LOG, line, "utf-8");
   } catch { /* best-effort */ }
+}
+
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  try {
+    webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+    webPushConfigured = true;
+  } catch {
+    serverLog("ERROR", "Web Push is disabled because the VAPID configuration is invalid.");
+  }
 }
 
 serverLog("INFO", `server.ts loaded — PORT=${PORT}  NODE_ENV=${process.env.NODE_ENV}  BASE_PATH=${process.env.BASE_PATH}`);
@@ -150,6 +166,128 @@ async function setSetting(key: string, value: any) {
     update: { value },
     create: { key, value },
   });
+}
+
+type StoredPushSubscription = {
+  endpoint: string;
+  expirationTime?: number | null;
+  keys: { p256dh: string; auth: string };
+};
+
+const PUBLIC_UPDATE_LABELS: Record<string, string> = {
+  competencies: "Program keahlian",
+  milestones: "Prestasi dan tonggak sekolah",
+  gallery: "Galeri kegiatan",
+  alumni: "Cerita alumni",
+  news: "Warta sekolah",
+  partners: "Mitra industri",
+};
+
+function isTrustedPushEndpoint(endpoint: string): boolean {
+  try {
+    const url = new URL(endpoint);
+    const host = url.hostname.toLowerCase();
+    const trustedHost =
+      host === "fcm.googleapis.com" ||
+      host === "web.push.apple.com" ||
+      host === "push.services.mozilla.com" ||
+      host === "updates.push.services.mozilla.com" ||
+      host.endsWith(".push.services.mozilla.com") ||
+      host.endsWith(".notify.windows.com");
+    return url.protocol === "https:" && trustedHost;
+  } catch {
+    return false;
+  }
+}
+
+function isValidPushSubscription(value: any): value is StoredPushSubscription {
+  return Boolean(
+    value &&
+      typeof value.endpoint === "string" &&
+      isTrustedPushEndpoint(value.endpoint) &&
+      value.keys &&
+      typeof value.keys.p256dh === "string" &&
+      value.keys.p256dh.length <= 256 &&
+      typeof value.keys.auth === "string" &&
+      value.keys.auth.length <= 256,
+  );
+}
+
+async function sendSchoolUpdatePush(title: string, body: string) {
+  if (!webPushConfigured) {
+    if (!pushConfigWarningLogged) {
+      serverLog("WARN", "Web Push update skipped: VAPID keys are not configured.");
+      pushConfigWarningLogged = true;
+    }
+    return;
+  }
+
+  try {
+    const subscriptions = await getSetting<StoredPushSubscription[]>(PUSH_SUBSCRIPTIONS_SETTING, []);
+    if (!Array.isArray(subscriptions) || subscriptions.length === 0) return;
+
+    const payload = JSON.stringify({
+      title: title.slice(0, 90),
+      body: body.slice(0, 180),
+      url: "./",
+      tag: "smkn1-school-update",
+      icon: "icons/icon-192.png",
+      badge: "icons/icon-192.png",
+    });
+    const expiredEndpoints = new Set<string>();
+
+    await Promise.all(
+      subscriptions.filter(isValidPushSubscription).map(async (subscription) => {
+        try {
+          await webpush.sendNotification(subscription, payload, { TTL: 60 * 60, urgency: "normal" });
+        } catch (error) {
+          const statusCode = (error as { statusCode?: number })?.statusCode;
+          if (statusCode === 404 || statusCode === 410) expiredEndpoints.add(subscription.endpoint);
+          serverLog("WARN", `Web Push delivery failed (${statusCode || "unknown"}).`);
+        }
+      }),
+    );
+
+    if (expiredEndpoints.size > 0) {
+      await setSetting(
+        PUSH_SUBSCRIPTIONS_SETTING,
+        subscriptions.filter((subscription) => !expiredEndpoints.has(subscription.endpoint)),
+      );
+    }
+  } catch {
+    serverLog("ERROR", "Web Push update delivery failed.");
+  }
+}
+
+function notifySchoolUpdate(title: string, body: string) {
+  void sendSchoolUpdatePush(title, body);
+}
+
+function getPublicItemIdentity(item: any, index: number): string {
+  const identifier = item?.id ?? item?.code ?? item?.slug ?? item?.name ?? item?.title ?? item?.year;
+  return typeof identifier === "string" || typeof identifier === "number"
+    ? String(identifier)
+    : `item-${index}`;
+}
+
+function getPublicItemTitle(item: any): string {
+  const title = item?.title ?? item?.nama ?? item?.judul ?? item?.name ?? item?.code ?? item?.year;
+  return typeof title === "string" || typeof title === "number" ? String(title) : "Konten baru";
+}
+
+function notifyNewSettingItems(key: string, previous: any[], next: any[]) {
+  const label = PUBLIC_UPDATE_LABELS[key];
+  if (!label || !Array.isArray(previous) || !Array.isArray(next)) return;
+
+  const knownItems = new Set(previous.map(getPublicItemIdentity));
+  const addedItems = next.filter((item, index) => !knownItems.has(getPublicItemIdentity(item, index)));
+  if (addedItems.length === 0) return;
+
+  const body =
+    addedItems.length === 1
+      ? `${label}: ${getPublicItemTitle(addedItems[0])}`
+      : `${addedItems.length} konten baru di bagian ${label.toLowerCase()}.`;
+  notifySchoolUpdate("Pembaruan baru SMKN 1 Wonogiri", body);
 }
 
 // ─── Image size guard ─────────────────────────────────────────────────────────
@@ -280,6 +418,8 @@ app.use((req, res, next) => {
   if (!writeMethods.includes(req.method)) return next();
   const publicExact = [
     "/api/auth/login",
+    "/api/push/subscribe",
+    "/api/push/unsubscribe",
     "/api/tracer",
     "/api/contact",
     "/api/suara",
@@ -551,6 +691,10 @@ function settingRoutes(
       if (opts.validateArray && !Array.isArray(data)) {
         return res.status(400).json({ error: `Data must be an array` });
       }
+      const previousData =
+        opts.validateArray && PUBLIC_UPDATE_LABELS[key]
+          ? await getSetting<any[]>(key, defaultValue)
+          : null;
       // Per-object image validation
       if (opts.imageFields) {
         const err = validateImageFields(data, opts.imageFields, opts.maxImgKB ?? 800);
@@ -564,6 +708,7 @@ function settingRoutes(
         }
       }
       await setSetting(key, data);
+      if (previousData) notifyNewSettingItems(key, previousData, data);
       res.json({ success: true, count: Array.isArray(data) ? data.length : undefined });
     } catch (e: any) {
       res.status(500).json({ error: `Failed to save ${key}: ` + e.message });
@@ -587,6 +732,60 @@ settingRoutes("manajemen-sekolah", DEFAULT_MANAJEMEN, {
 settingRoutes("visi-misi", DEFAULT_VISI_MISI);
 settingRoutes("social-media", DEFAULT_SOCIAL_MEDIA);
 settingRoutes("about", DEFAULT_ABOUT, { imageFields: ["foto"], maxImgKB: 800 });
+
+app.get("/api/push/vapid-public-key", (_req, res) => {
+  if (!webPushConfigured || !VAPID_PUBLIC_KEY) {
+    return res.status(503).json({ error: "Notifikasi push belum dikonfigurasi." });
+  }
+  res.json({ publicKey: VAPID_PUBLIC_KEY });
+});
+
+app.post("/api/push/subscribe", async (req, res) => {
+  if (!webPushConfigured) {
+    return res.status(503).json({ error: "Notifikasi push belum dikonfigurasi." });
+  }
+
+  const subscription = req.body?.subscription ?? req.body;
+  if (!isValidPushSubscription(subscription)) {
+    return res.status(400).json({ error: "Data langganan notifikasi tidak valid." });
+  }
+
+  try {
+    const subscriptions = await getSetting<StoredPushSubscription[]>(PUSH_SUBSCRIPTIONS_SETTING, []);
+    const current = Array.isArray(subscriptions) ? subscriptions : [];
+    const alreadySubscribed = current.some((item) => item.endpoint === subscription.endpoint);
+    if (!alreadySubscribed && current.length >= 5000) {
+      return res.status(429).json({ error: "Batas langganan notifikasi telah tercapai." });
+    }
+
+    await setSetting(PUSH_SUBSCRIPTIONS_SETTING, [
+      ...current.filter((item) => item.endpoint !== subscription.endpoint),
+      subscription,
+    ]);
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: "Gagal menyimpan langganan notifikasi." });
+  }
+});
+
+app.post("/api/push/unsubscribe", async (req, res) => {
+  const endpoint = req.body?.endpoint;
+  if (typeof endpoint !== "string" || !isTrustedPushEndpoint(endpoint)) {
+    return res.status(400).json({ error: "Alamat langganan notifikasi tidak valid." });
+  }
+
+  try {
+    const subscriptions = await getSetting<StoredPushSubscription[]>(PUSH_SUBSCRIPTIONS_SETTING, []);
+    const current = Array.isArray(subscriptions) ? subscriptions : [];
+    await setSetting(
+      PUSH_SUBSCRIPTIONS_SETTING,
+      current.filter((item) => item.endpoint !== endpoint),
+    );
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: "Gagal menghapus langganan notifikasi." });
+  }
+});
 
 // ─── Branding (special: POST wraps body as-is, with logo field validation) ────
 app.get("/api/branding", async (_req, res) => {
@@ -981,6 +1180,9 @@ app.patch("/api/suara/:id/approve", requireAuth as any, async (req, res) => {
       where: { id: req.params.id },
       data: { status: "PUBLISHED", feedback: null, publishedAt: existing.publishedAt ?? new Date() },
     });
+    if (existing.status !== "PUBLISHED") {
+      notifySchoolUpdate("Karya siswa baru di Suara Skansagiri", existing.title);
+    }
     res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -1165,6 +1367,7 @@ app.post("/api/osis/pengurus", requireAuth as any, async (req, res) => {
     const item = await db.osisPengurus.create({
       data: { nama: nama.trim(), jabatan: jabatan.trim(), bidang: String(bidang||"").trim(), foto: foto || null, tugasPokok: String(tugasPokok||"").trim(), instagram: String(instagram||"").trim(), email: String(email||"").trim(), urutan: parseInt(urutan)||0 },
     });
+    notifySchoolUpdate("Pengurus OSIS baru", item.nama);
     res.json(item);
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -1210,6 +1413,7 @@ app.post("/api/osis/proker", requireAuth as any, async (req, res) => {
     const item = await db.osisProgramKerja.create({
       data: { nama: nama.trim(), bidang: bidang.trim(), deskripsi: String(deskripsi||"").trim(), status: status || "DIRENCANAKAN", progress: Math.min(100, Math.max(0, parseInt(progress)||0)), targetDate: String(targetDate||"").trim(), penanggungJawab: String(penanggungJawab||"").trim(), urutan: parseInt(urutan)||0 },
     });
+    notifySchoolUpdate("Program kerja OSIS baru", item.nama);
     res.json(item);
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -1255,6 +1459,7 @@ app.post("/api/osis/agenda", requireAuth as any, async (req, res) => {
     const item = await db.osisAgenda.create({
       data: { nama: nama.trim(), tanggal: String(tanggal).trim(), waktu: String(waktu||"").trim(), tempat: String(tempat||"").trim(), deskripsi: String(deskripsi||"").trim(), jenis: ["RUTIN","BESAR","KOLABORASI"].includes(jenis) ? jenis : "RUTIN" },
     });
+    notifySchoolUpdate("Agenda sekolah baru", item.nama);
     res.json(item);
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -1301,6 +1506,7 @@ app.post("/api/osis/ekskul", requireAuth as any, async (req, res) => {
     const item = await db.osisEkskul.create({
       data: { nama: nama.trim(), kategori: validKat.includes(kategori) ? kategori : "AKADEMIK", deskripsi: String(deskripsi||"").trim(), jadwal: String(jadwal||"").trim(), pembina: String(pembina||"").trim(), jumlahAnggota: parseInt(jumlahAnggota)||0, foto: foto || null, urutan: parseInt(urutan)||0 },
     });
+    notifySchoolUpdate("Ekstrakurikuler baru", item.nama);
     res.json(item);
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -1348,6 +1554,7 @@ app.post("/api/osis/galeri", requireAuth as any, async (req, res) => {
     const item = await db.osisGaleri.create({
       data: { judul: String(judul).trim(), kategori: String(kategori||"KEGIATAN").trim(), foto: String(foto) },
     });
+    notifySchoolUpdate("Foto kegiatan sekolah baru", item.judul);
     res.json(item);
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -1379,6 +1586,7 @@ app.post("/api/osis/prestasi", requireAuth as any, async (req, res) => {
     const item = await db.osisPrestasi.create({
       data: { judul: String(judul).trim(), deskripsi: String(deskripsi||"").trim(), tingkat: validTingkat.includes(tingkat) ? tingkat : "SEKOLAH", tanggal: String(tanggal).trim(), foto: foto || null },
     });
+    notifySchoolUpdate("Prestasi siswa baru", item.judul);
     res.json(item);
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
