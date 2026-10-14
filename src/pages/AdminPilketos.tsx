@@ -147,6 +147,14 @@ function getFinalResultRows(candidates: Candidate[]): FinalResultRow[] {
   return [...officeRows, ...additionalRows];
 }
 
+function getFinalResultHeading(row: FinalResultRow) {
+  if (!row.rank.startsWith("Peringkat")) return `${row.rank} · ${row.position}`;
+
+  const rankNumber = row.rank.match(/^Peringkat (\d+)/)?.[1];
+  const rankLabel = row.rank.replace(/ \(seri\)$/, "");
+  return `${rankNumber ? `${rankNumber}. ` : ""}${rankLabel} (${row.name})${row.tied ? " (seri)" : ""}`;
+}
+
 function formatIndonesianNumber(value: number) {
   return value.toLocaleString("id-ID");
 }
@@ -227,12 +235,16 @@ function createPilketosResultsPdf(election: Election, stats: ParticipationStats 
     startY: 60,
     margin: { left: margin, right: margin },
     head: [["No.", "Jabatan / Peringkat", "Nama kandidat", "Perolehan suara"]],
-    body: rows.map((row) => [
-      row.rank,
-      row.position,
-      `${row.name}${row.tied && !row.rank.startsWith("Peringkat") ? " (seri)" : ""}`,
-      row.votes === null ? "—" : formatIndonesianNumber(row.votes),
-    ]),
+    body: rows.map((row) => {
+      const isAdditionalRank = row.rank.startsWith("Peringkat");
+      const rankNumber = row.rank.match(/^Peringkat (\d+)/)?.[1];
+      return [
+        isAdditionalRank && rankNumber ? `${rankNumber}.` : row.rank,
+        isAdditionalRank ? row.rank.replace(/ \(seri\)$/, "") : row.position,
+        `${row.name}${row.tied ? " (seri)" : ""}`,
+        row.votes === null ? "—" : formatIndonesianNumber(row.votes),
+      ];
+    }),
     theme: "grid",
     styles: { font: "helvetica", fontSize: 7.5, textColor: dark, cellPadding: 1.7, minCellHeight: 7.6, lineColor: [216, 222, 228], lineWidth: 0.15 },
     headStyles: { fillColor: dark, textColor: white, fontStyle: "bold", fontSize: 7.5, halign: "center" },
@@ -686,8 +698,8 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
                 {finalResultRows.map((row, index) => (
                   <div key={`${row.rank}-${row.position}-${index}`} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2.5">
                     <div className="min-w-0">
-                      <p className="text-[10px] font-black uppercase tracking-wide text-amber-600">{row.rank} · {row.position}</p>
-                      <p className="mt-0.5 truncate text-sm font-bold">{row.name}{row.tied && !row.rank.startsWith("Peringkat") ? " (seri)" : ""}</p>
+                      <p className="text-[10px] font-black uppercase tracking-wide text-amber-600">{getFinalResultHeading(row)}</p>
+                      {!row.rank.startsWith("Peringkat") && <p className="mt-0.5 truncate text-sm font-bold">{row.name}{row.tied ? " (seri)" : ""}</p>}
                     </div>
                     <span className="rounded-full bg-amber-400/15 px-3 py-1 text-sm font-black text-amber-600">
                       {row.votes === null ? "—" : `${formatIndonesianNumber(row.votes)} suara`}
