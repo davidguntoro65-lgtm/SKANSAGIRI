@@ -151,6 +151,26 @@ function formatIndonesianNumber(value: number) {
   return value.toLocaleString("id-ID");
 }
 
+function formatElectionStartDateWib(value?: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("id-ID", {
+    timeZone: "Asia/Jakarta",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).formatToParts(date);
+  const part = (type: string) => parts.find((item) => item.type === type)?.value || "";
+  return {
+    weekday: part("weekday"),
+    day: part("day"),
+    month: part("month"),
+    year: part("year"),
+  };
+}
+
 function createPilketosResultsPdf(election: Election, stats: ParticipationStats | null, rows: FinalResultRow[]) {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -163,6 +183,10 @@ function createPilketosResultsPdf(election: Election, stats: ParticipationStats 
   const totalVoters = stats?.totalVoters ?? 0;
   const totalVoted = stats?.totalVoted ?? 0;
   const participationRate = totalVoters > 0 ? (totalVoted / totalVoters) * 100 : 0;
+  const electionDate = formatElectionStartDateWib(election.startsAt);
+  const reportDate = electionDate
+    ? `${electionDate.day} ${electionDate.month} ${electionDate.year}`
+    : null;
 
   doc.setFillColor(...dark);
   doc.rect(0, 0, pageWidth, 3, "F");
@@ -190,8 +214,10 @@ function createPilketosResultsPdf(election: Election, stats: ParticipationStats 
   doc.text(`MASA BAKTI ${PILKETOS_TERM}`, pageWidth / 2, 42, { align: "center" });
 
   const introduction = [
-    "Pada hari ............ tanggal ............ bulan ............ tahun ............, panitia penyelenggara",
-    `menetapkan rekapitulasi hasil ${election.title} SMK Negeri 1 Wonogiri sebagai berikut:`,
+    electionDate
+      ? `Pada hari ${electionDate.weekday}, tanggal ${electionDate.day} bulan ${electionDate.month} tahun ${electionDate.year},`
+      : "Pada hari ............, tanggal ............ bulan ............ tahun ............,",
+    `panitia penyelenggara menetapkan rekapitulasi hasil ${election.title} SMK Negeri 1 Wonogiri sebagai berikut:`,
   ];
   doc.setFontSize(8.5);
   doc.setTextColor(...dark);
@@ -247,20 +273,23 @@ function createPilketosResultsPdf(election: Election, stats: ParticipationStats 
   const notes = [
     "Peringkat 5–8 memakai satu rekap per kandidat: suara Ketua Umum untuk kelas XI dan suara Ketua 2 untuk kelas X.",
     "Suara tidak sah yang tercatat berjumlah 0; ballot tidak valid ditolak sistem dan tidak disimpan sebagai suara.",
-    "Apabila terdapat perolehan sama, kandidat ditandai seri. Tanggal pelaksanaan diisi oleh panitia sebelum pengesahan.",
+    "Apabila terdapat perolehan sama, kandidat ditandai seri.",
+    electionDate
+      ? "Tanggal berita acara mengikuti tanggal mulai voting dalam zona waktu WIB."
+      : "Tanggal mulai voting belum tersedia; lengkapi bagian tanggal sebelum berita acara disahkan.",
   ];
   doc.text(notes, margin, noteY, { lineHeightFactor: 1.35 });
 
   doc.setFontSize(7.2);
   doc.setTextColor(...dark);
-  doc.text("Berita acara ini dibuat dengan sebenarnya untuk digunakan sebagaimana mestinya.", margin, noteY + 10);
+  doc.text("Berita acara ini dibuat dengan sebenarnya untuk digunakan sebagaimana mestinya.", margin, noteY + 12);
 
-  const signaturesY = Math.max(noteY + 20, 211);
+  const signaturesY = Math.max(noteY + 23, 211);
   doc.setFontSize(7.5);
   doc.setTextColor(...dark);
-  doc.text("Wonogiri, ................................ 2026", pageWidth - margin, signaturesY, { align: "right" });
-  doc.text("Sekretaris", pageWidth * 0.29, signaturesY + 7, { align: "center" });
-  doc.text("Ketua Penyelenggara", pageWidth * 0.71, signaturesY + 7, { align: "center" });
+  doc.text(`Wonogiri, ${reportDate || "................................"}`, pageWidth - margin, signaturesY, { align: "right" });
+  doc.text("Ketua Penyelenggara", pageWidth * 0.29, signaturesY + 7, { align: "center" });
+  doc.text("Sekretaris", pageWidth * 0.71, signaturesY + 7, { align: "center" });
   doc.setDrawColor(...slate);
   doc.setLineWidth(0.2);
   doc.line(pageWidth * 0.12, signaturesY + 27, pageWidth * 0.46, signaturesY + 27);
