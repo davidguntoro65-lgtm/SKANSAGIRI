@@ -60,6 +60,13 @@
       "description": "Informasi dan berita sekolah",
       "url": "/id/?section=berita",
       "icons": [{ "src": "/id/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "E-Voting Pilketos",
+      "short_name": "E-Voting",
+      "description": "Akses pemilihan ketua OSIS dengan cepat",
+      "url": "/id/pilketos",
+      "icons": [{ "src": "/id/icons/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }
