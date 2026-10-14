@@ -842701,7 +842701,7 @@ var REQUIRED_HEADERS = {
   mapel: ["code", "name"],
   kelas: ["code", "name", "tingkat", "kodeTahunAjaran"],
   guru: ["nip", "namaLengkap"],
-  siswa: ["nisn", "nis", "namaLengkap", "kodeKelas", "kodeTahunAjaran", "password"],
+  siswa: ["nisn", "nis", "namaLengkap", "kodeKelas", "kodeTahunAjaran"],
   "assignment-guru": ["nip", "kodeMapel", "kodeKelas", "kodeTahunAjaran"],
   "enrollment-siswa": ["nisn", "kodeKelas", "kodeTahunAjaran"]
 };
@@ -842733,7 +842733,9 @@ function hashPasswordAsync(password, salt = import_crypto.default.randomBytes(16
   });
 }
 function studentAccountEmail(nis) {
-  return `siswa.${nis.toLowerCase().replace(/[^a-z0-9._-]/g, "-")}@akun.smkn1wonogiri.local`;
+  const normalizedNis = nis.toLowerCase().replace(/[^a-z0-9._-]/g, "-");
+  const uniqueSuffix = import_crypto.default.createHash("sha256").update(nis).digest("hex").slice(0, 12);
+  return `siswa.${normalizedNis}.${uniqueSuffix}@akun.smkn1wonogiri.local`;
 }
 function maskPreviewRows(rows) {
   return rows.map((row) => ({
@@ -842745,8 +842747,20 @@ function asBoolean(value) {
   return ["true", "1", "ya", "yes", "aktif", "active"].includes(clean(value).toLowerCase());
 }
 function parseDate(value) {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const date2 = new Date(Date.UTC(1899, 11, 30) + Math.floor(value) * 24 * 60 * 60 * 1e3);
+    return Number.isNaN(date2.getTime()) ? null : date2;
+  }
   const text = clean(value);
   if (!text) return null;
+  const localDate = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (localDate) {
+    const [, day, month, year] = localDate;
+    const date2 = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+    if (date2.getUTCFullYear() !== Number(year) || date2.getUTCMonth() !== Number(month) - 1 || date2.getUTCDate() !== Number(day)) return null;
+    return date2;
+  }
   const date = new Date(text);
   return Number.isNaN(date.getTime()) ? null : date;
 }
@@ -842773,6 +842787,7 @@ function parseWorkbook(fileBase64, type) {
     });
     return values;
   }).filter((row) => Object.values(row).some((value) => clean(value)));
+  if (!rows.length) throw new Error("File belum berisi baris data untuk diimpor.");
   return { checksum, rows };
 }
 async function referenceMaps() {
@@ -842782,7 +842797,14 @@ async function referenceMaps() {
     db.subject.findMany({ select: { id: true, code: true } }),
     db.academicClass.findMany({ select: { id: true, code: true, academicYearId: true } }),
     db.coreTeacher.findMany({ select: { id: true, nip: true } }),
-    db.coreStudent.findMany({ select: { id: true, nisn: true, nis: true } })
+    db.coreStudent.findMany({
+      select: {
+        id: true,
+        nisn: true,
+        nis: true,
+        user: { select: { id: true, email: true } }
+      }
+    })
   ]);
   return {
     years: new Map(years.map((item) => [item.code, item])),
@@ -842796,10 +842818,18 @@ async function referenceMaps() {
 }
 async function validateRows(type, rows) {
   const refs = await referenceMaps();
+  const accountEmails = type === "siswa" ? [...new Set(rows.map((values) => {
+    const nisn = clean(values.nisn);
+    const existing = refs.students.get(nisn);
+    return clean(values.email).toLowerCase() || existing?.user?.email || studentAccountEmail(clean(values.nis));
+  }))] : [];
+  const emailOwners = accountEmails.length ? await db.coreUser.findMany({ where: { email: { in: accountEmails } }, select: { id: true, email: true } }) : [];
+  const emailOwnerByEmail = new Map(emailOwners.map((user) => [user.email, user]));
   const seen = /* @__PURE__ */ new Set();
   const seenStudentNisn = /* @__PURE__ */ new Set();
   const seenStudentNis = /* @__PURE__ */ new Set();
   const seenStudentEmails = /* @__PURE__ */ new Set();
+  const seenAccountEmails = /* @__PURE__ */ new Set();
   const result = [];
   const keyFor = (values) => {
     switch (type) {
@@ -842833,13 +842863,23 @@ async function validateRows(type, rows) {
       const nisn = clean(values.nisn);
       const nis = clean(values.nis);
       const email = clean(values.email).toLowerCase();
+      const existingStudent = refs.students.get(nisn);
+      const accountEmail = email || existingStudent?.user?.email || studentAccountEmail(nis);
       if (seenStudentNisn.has(nisn)) errors.push(`NISN "${nisn}" duplikat di dalam file.`);
       if (seenStudentNis.has(nis)) errors.push(`NIS "${nis}" duplikat di dalam file.`);
       if (email && seenStudentEmails.has(email)) errors.push(`Email "${email}" duplikat di dalam file.`);
+      if (seenAccountEmails.has(accountEmail)) errors.push(`Email akun "${accountEmail}" duplikat di dalam file.`);
       seenStudentNisn.add(nisn);
       seenStudentNis.add(nis);
       if (email) seenStudentEmails.add(email);
-      if (clean(values.password).length < 8) errors.push("Password awal wajib diisi minimal 8 karakter.");
+      seenAccountEmails.add(accountEmail);
+      const emailOwner = emailOwnerByEmail.get(accountEmail);
+      if (emailOwner && emailOwner.id !== existingStudent?.user?.id) {
+        errors.push(`Email akun "${accountEmail}" sudah digunakan akun lain.`);
+      }
+      const password = clean(values.password);
+      if (password && password.length < 8) errors.push("Password awal harus minimal 8 karakter.");
+      if (!password && !existingStudent?.user?.id) errors.push("Password awal wajib diisi minimal 8 karakter untuk akun baru.");
       const existingByNis = refs.studentsByNis.get(nis);
       if (existingByNis && existingByNis.nisn !== nisn) errors.push(`NIS "${nis}" sudah digunakan siswa lain.`);
     }
@@ -842862,6 +842902,13 @@ async function validateRows(type, rows) {
       if (!refs.classes.has(clean(values.kodeKelas))) errors.push(`Kode kelas "${clean(values.kodeKelas)}" tidak ditemukan.`);
       if (!refs.years.has(clean(values.kodeTahunAjaran))) errors.push(`Kode tahun ajaran "${clean(values.kodeTahunAjaran)}" tidak ditemukan.`);
     }
+    if (["siswa", "assignment-guru", "enrollment-siswa"].includes(type)) {
+      const classroom = refs.classes.get(clean(values.kodeKelas));
+      const year = refs.years.get(clean(values.kodeTahunAjaran));
+      if (classroom && year && classroom.academicYearId !== year.id) {
+        errors.push(`Kelas "${clean(values.kodeKelas)}" bukan bagian dari tahun ajaran "${clean(values.kodeTahunAjaran)}".`);
+      }
+    }
     if (values.status && !VALID_STATUSES.has(clean(values.status).toUpperCase())) errors.push("Status harus ACTIVE, INACTIVE, atau ARCHIVED.");
     result.push({ row: index + 2, values, status: errors.length ? errors.some((error) => error.startsWith("Duplikat")) ? "DUPLICATE" : "ERROR" : "VALID", errors });
   });
@@ -842880,13 +842927,26 @@ function pageParams(req) {
 async function audit(action, entity, entityId, metadata = {}) {
   await db.coreAuditLog.create({ data: { action, entity, entityId, actor: "ADMIN_SESSION", metadata } });
 }
-async function commitRows(type, rows, actor) {
+async function commitRows(type, rows, actor, jobId) {
   const validRows = rows.filter((row) => row.status === "VALID" || row.status === "UNCHANGED");
-  const preparedRows = await Promise.all(validRows.map(async (row) => ({
-    ...row,
-    ...type === "siswa" ? { passwordHash: await hashPasswordAsync(clean(row.values.password)) } : {}
-  })));
+  const preparedRows = new Array(validRows.length);
+  let nextRow = 0;
+  const hashWorkers = Math.min(4, validRows.length);
+  await Promise.all(Array.from({ length: hashWorkers }, async () => {
+    while (nextRow < validRows.length) {
+      const index = nextRow++;
+      const row = validRows[index];
+      const password = type === "siswa" ? clean(row.values.password) : "";
+      const passwordHash = password ? await hashPasswordAsync(password) : void 0;
+      preparedRows[index] = { ...row, ...passwordHash ? { passwordHash } : {} };
+    }
+  }));
   return db.$transaction(async (tx) => {
+    const claimedJob = await tx.coreImportJob.updateMany({
+      where: { id: jobId, templateType: type, status: "PREVIEWED" },
+      data: { status: "COMMITTED", committedAt: /* @__PURE__ */ new Date(), successRows: validRows.length, errorRows: 0 }
+    });
+    if (claimedJob.count !== 1) throw new Error("IMPORT_ALREADY_PROCESSED");
     let success = 0;
     const studentRoleAssignments = [];
     let studentRoleId = null;
@@ -842901,7 +842961,17 @@ async function commitRows(type, rows, actor) {
       const [students, years, classes, role] = await Promise.all([
         tx.coreStudent.findMany({
           where: { nisn: { in: nisns } },
-          select: { id: true, nisn: true, user: { select: { id: true, email: true } } }
+          select: {
+            id: true,
+            nisn: true,
+            email: true,
+            phone: true,
+            gender: true,
+            birthPlace: true,
+            birthDate: true,
+            status: true,
+            user: { select: { id: true, email: true, status: true } }
+          }
         }),
         tx.academicYear.findMany({ where: { code: { in: yearCodes } }, select: { id: true, code: true } }),
         tx.academicClass.findMany({ where: { code: { in: classCodes } }, select: { id: true, code: true } }),
@@ -842923,7 +842993,8 @@ async function commitRows(type, rows, actor) {
       usersByEmail = new Map(users.map((user) => [user.email, user]));
     }
     for (const { values, passwordHash } of preparedRows) {
-      const status = statusValue(values.status);
+      const existingStudent = type === "siswa" ? studentsByNisn.get(clean(values.nisn)) : void 0;
+      const status = clean(values.status) ? statusValue(values.status) : existingStudent?.status || "ACTIVE";
       if (type === "tahun-ajaran") {
         const code = clean(values.code);
         if (asBoolean(values.isActive)) await tx.academicYear.updateMany({ data: { isActive: false }, where: { isActive: true } });
@@ -842949,14 +843020,27 @@ async function commitRows(type, rows, actor) {
       } else if (type === "siswa") {
         const nisn = clean(values.nisn);
         const nis = clean(values.nis);
-        const email = clean(values.email).toLowerCase() || null;
-        const phone = clean(values.noTelp || values.noHp) || null;
-        if (!passwordHash) throw new Error("Hash password awal siswa tidak berhasil disiapkan.");
-        const existingUser = studentsByNisn.get(nisn)?.user || null;
-        const accountEmail = email || existingUser?.email || studentAccountEmail(nis);
+        const suppliedEmail = clean(values.email).toLowerCase() || null;
+        const email = suppliedEmail || existingStudent?.email || null;
+        const phone = clean(values.noTelp || values.noHp) || existingStudent?.phone || null;
+        const gender = clean(values.jenisKelamin) || existingStudent?.gender || null;
+        const birthPlace = clean(values.tempatLahir) || existingStudent?.birthPlace || null;
+        const birthDate = clean(values.tanggalLahir) ? parseDate(values.tanggalLahir) : existingStudent?.birthDate || null;
+        const existingUser = existingStudent?.user || null;
+        const accountEmail = suppliedEmail || existingUser?.email || studentAccountEmail(nis);
+        const userStatus = clean(values.status) || !existingUser ? status === "ACTIVE" ? "ACTIVE" : "DISABLED" : void 0;
         const emailOwner = usersByEmail.get(accountEmail);
         if (emailOwner && emailOwner.id !== existingUser?.id) throw new Error(`Email akun siswa "${accountEmail}" sudah digunakan akun lain.`);
-        const coreUser = existingUser ? await tx.coreUser.update({ where: { id: existingUser.id }, data: { ...email ? { email } : {}, fullName: clean(values.namaLengkap), status: status === "ACTIVE" ? "ACTIVE" : "DISABLED", passwordHash, passwordChangeRecommended: true } }) : await tx.coreUser.create({ data: { email: accountEmail, fullName: clean(values.namaLengkap), status: status === "ACTIVE" ? "ACTIVE" : "DISABLED", passwordHash, passwordChangeRecommended: true } });
+        if (!existingUser && !passwordHash) throw new Error("Hash password awal siswa tidak berhasil disiapkan.");
+        const coreUser = existingUser ? await tx.coreUser.update({
+          where: { id: existingUser.id },
+          data: {
+            ...suppliedEmail ? { email: suppliedEmail } : {},
+            fullName: clean(values.namaLengkap),
+            ...userStatus ? { status: userStatus } : {},
+            ...passwordHash ? { passwordHash, passwordChangeRecommended: true } : {}
+          }
+        }) : await tx.coreUser.create({ data: { email: accountEmail, fullName: clean(values.namaLengkap), status: userStatus, passwordHash, passwordChangeRecommended: true } });
         if (existingUser?.email !== coreUser.email) {
           const formerOwner = existingUser?.email ? usersByEmail.get(existingUser.email) : void 0;
           if (formerOwner?.id === existingUser?.id) usersByEmail.delete(existingUser.email);
@@ -842964,8 +843048,8 @@ async function commitRows(type, rows, actor) {
         usersByEmail.set(accountEmail, { id: coreUser.id, email: accountEmail });
         const student = await tx.coreStudent.upsert({
           where: { nisn },
-          update: { nis, fullName: clean(values.namaLengkap), email, phone, gender: clean(values.jenisKelamin) || null, birthPlace: clean(values.tempatLahir) || null, birthDate: parseDate(values.tanggalLahir), status, userId: coreUser.id },
-          create: { nisn, nis, fullName: clean(values.namaLengkap), email, phone, gender: clean(values.jenisKelamin) || null, birthPlace: clean(values.tempatLahir) || null, birthDate: parseDate(values.tanggalLahir), status, userId: coreUser.id }
+          update: { nis, fullName: clean(values.namaLengkap), email, phone, gender, birthPlace, birthDate, status, userId: coreUser.id },
+          create: { nisn, nis, fullName: clean(values.namaLengkap), email, phone, gender, birthPlace, birthDate, status, userId: coreUser.id }
         });
         if (studentRoleId) studentRoleAssignments.push({ userId: coreUser.id, roleId: studentRoleId });
         const year = yearsByCode.get(clean(values.kodeTahunAjaran));
@@ -843658,14 +843742,31 @@ function registerCorePlatformRoutes(app2, requireAuth2, getAdminPassword) {
   app2.get("/api/v1/akademik/master", requireAuth2, async (req, res) => {
     const { page, pageSize, search } = pageParams(req);
     const contains = search ? { contains: search, mode: "insensitive" } : void 0;
-    const [academicYears, departments, subjects, classes, teachers, students] = await Promise.all([
+    const teacherWhere = contains ? { OR: [{ nip: contains }, { fullName: contains }] } : void 0;
+    const studentWhere = contains ? { OR: [{ nisn: contains }, { nis: contains }, { fullName: contains }] } : void 0;
+    const [
+      academicYears,
+      departments,
+      subjects,
+      classes,
+      teachers,
+      students,
+      totalTeachers,
+      totalStudents,
+      matchingTeachers,
+      matchingStudents,
+      totalAcademicYears,
+      totalDepartments,
+      totalSubjects,
+      totalClasses
+    ] = await Promise.all([
       db.academicYear.findMany({ where: contains ? { OR: [{ code: contains }, { name: contains }] } : void 0, orderBy: { code: "desc" } }),
       db.department.findMany({ where: contains ? { OR: [{ code: contains }, { name: contains }] } : void 0, orderBy: { code: "asc" } }),
       db.subject.findMany({ where: contains ? { OR: [{ code: contains }, { name: contains }] } : void 0, include: { department: true }, orderBy: { code: "asc" } }),
       db.academicClass.findMany({ where: contains ? { OR: [{ code: contains }, { name: contains }] } : void 0, include: { academicYear: true, department: true }, orderBy: { code: "asc" } }),
-      db.coreTeacher.findMany({ where: contains ? { OR: [{ nip: contains }, { fullName: contains }] } : void 0, orderBy: { nip: "asc" }, skip: (page - 1) * pageSize, take: pageSize }),
+      db.coreTeacher.findMany({ where: teacherWhere, orderBy: { nip: "asc" }, skip: (page - 1) * pageSize, take: pageSize }),
       db.coreStudent.findMany({
-        where: contains ? { OR: [{ nisn: contains }, { nis: contains }, { fullName: contains }] } : void 0,
+        where: studentWhere,
         include: {
           enrollments: {
             where: { status: "ACTIVE" },
@@ -843677,9 +843778,42 @@ function registerCorePlatformRoutes(app2, requireAuth2, getAdminPassword) {
         orderBy: { nisn: "asc" },
         skip: (page - 1) * pageSize,
         take: pageSize
-      })
+      }),
+      db.coreTeacher.count(),
+      db.coreStudent.count(),
+      search ? db.coreTeacher.count({ where: teacherWhere }) : Promise.resolve(null),
+      search ? db.coreStudent.count({ where: studentWhere }) : Promise.resolve(null),
+      db.academicYear.count(),
+      db.department.count(),
+      db.subject.count(),
+      db.academicClass.count()
     ]);
-    return ok(res, { academicYears, departments, subjects, classes, teachers, students, page, pageSize, search });
+    const counts = {
+      academicYears: totalAcademicYears,
+      departments: totalDepartments,
+      subjects: totalSubjects,
+      classes: totalClasses,
+      teachers: totalTeachers,
+      students: totalStudents
+    };
+    const matchingCounts = {
+      teachers: matchingTeachers ?? totalTeachers,
+      students: matchingStudents ?? totalStudents
+    };
+    return ok(res, {
+      academicYears,
+      departments,
+      subjects,
+      classes,
+      teachers,
+      students,
+      counts,
+      matchingCounts,
+      page,
+      pageSize,
+      pageCount: Math.max(1, Math.ceil(matchingCounts.students / pageSize)),
+      search
+    });
   });
   app2.post("/api/v1/akademik/siswa", requireAuth2, async (req, res) => {
     const nisn = clean(req.body.nisn);
@@ -843885,7 +844019,6 @@ function registerCorePlatformRoutes(app2, requireAuth2, getAdminPassword) {
     }
   });
   app2.delete("/api/v1/akademik/siswa", requireAuth2, async (req, res) => {
-    if (!await confirmAdminPassword(req, res)) return;
     const ids = Array.isArray(req.body?.ids) ? [...new Set(req.body.ids.filter((value) => typeof value === "string").map((value) => clean(value)).filter(Boolean))] : [];
     if (!ids.length || ids.length > 100) {
       return fail(res, 400, "INVALID_STUDENT_SELECTION", "Pilih antara 1 sampai 100 siswa untuk dihapus.");
@@ -844249,10 +844382,12 @@ function registerCorePlatformRoutes(app2, requireAuth2, getAdminPassword) {
       const rows = await validateRows(type, parsed.rows);
       const invalid = rows.filter((row) => row.status === "ERROR" || row.status === "DUPLICATE");
       if (invalid.length) return fail(res, 422, "VALIDATION_FAILED", "Perbaiki semua error sebelum commit.", { errors: maskPreviewRows(invalid.slice(0, 200)) });
-      const successRows = await commitRows(type, rows, "ADMIN_SESSION");
-      const updated = await db.coreImportJob.update({ where: { id: job.id }, data: { status: "COMMITTED", successRows, errorRows: 0, committedAt: /* @__PURE__ */ new Date() } });
-      return ok(res, { jobId: updated.id, status: updated.status, successRows });
+      const successRows = await commitRows(type, rows, "ADMIN_SESSION", job.id);
+      return ok(res, { jobId: job.id, status: "COMMITTED", successRows });
     } catch (error) {
+      if (error instanceof Error && error.message === "IMPORT_ALREADY_PROCESSED") {
+        return fail(res, 409, "IMPORT_ALREADY_PROCESSED", "Import ini sudah diproses.");
+      }
       return fail(res, 500, "COMMIT_FAILED", error instanceof Error ? error.message : "Import gagal disimpan.");
     }
   });

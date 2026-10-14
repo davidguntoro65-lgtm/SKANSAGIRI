@@ -55,6 +55,10 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
   const [tab, setTab] = useState<CoreTab>("dashboard");
   const [overview, setOverview] = useState<Overview | null>(null);
   const [master, setMaster] = useState<MasterData>({ academicYears: [], departments: [], subjects: [], classes: [], teachers: [], students: [] });
+  const [masterCounts, setMasterCounts] = useState<Record<MasterKey, number>>({ academicYears: 0, departments: 0, subjects: 0, classes: 0, teachers: 0, students: 0 });
+  const [masterMatchingCounts, setMasterMatchingCounts] = useState({ teachers: 0, students: 0 });
+  const [masterPage, setMasterPage] = useState(1);
+  const [masterPageSize, setMasterPageSize] = useState(50);
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
@@ -117,19 +121,29 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
     }
   };
 
-  const load = async (options?: { pinnedStudent?: any; searchTerm?: string }) => {
+  const load = async (options?: { pinnedStudent?: any; searchTerm?: string; page?: number }) => {
     if (!loggedIn) return;
     setLoading(true);
     try {
       const [nextOverview, nextMaster, nextRequests] = await Promise.all([
         request("/api/v1/akademik/overview"),
-        request(`/api/v1/akademik/master?search=${encodeURIComponent(options?.searchTerm ?? search)}&pageSize=50`),
+        request(`/api/v1/akademik/master?search=${encodeURIComponent(options?.searchTerm ?? search)}&page=${options?.page ?? masterPage}&pageSize=50`),
         request("/api/v1/akademik/teacher-requests"),
       ]);
       const refreshedMaster = options?.pinnedStudent
         ? { ...nextMaster, students: [options.pinnedStudent, ...nextMaster.students.filter((student: any) => student.id !== options.pinnedStudent.id)] }
         : nextMaster;
       setOverview(nextOverview); setMaster(refreshedMaster); setRequests(nextRequests || []);
+      setMasterCounts(nextMaster.counts || {
+        academicYears: nextMaster.academicYears.length,
+        departments: nextMaster.departments.length,
+        subjects: nextMaster.subjects.length,
+        classes: nextMaster.classes.length,
+        teachers: nextMaster.teachers.length,
+        students: nextMaster.students.length,
+      });
+      setMasterMatchingCounts(nextMaster.matchingCounts || { teachers: nextMaster.teachers.length, students: nextMaster.students.length });
+      setMasterPageSize(nextMaster.pageSize || 50);
     } catch (error) { setNotice({ type: "error", text: error instanceof Error ? error.message : "Data gagal dimuat." }); }
     finally { setLoading(false); }
   };
@@ -140,6 +154,11 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
     } catch (error) { setNotice({ type: "error", text: error instanceof Error ? error.message : "Aktivitas gagal dimuat." }); }
   };
   useEffect(() => { load(); }, [loggedIn]);
+  useEffect(() => {
+    if (!loggedIn || tab !== "master") return;
+    const timeout = window.setTimeout(() => load({ searchTerm: search, page: masterPage }), 250);
+    return () => window.clearTimeout(timeout);
+  }, [loggedIn, tab, search, masterPage]);
   useEffect(() => { if (loggedIn && (tab === "import" || tab === "audit")) loadActivity(); }, [tab, loggedIn]);
 
   const login = async (event: FormEvent) => {
@@ -280,8 +299,9 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
       setStudentAdminPassword("");
       setEditingId(null);
       setSearch("");
+      setMasterPage(1);
       setSelectedStudentIds([]);
-      await load({ pinnedStudent: saved, searchTerm: "" });
+      await load({ pinnedStudent: saved, searchTerm: "", page: 1 });
       setNotice({ type: "success", text: `Data siswa ${saved.fullName} berhasil ${isEditing ? "diperbarui" : "disimpan"}.` });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Data siswa gagal disimpan.";
@@ -293,21 +313,18 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
   };
   const deleteStudents = async (event: FormEvent) => {
     event.preventDefault();
-    if (!studentAdminPassword) {
-      setStudentActionError("Masukkan kata sandi admin untuk mengonfirmasi penghapusan.");
-      return;
-    }
     setStudentActionError("");
     setDeletingStudents(true);
     try {
       const result = await request("/api/v1/akademik/siswa", {
         method: "DELETE",
-        body: JSON.stringify({ ids: deleteStudentIds, adminPassword: studentAdminPassword }),
+        body: JSON.stringify({ ids: deleteStudentIds }),
       });
       setDeleteStudentIds([]);
       setSelectedStudentIds([]);
       setStudentAdminPassword("");
-      await load();
+      setMasterPage(1);
+      await load({ page: 1 });
       setNotice({ type: "success", text: `${result.deletedCount} data siswa berhasil dihapus.` });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Data siswa gagal dihapus.";
@@ -540,13 +557,13 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
                 <div className="flex flex-col sm:flex-row gap-2">
                   <label className="relative">
                     <Search className="w-4 h-4 absolute left-3 top-3 opacity-40" />
-                    <input aria-label="Cari master data" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari kode atau nama..." className="w-full sm:w-56 rounded-xl border pl-9 pr-3 py-2.5 bg-transparent text-sm outline-none focus:ring-2 focus:ring-amber-400" />
+                    <input aria-label="Cari master data" value={search} onChange={(event) => { setSearch(event.target.value); setMasterPage(1); }} placeholder="Cari kode atau nama..." className="w-full sm:w-56 rounded-xl border pl-9 pr-3 py-2.5 bg-transparent text-sm outline-none focus:ring-2 focus:ring-amber-400" />
                   </label>
                   {MASTER_META.find((item) => item.key === masterKey)?.manual && <button onClick={openCreate} className="rounded-xl bg-slate-950 text-white dark:bg-amber-400 dark:text-slate-950 px-4 py-2.5 text-sm font-black flex items-center justify-center gap-2"><Plus className="w-4 h-4" /> Tambah data</button>}
                 </div>
               </div>
               <div className="flex overflow-x-auto gap-2 px-4 sm:px-6 py-3 border-b border-current/10">
-                {MASTER_META.map(({ key, label }) => <button key={key} onClick={() => { setMasterKey(key); setSearch(""); setSelectedStudentIds([]); }} className={`shrink-0 rounded-xl px-3 py-2 text-xs font-bold ${masterKey === key ? "bg-amber-400 text-slate-950" : "bg-current/5 opacity-70 hover:opacity-100"}`}>{label}<span className="ml-1.5 opacity-60">{master[key]?.length || 0}</span></button>)}
+                {MASTER_META.map(({ key, label }) => <button key={key} onClick={() => { setMasterKey(key); setSearch(""); setMasterPage(1); setSelectedStudentIds([]); }} className={`shrink-0 rounded-xl px-3 py-2 text-xs font-bold ${masterKey === key ? "bg-amber-400 text-slate-950" : "bg-current/5 opacity-70 hover:opacity-100"}`}>{label}<span className="ml-1.5 opacity-60">{masterCounts[key]}</span></button>)}
               </div>
               {masterKey === "students" && selectedStudentIds.length > 0 && (
                 <div className="flex flex-col gap-3 border-b border-current/10 bg-rose-500/[.04] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
@@ -590,6 +607,19 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
                 </table>
                 {!filteredMaster.length && <div className="py-16 text-center opacity-50"><BookOpen className="w-9 h-9 mx-auto mb-3" /><p className="font-bold">Belum ada data</p><p className="text-sm mt-1">{search ? "Coba kata kunci lain." : "Mulai dengan menambah atau mengimport data."}</p></div>}
               </div>
+              {["students", "teachers"].includes(masterKey) && masterMatchingCounts[masterKey as "students" | "teachers"] > 0 && (
+                <div className="flex flex-col gap-3 border-t border-current/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                  <p className="text-xs opacity-60">
+                    Menampilkan {Math.min(masterMatchingCounts[masterKey as "students" | "teachers"], (masterPage - 1) * masterPageSize + 1)}–{Math.min(masterMatchingCounts[masterKey as "students" | "teachers"], masterPage * masterPageSize)} dari {masterMatchingCounts[masterKey as "students" | "teachers"]} data
+                    {search.trim() ? ` untuk “${search.trim()}”` : ""}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button type="button" disabled={masterPage <= 1 || loading} onClick={() => setMasterPage((page) => Math.max(1, page - 1))} className="rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-40">Sebelumnya</button>
+                    <span className="text-xs font-bold">Halaman {masterPage} dari {Math.max(1, Math.ceil(masterMatchingCounts[masterKey as "students" | "teachers"] / masterPageSize))}</span>
+                    <button type="button" disabled={masterPage >= Math.ceil(masterMatchingCounts[masterKey as "students" | "teachers"] / masterPageSize) || loading} onClick={() => setMasterPage((page) => page + 1)} className="rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-40">Berikutnya</button>
+                  </div>
+                </div>
+              )}
             </div>
           </section>}
 

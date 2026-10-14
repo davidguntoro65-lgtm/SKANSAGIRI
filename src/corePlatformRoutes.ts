@@ -1271,14 +1271,31 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
   app.get("/api/v1/akademik/master", requireAuth, async (req, res) => {
     const { page, pageSize, search } = pageParams(req);
     const contains = search ? { contains: search, mode: "insensitive" as const } : undefined;
-    const [academicYears, departments, subjects, classes, teachers, students] = await Promise.all([
+    const teacherWhere = contains ? { OR: [{ nip: contains }, { fullName: contains }] } : undefined;
+    const studentWhere = contains ? { OR: [{ nisn: contains }, { nis: contains }, { fullName: contains }] } : undefined;
+    const [
+      academicYears,
+      departments,
+      subjects,
+      classes,
+      teachers,
+      students,
+      totalTeachers,
+      totalStudents,
+      matchingTeachers,
+      matchingStudents,
+      totalAcademicYears,
+      totalDepartments,
+      totalSubjects,
+      totalClasses,
+    ] = await Promise.all([
       db.academicYear.findMany({ where: contains ? { OR: [{ code: contains }, { name: contains }] } : undefined, orderBy: { code: "desc" } }),
       db.department.findMany({ where: contains ? { OR: [{ code: contains }, { name: contains }] } : undefined, orderBy: { code: "asc" } }),
       db.subject.findMany({ where: contains ? { OR: [{ code: contains }, { name: contains }] } : undefined, include: { department: true }, orderBy: { code: "asc" } }),
       db.academicClass.findMany({ where: contains ? { OR: [{ code: contains }, { name: contains }] } : undefined, include: { academicYear: true, department: true }, orderBy: { code: "asc" } }),
-      db.coreTeacher.findMany({ where: contains ? { OR: [{ nip: contains }, { fullName: contains }] } : undefined, orderBy: { nip: "asc" }, skip: (page - 1) * pageSize, take: pageSize }),
+      db.coreTeacher.findMany({ where: teacherWhere, orderBy: { nip: "asc" }, skip: (page - 1) * pageSize, take: pageSize }),
       db.coreStudent.findMany({
-        where: contains ? { OR: [{ nisn: contains }, { nis: contains }, { fullName: contains }] } : undefined,
+        where: studentWhere,
         include: {
           enrollments: {
             where: { status: "ACTIVE" },
@@ -1291,8 +1308,41 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
+      db.coreTeacher.count(),
+      db.coreStudent.count(),
+      search ? db.coreTeacher.count({ where: teacherWhere }) : Promise.resolve(null),
+      search ? db.coreStudent.count({ where: studentWhere }) : Promise.resolve(null),
+      db.academicYear.count(),
+      db.department.count(),
+      db.subject.count(),
+      db.academicClass.count(),
     ]);
-    return ok(res, { academicYears, departments, subjects, classes, teachers, students, page, pageSize, search });
+    const counts = {
+      academicYears: totalAcademicYears,
+      departments: totalDepartments,
+      subjects: totalSubjects,
+      classes: totalClasses,
+      teachers: totalTeachers,
+      students: totalStudents,
+    };
+    const matchingCounts = {
+      teachers: matchingTeachers ?? totalTeachers,
+      students: matchingStudents ?? totalStudents,
+    };
+    return ok(res, {
+      academicYears,
+      departments,
+      subjects,
+      classes,
+      teachers,
+      students,
+      counts,
+      matchingCounts,
+      page,
+      pageSize,
+      pageCount: Math.max(1, Math.ceil(matchingCounts.students / pageSize)),
+      search,
+    });
   });
 
   app.post("/api/v1/akademik/siswa", requireAuth, async (req, res) => {
@@ -1516,8 +1566,6 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
   });
 
   app.delete("/api/v1/akademik/siswa", requireAuth, async (req, res) => {
-    if (!(await confirmAdminPassword(req, res))) return;
-
     const ids: string[] = Array.isArray(req.body?.ids)
       ? [...new Set((req.body.ids as unknown[]).filter((value): value is string => typeof value === "string").map((value) => clean(value)).filter(Boolean))]
       : [];
