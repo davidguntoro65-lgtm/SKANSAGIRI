@@ -4,6 +4,7 @@ import { Newspaper, Calendar, Clock, Star } from "lucide-react";
 import { DataStore } from "../dataStore";
 import { SectionPattern, GradientMesh } from "./BackgroundSystem";
 import { navigate } from "../utils/navigation";
+import { splitNewsParagraphs } from "../utils/newsFormatting";
 
 export default function News({ theme = "dark" }: { theme?: "light" | "dark" }) {
   const [news, setNews] = useState(() => DataStore.getNews());
@@ -109,11 +110,13 @@ export default function News({ theme = "dark" }: { theme?: "light" | "dark" }) {
                 {featuredNews.title}
               </h3>
 
-              <p className={`text-xs md:text-sm leading-relaxed font-sans font-light mb-6 ${
+              <div className={`text-xs md:text-sm leading-relaxed font-sans font-light mb-6 space-y-3 text-justify [text-align-last:left] break-words ${
                 isDark ? "text-slate-400" : "text-slate-500"
               }`}>
-                {featuredNews.excerpt}
-              </p>
+                {splitNewsParagraphs(featuredNews.excerpt).map((paragraph, index) => (
+                  <p key={`${featuredNews.id}-paragraph-${index}`} className="indent-5">{paragraph}</p>
+                ))}
+              </div>
 
               <div className={`flex flex-wrap items-center justify-between pt-4 border-t gap-4 ${
                 isDark ? "border-white/5" : "border-slate-200"

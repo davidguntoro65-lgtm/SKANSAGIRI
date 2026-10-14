@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { DataStore } from "../dataStore";
 import { NewsArticle } from "../data";
+import { splitNewsParagraphs } from "../utils/newsFormatting";
 
 export default function Berita({ theme }: { theme: "light" | "dark" }) {
   const [news, setNews] = useState<NewsArticle[]>(() => DataStore.getNews());
@@ -208,11 +209,13 @@ export default function Berita({ theme }: { theme: "light" | "dark" }) {
                         }`}>
                           {featured.title}
                         </h2>
-                        <p className={`text-sm leading-7 font-sans mb-6 ${
+                        <div className={`mb-6 space-y-4 text-sm leading-7 font-sans text-justify [text-align-last:left] break-words ${
                           isDark ? "text-slate-400" : "text-slate-500"
                         }`}>
-                          {featured.excerpt}
-                        </p>
+                          {splitNewsParagraphs(featured.excerpt).map((paragraph, index) => (
+                            <p key={`${featured.id}-paragraph-${index}`} className="indent-6">{paragraph}</p>
+                          ))}
+                        </div>
                       </div>
 
                       <div>

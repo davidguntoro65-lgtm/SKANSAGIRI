@@ -17,6 +17,7 @@ import AdminAkademik from "../pages/AdminAkademik";
 import AdminPilketos from "../pages/AdminPilketos";
 import AdminDiklat from "../pages/AdminDiklat";
 import { apiFetch } from "../utils/navigation";
+import { getTodayNewsDate } from "../utils/newsFormatting";
 
 export default function AdminPanel({ 
   theme = "dark", 
@@ -1620,7 +1621,7 @@ export default function AdminPanel({
                       } else if (activeTab === "news") {
                         setEditingItem({
                           id: "", category: "PRESTASI NASIONAL", title: "", excerpt: "",
-                          date: "11 Juni 2026", readTime: "4 min read",
+                          date: getTodayNewsDate(), readTime: "4 min read",
                           image: "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=800&q=80",
                           author: "Superadmin Humas", authorRole: "Koordinator Publikasi"
                         });
@@ -2607,16 +2608,19 @@ export default function AdminPanel({
                       </div>
 
                       <div>
-                        <label className="block text-xs font-mono uppercase tracking-wider text-slate-400 mb-2">Cuplikan Pengantar Kutipan (Excerpt)</label>
+                        <label className="block text-xs font-mono uppercase tracking-wider text-slate-400 mb-2">Narasi Redaksi / Isi Berita</label>
                         <textarea
-                          rows={3}
+                          rows={10}
                           value={editingItem.excerpt}
                           onChange={(e) => setEditingItem({ ...editingItem, excerpt: e.target.value })}
-                          placeholder="Tulis baris kata memikat untuk menuntun pembaca ke arah isinya lengkap..."
-                          className={`w-full text-xs p-3 rounded-lg border outline-none resize-none ${
+                          placeholder="Tulis narasi berita di sini. Tekan Enter untuk memulai paragraf baru."
+                          className={`w-full min-h-[260px] text-sm leading-7 text-justify [text-align-last:left] p-4 rounded-lg border outline-none resize-y ${
                             isDarkTheme ? "bg-slate-950 border-white/5 text-white focus:border-amber-500" : "bg-slate-50 border-slate-200 focus:border-amber-600"
                           }`}
                         />
+                        <p className={`mt-2 text-xs leading-relaxed ${isDarkTheme ? "text-slate-500" : "text-slate-500"}`}>
+                          Tekan Enter untuk memulai paragraf baru. Jarak paragraf dan rata kiri-kanan akan dipertahankan pada halaman berita.
+                        </p>
                       </div>
 
                       <div className="flex items-center gap-3 pt-4">
