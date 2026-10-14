@@ -842924,6 +842924,88 @@ function pageParams(req) {
   const search = clean(req.query.search);
   return { page, pageSize, search };
 }
+function masterSearchWhere(entity, field, search) {
+  if (!search) return void 0;
+  const contains = { contains: search, mode: "insensitive" };
+  const status = search.toUpperCase();
+  const validStatus = VALID_STATUSES.has(status) ? status : null;
+  const activeValue = ["AKTIF", "ACTIVE", "YA", "TRUE"].includes(status) ? true : ["TIDAK AKTIF", "NONAKTIF", "INACTIVE", "TIDAK", "FALSE"].includes(status) ? false : null;
+  const statusFilter = validStatus ? { status: validStatus } : entity === "academicYears" && activeValue !== null ? { isActive: activeValue } : { id: "__no_matching_master_record__" };
+  const isAll = field === "all";
+  const is = (value) => value === field;
+  const or = (...filters) => filters.filter((filter) => Boolean(filter));
+  const text = (key) => ({ [key]: contains });
+  const department = {
+    department: { is: { OR: [{ code: contains }, { name: contains }] } }
+  };
+  const academicYear = {
+    academicYear: { is: { OR: [{ code: contains }, { name: contains }] } }
+  };
+  switch (entity) {
+    case "academicYears": {
+      if (is("code")) return text("code");
+      if (is("name")) return text("name");
+      if (is("status")) return statusFilter;
+      if (isAll) return { OR: or(text("code"), text("name"), validStatus ? { status: validStatus } : null, activeValue !== null ? { isActive: activeValue } : null) };
+      return { id: "__no_matching_master_record__" };
+    }
+    case "departments": {
+      if (is("code")) return text("code");
+      if (is("name")) return text("name");
+      if (is("status")) return statusFilter;
+      if (isAll) return { OR: or(text("code"), text("name"), validStatus ? { status: validStatus } : null) };
+      return { id: "__no_matching_master_record__" };
+    }
+    case "subjects": {
+      if (is("code")) return text("code");
+      if (is("name")) return text("name");
+      if (is("department")) return department;
+      if (is("status")) return statusFilter;
+      if (isAll) return { OR: or(text("code"), text("name"), department, validStatus ? { status: validStatus } : null) };
+      return { id: "__no_matching_master_record__" };
+    }
+    case "classes": {
+      if (is("code")) return text("code");
+      if (is("name")) return text("name");
+      if (is("grade")) return text("grade");
+      if (is("academicYear")) return academicYear;
+      if (is("department")) return department;
+      if (is("status")) return statusFilter;
+      if (isAll) return { OR: or(text("code"), text("name"), text("grade"), academicYear, department, validStatus ? { status: validStatus } : null) };
+      return { id: "__no_matching_master_record__" };
+    }
+    case "teachers": {
+      if (is("nip")) return text("nip");
+      if (is("name")) return text("fullName");
+      if (is("email")) return text("email");
+      if (is("status")) return statusFilter;
+      if (isAll) return { OR: or(text("nip"), text("fullName"), text("email"), text("phone"), validStatus ? { status: validStatus } : null) };
+      return { id: "__no_matching_master_record__" };
+    }
+    case "students": {
+      const classEnrollment = {
+        enrollments: {
+          some: { status: "ACTIVE", academicClass: { is: { OR: [{ code: contains }, { name: contains }] } } }
+        }
+      };
+      const yearEnrollment = {
+        enrollments: {
+          some: { status: "ACTIVE", academicYear: { is: { OR: [{ code: contains }, { name: contains }] } } }
+        }
+      };
+      if (is("nis")) return text("nis");
+      if (is("nisn")) return text("nisn");
+      if (is("name")) return text("fullName");
+      if (is("class")) return classEnrollment;
+      if (is("academicYear")) return yearEnrollment;
+      if (is("status")) return statusFilter;
+      if (isAll) return { OR: or(text("nis"), text("nisn"), text("fullName"), text("email"), text("phone"), classEnrollment, yearEnrollment, validStatus ? { status: validStatus } : null) };
+      return { id: "__no_matching_master_record__" };
+    }
+    default:
+      return void 0;
+  }
+}
 async function audit(action, entity, entityId, metadata = {}) {
   await db.coreAuditLog.create({ data: { action, entity, entityId, actor: "ADMIN_SESSION", metadata } });
 }
@@ -843741,9 +843823,15 @@ function registerCorePlatformRoutes(app2, requireAuth2, getAdminPassword) {
   });
   app2.get("/api/v1/akademik/master", requireAuth2, async (req, res) => {
     const { page, pageSize, search } = pageParams(req);
-    const contains = search ? { contains: search, mode: "insensitive" } : void 0;
-    const teacherWhere = contains ? { OR: [{ nip: contains }, { fullName: contains }] } : void 0;
-    const studentWhere = contains ? { OR: [{ nisn: contains }, { nis: contains }, { fullName: contains }] } : void 0;
+    const entity = clean(req.query.entity);
+    const searchBy = clean(req.query.searchBy) || "all";
+    const whereFor = (key) => entity === key ? masterSearchWhere(key, searchBy, search) : void 0;
+    const academicYearWhere = whereFor("academicYears");
+    const departmentWhere = whereFor("departments");
+    const subjectWhere = whereFor("subjects");
+    const classWhere = whereFor("classes");
+    const teacherWhere = whereFor("teachers");
+    const studentWhere = whereFor("students");
     const [
       academicYears,
       departments,
@@ -843760,10 +843848,10 @@ function registerCorePlatformRoutes(app2, requireAuth2, getAdminPassword) {
       totalSubjects,
       totalClasses
     ] = await Promise.all([
-      db.academicYear.findMany({ where: contains ? { OR: [{ code: contains }, { name: contains }] } : void 0, orderBy: { code: "desc" } }),
-      db.department.findMany({ where: contains ? { OR: [{ code: contains }, { name: contains }] } : void 0, orderBy: { code: "asc" } }),
-      db.subject.findMany({ where: contains ? { OR: [{ code: contains }, { name: contains }] } : void 0, include: { department: true }, orderBy: { code: "asc" } }),
-      db.academicClass.findMany({ where: contains ? { OR: [{ code: contains }, { name: contains }] } : void 0, include: { academicYear: true, department: true }, orderBy: { code: "asc" } }),
+      db.academicYear.findMany({ where: academicYearWhere, orderBy: { code: "desc" } }),
+      db.department.findMany({ where: departmentWhere, orderBy: { code: "asc" } }),
+      db.subject.findMany({ where: subjectWhere, include: { department: true }, orderBy: { code: "asc" } }),
+      db.academicClass.findMany({ where: classWhere, include: { academicYear: true, department: true }, orderBy: { code: "asc" } }),
       db.coreTeacher.findMany({ where: teacherWhere, orderBy: { nip: "asc" }, skip: (page - 1) * pageSize, take: pageSize }),
       db.coreStudent.findMany({
         where: studentWhere,
@@ -843781,8 +843869,8 @@ function registerCorePlatformRoutes(app2, requireAuth2, getAdminPassword) {
       }),
       db.coreTeacher.count(),
       db.coreStudent.count(),
-      search ? db.coreTeacher.count({ where: teacherWhere }) : Promise.resolve(null),
-      search ? db.coreStudent.count({ where: studentWhere }) : Promise.resolve(null),
+      entity === "teachers" && search ? db.coreTeacher.count({ where: teacherWhere }) : Promise.resolve(null),
+      entity === "students" && search ? db.coreStudent.count({ where: studentWhere }) : Promise.resolve(null),
       db.academicYear.count(),
       db.department.count(),
       db.subject.count(),
@@ -843812,7 +843900,9 @@ function registerCorePlatformRoutes(app2, requireAuth2, getAdminPassword) {
       page,
       pageSize,
       pageCount: Math.max(1, Math.ceil(matchingCounts.students / pageSize)),
-      search
+      search,
+      searchBy,
+      entity
     });
   });
   app2.post("/api/v1/akademik/siswa", requireAuth2, async (req, res) => {

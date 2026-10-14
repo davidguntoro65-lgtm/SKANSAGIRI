@@ -33,8 +33,48 @@ const MASTER_META: { key: MasterKey; label: string; code: string; icon: typeof B
   { key: "teachers", label: "Guru", code: "nip", icon: GraduationCap, manual: false },
   { key: "students", label: "Siswa", code: "nis", icon: Users, manual: true },
 ];
+type SearchField = { value: string; label: string };
+const SEARCH_FIELDS: Record<MasterKey, SearchField[]> = {
+  academicYears: [{ value: "all", label: "Semua kriteria" }, { value: "code", label: "Kode tahun ajaran" }, { value: "name", label: "Nama tahun ajaran" }, { value: "status", label: "Status" }],
+  departments: [{ value: "all", label: "Semua kriteria" }, { value: "code", label: "Kode jurusan" }, { value: "name", label: "Nama jurusan" }, { value: "status", label: "Status" }],
+  subjects: [{ value: "all", label: "Semua kriteria" }, { value: "code", label: "Kode mata pelajaran" }, { value: "name", label: "Nama mata pelajaran" }, { value: "department", label: "Jurusan" }, { value: "status", label: "Status" }],
+  classes: [{ value: "all", label: "Semua kriteria" }, { value: "code", label: "Kode kelas" }, { value: "name", label: "Nama kelas" }, { value: "grade", label: "Tingkat" }, { value: "academicYear", label: "Tahun ajaran" }, { value: "department", label: "Jurusan" }, { value: "status", label: "Status" }],
+  teachers: [{ value: "all", label: "Semua kriteria" }, { value: "nip", label: "NIP" }, { value: "name", label: "Nama guru" }, { value: "email", label: "Email" }, { value: "status", label: "Status" }],
+  students: [{ value: "all", label: "Semua kriteria" }, { value: "nis", label: "NIS" }, { value: "nisn", label: "NISN" }, { value: "name", label: "Nama siswa" }, { value: "class", label: "Kelas" }, { value: "academicYear", label: "Tahun ajaran" }, { value: "status", label: "Status" }],
+};
 const EMPTY_FORM: FormState = { code: "", name: "", grade: "X", academicYearId: "", departmentId: "", isActive: false, status: "ACTIVE" };
 const EMPTY_STUDENT_FORM: StudentFormState = { nisn: "", nis: "", fullName: "", email: "", phone: "", gender: "", birthPlace: "", birthDate: "", classCode: "", academicYearCode: "", enrollmentId: "", password: "", status: "ACTIVE" };
+
+function masterSearchValues(item: any, key: MasterKey, field: string): string[] {
+  const enrollment = item.enrollments?.[0];
+  const values: Record<MasterKey, Record<string, unknown[]>> = {
+    academicYears: {
+      code: [item.code], name: [item.name], status: [item.status, item.isActive ? "AKTIF" : "TIDAK AKTIF", String(item.isActive)],
+      all: [item.code, item.name, item.status, item.isActive ? "AKTIF" : "TIDAK AKTIF", String(item.isActive)],
+    },
+    departments: {
+      code: [item.code], name: [item.name], status: [item.status],
+      all: [item.code, item.name, item.status],
+    },
+    subjects: {
+      code: [item.code], name: [item.name], department: [item.department?.code, item.department?.name], status: [item.status],
+      all: [item.code, item.name, item.department?.code, item.department?.name, item.status],
+    },
+    classes: {
+      code: [item.code], name: [item.name], grade: [item.grade], academicYear: [item.academicYear?.code, item.academicYear?.name], department: [item.department?.code, item.department?.name], status: [item.status],
+      all: [item.code, item.name, item.grade, item.academicYear?.code, item.academicYear?.name, item.department?.code, item.department?.name, item.status],
+    },
+    teachers: {
+      nip: [item.nip], name: [item.fullName], email: [item.email], status: [item.status],
+      all: [item.nip, item.fullName, item.email, item.phone, item.status],
+    },
+    students: {
+      nis: [item.nis], nisn: [item.nisn], name: [item.fullName], class: [enrollment?.academicClass?.code, enrollment?.academicClass?.name], academicYear: [enrollment?.academicYear?.code, enrollment?.academicYear?.name], status: [item.status],
+      all: [item.nis, item.nisn, item.fullName, item.email, item.phone, enrollment?.academicClass?.code, enrollment?.academicClass?.name, enrollment?.academicYear?.code, enrollment?.academicYear?.name, item.status],
+    },
+  };
+  return (values[key][field] || values[key].all).filter((value) => value !== undefined && value !== null).map(String);
+}
 
 function token() { return localStorage.getItem("smkn1_adm_token") || ""; }
 function authHeaders(json = false) { return { Authorization: `Bearer ${token()}`, ...(json ? { "Content-Type": "application/json" } : {}) }; }
@@ -64,6 +104,7 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
   const [notice, setNotice] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
   const [masterKey, setMasterKey] = useState<MasterKey>("academicYears");
   const [search, setSearch] = useState("");
+  const [searchBy, setSearchBy] = useState("all");
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [studentForm, setStudentForm] = useState<StudentFormState>(EMPTY_STUDENT_FORM);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -121,13 +162,13 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
     }
   };
 
-  const load = async (options?: { pinnedStudent?: any; searchTerm?: string; page?: number }) => {
+  const load = async (options?: { pinnedStudent?: any; searchTerm?: string; page?: number; searchField?: string; entity?: MasterKey }) => {
     if (!loggedIn) return;
     setLoading(true);
     try {
       const [nextOverview, nextMaster, nextRequests] = await Promise.all([
         request("/api/v1/akademik/overview"),
-        request(`/api/v1/akademik/master?search=${encodeURIComponent(options?.searchTerm ?? search)}&page=${options?.page ?? masterPage}&pageSize=50`),
+        request(`/api/v1/akademik/master?search=${encodeURIComponent(options?.searchTerm ?? search)}&searchBy=${encodeURIComponent(options?.searchField ?? searchBy)}&entity=${options?.entity ?? masterKey}&page=${options?.page ?? masterPage}&pageSize=50`),
         request("/api/v1/akademik/teacher-requests"),
       ]);
       const refreshedMaster = options?.pinnedStudent
@@ -156,9 +197,9 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
   useEffect(() => { load(); }, [loggedIn]);
   useEffect(() => {
     if (!loggedIn || tab !== "master") return;
-    const timeout = window.setTimeout(() => load({ searchTerm: search, page: masterPage }), 250);
+    const timeout = window.setTimeout(() => load({ searchTerm: search, searchField: searchBy, entity: masterKey, page: masterPage }), 250);
     return () => window.clearTimeout(timeout);
-  }, [loggedIn, tab, search, masterPage]);
+  }, [loggedIn, tab, masterKey, search, searchBy, masterPage]);
   useEffect(() => { if (loggedIn && (tab === "import" || tab === "audit")) loadActivity(); }, [tab, loggedIn]);
 
   const login = async (event: FormEvent) => {
@@ -299,9 +340,10 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
       setStudentAdminPassword("");
       setEditingId(null);
       setSearch("");
+      setSearchBy("all");
       setMasterPage(1);
       setSelectedStudentIds([]);
-      await load({ pinnedStudent: saved, searchTerm: "", page: 1 });
+      await load({ pinnedStudent: saved, searchTerm: "", searchField: "all", page: 1 });
       setNotice({ type: "success", text: `Data siswa ${saved.fullName} berhasil ${isEditing ? "diperbarui" : "disimpan"}.` });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Data siswa gagal disimpan.";
@@ -343,9 +385,10 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
   const filteredMaster = useMemo(() => {
     const items = master[masterKey] || [];
     if (!search.trim()) return items;
+    if (masterKey === "students" || masterKey === "teachers") return items;
     const needle = search.toLowerCase();
-    return items.filter((item) => Object.values(item).some((value) => String(value ?? "").toLowerCase().includes(needle)));
-  }, [master, masterKey, search]);
+    return items.filter((item) => masterSearchValues(item, masterKey, searchBy).some((value) => value.toLowerCase().includes(needle)));
+  }, [master, masterKey, search, searchBy]);
 
   if (!loggedIn) return (
     <main className={`min-h-screen flex items-center justify-center p-5 ${dark ? "bg-[#07111f] text-white" : "bg-[#f5f7fb] text-slate-900"}`}>
@@ -554,16 +597,22 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
                   <h3 className="font-black text-xl mt-1">Master data sekolah</h3>
                   <p className="text-sm opacity-60 mt-1">Gunakan kode stabil untuk menjaga relasi dan idempotency.</p>
                 </div>
-                <div className="flex flex-col sm:flex-row gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <label>
+                    <span className="sr-only">Kriteria pencarian</span>
+                    <select aria-label="Kriteria pencarian" value={searchBy} onChange={(event) => { setSearchBy(event.target.value); setMasterPage(1); }} className="w-full sm:w-48 rounded-xl border bg-transparent px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-amber-400">
+                      {SEARCH_FIELDS[masterKey].map((field) => <option key={field.value} value={field.value}>{field.label}</option>)}
+                    </select>
+                  </label>
                   <label className="relative">
                     <Search className="w-4 h-4 absolute left-3 top-3 opacity-40" />
-                    <input aria-label="Cari master data" value={search} onChange={(event) => { setSearch(event.target.value); setMasterPage(1); }} placeholder="Cari kode atau nama..." className="w-full sm:w-56 rounded-xl border pl-9 pr-3 py-2.5 bg-transparent text-sm outline-none focus:ring-2 focus:ring-amber-400" />
+                    <input aria-label="Cari master data" value={search} onChange={(event) => { setSearch(event.target.value); setMasterPage(1); }} placeholder={searchBy === "status" ? "Contoh: ACTIVE" : `Cari ${SEARCH_FIELDS[masterKey].find((field) => field.value === searchBy)?.label.toLowerCase() || "data"}...`} className="w-full sm:w-56 rounded-xl border pl-9 pr-3 py-2.5 bg-transparent text-sm outline-none focus:ring-2 focus:ring-amber-400" />
                   </label>
                   {MASTER_META.find((item) => item.key === masterKey)?.manual && <button onClick={openCreate} className="rounded-xl bg-slate-950 text-white dark:bg-amber-400 dark:text-slate-950 px-4 py-2.5 text-sm font-black flex items-center justify-center gap-2"><Plus className="w-4 h-4" /> Tambah data</button>}
                 </div>
               </div>
               <div className="flex overflow-x-auto gap-2 px-4 sm:px-6 py-3 border-b border-current/10">
-                {MASTER_META.map(({ key, label }) => <button key={key} onClick={() => { setMasterKey(key); setSearch(""); setMasterPage(1); setSelectedStudentIds([]); }} className={`shrink-0 rounded-xl px-3 py-2 text-xs font-bold ${masterKey === key ? "bg-amber-400 text-slate-950" : "bg-current/5 opacity-70 hover:opacity-100"}`}>{label}<span className="ml-1.5 opacity-60">{masterCounts[key]}</span></button>)}
+                {MASTER_META.map(({ key, label }) => <button key={key} onClick={() => { setMasterKey(key); setSearch(""); setSearchBy("all"); setMasterPage(1); setSelectedStudentIds([]); }} className={`shrink-0 rounded-xl px-3 py-2 text-xs font-bold ${masterKey === key ? "bg-amber-400 text-slate-950" : "bg-current/5 opacity-70 hover:opacity-100"}`}>{label}<span className="ml-1.5 opacity-60">{masterCounts[key]}</span></button>)}
               </div>
               {masterKey === "students" && selectedStudentIds.length > 0 && (
                 <div className="flex flex-col gap-3 border-b border-current/10 bg-rose-500/[.04] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
