@@ -596,8 +596,12 @@ PRISMA_CONFIG
         log_err "Periksa koneksi PostgreSQL dari cPanel: host/port, firewall atau allowlist, SSL, dan lock migrasi."
       fi
       log_err "Prisma migration mengembalikan error — deploy dibatalkan sebelum restart."
-      log_err "Jika database existing dibuat sebelum Prisma Migrate, jalankan ulang dengan"
-      log_err "BASELINE_EXISTING_SCHEMA=1 setelah memastikan schema production identik."
+      if printf '%s\n' "$migration_output" | grep -q 'P1001'; then
+        log_err "P1001: Prisma gagal membuka koneksi database; baseline schema tidak memperbaiki error ini."
+      elif printf '%s\n' "$migration_output" | grep -q 'P3005'; then
+        log_err "P3005: baseline hanya boleh dipertimbangkan setelah schema production diverifikasi identik."
+        log_err "BASELINE_EXISTING_SCHEMA=1 hanya mengaktifkan pemeriksaan dan baseline migration awal."
+      fi
       rm -f "$config_file"
       return 1
     fi
