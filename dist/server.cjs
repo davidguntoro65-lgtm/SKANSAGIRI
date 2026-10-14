@@ -844062,7 +844062,7 @@ function registerCorePlatformRoutes(app2, requireAuth2, getAdminPassword) {
             data: {
               email: email || studentAccountEmail(nis),
               fullName,
-              ...status !== "ACTIVE" ? { status: "DISABLED" } : {}
+              status: status === "ACTIVE" ? "ACTIVE" : "DISABLED"
             }
           });
         }
