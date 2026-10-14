@@ -9,7 +9,7 @@ Voter access is intentionally limited to entering NIS or NISN; do not require a 
 
 **How to apply:** Resolve the identifier to an active student on the server, and continue enforcing the one-ballot transaction, schedule, candidate-grade, and duplicate-choice rules server-side.
 
-Each student has one ballot per election containing four choices: Ketua Umum and Ketua 1 from the four grade XI candidates, plus Ketua 3 and Ketua 4 from the four grade X candidates. The same candidate cannot be selected for both roles in either grade pair. Admin scores are tallied independently for each role.
+Each student has one ballot per election containing four choices: Ketua Umum and Ketua 1 from the four grade XI candidates, plus Ketua 2 and Ketua 3 from the four grade X candidates. The same candidate cannot be selected for both roles in either grade pair. Admin scores are tallied independently for each role.
 
 **Why:** The user specified exactly eight candidates (four from each grade), one voting right per NIS/NISN/student, and four role-specific results.
 
@@ -19,7 +19,13 @@ Existing votes from the earlier two-grade flow are retained under separate legac
 
 **Why:** This preserves previous records without assigning them an invented office or allowing existing voters to cast another ballot.
 
-**How to apply:** Do not migrate legacy votes into Ketua Umum/Ketua 1/Ketua 3/Ketua 4 unless a verified mapping is supplied.
+**How to apply:** Do not migrate legacy votes into Ketua Umum/Ketua 1/Ketua 2/Ketua 3 unless a verified mapping is supplied.
+
+The user clarified the report labels: KETUA_3 is displayed as Ketua 2 and KETUA_4 as Ketua 3; stored position IDs and vote history stay unchanged. For additional ranks 5–8, exclude candidates already listed as office winners, then use only one role score per remaining candidate: Ketua Umum for grade XI and Ketua 2 for grade X. Never sum scores across roles.
+
+**Why:** The user corrected the displayed office names and explicitly confirmed grade eligibility and that cross-position totals must not be combined.
+
+**How to apply:** Keep the historical enum mapping at the presentation layer. Rank remaining grade XI candidates from their KETUA_UMUM counts and grade X candidates from their KETUA_3 counts; surface ties instead of summing votes.
 
 Automatic voting schedules use WIB for both start and end instants, with input and displayed time precise to the second. Supplying one time requires supplying both; the end must be later than the start. With neither time set, an OPEN election stays in manual mode.
 

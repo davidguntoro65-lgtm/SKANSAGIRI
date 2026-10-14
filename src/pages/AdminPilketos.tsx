@@ -1,5 +1,7 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
-import { Clock3, ImagePlus, Loader2, Pencil, Plus, RotateCcw, Save, Trash2, Vote, X } from "lucide-react";
+import { Clock3, Download, ImagePlus, Loader2, Pencil, Plus, RotateCcw, Save, Trash2, Vote, X } from "lucide-react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { apiFetch } from "../utils/navigation";
 
 type Candidate = {
@@ -39,11 +41,241 @@ type AdminSection = "dashboard" | "candidates" | "settings" | "results";
 const POSITIONS: Array<{ id: Position; label: string; grade: "X" | "XI" }> = [
   { id: "KETUA_UMUM", label: "Ketua Umum", grade: "XI" },
   { id: "KETUA_1", label: "Ketua 1", grade: "XI" },
-  { id: "KETUA_3", label: "Ketua 3", grade: "X" },
-  { id: "KETUA_4", label: "Ketua 4", grade: "X" },
+  { id: "KETUA_3", label: "Ketua 2", grade: "X" },
+  { id: "KETUA_4", label: "Ketua 3", grade: "X" },
 ];
 
 const TOKEN_KEY = "smkn1_adm_token";
+const PILKETOS_TERM = "2026/2027";
+
+type FinalResultRow = {
+  rank: string;
+  position: string;
+  name: string;
+  votes: number | null;
+  tied?: boolean;
+  unavailable?: boolean;
+};
+
+function getCandidateVotes(candidate: Candidate, position: Position) {
+  return candidate.voteCounts?.[position] || 0;
+}
+
+function getFinalResultRows(candidates: Candidate[]): FinalResultRow[] {
+  const selectedWinnerIds = new Set<string>();
+  const hasRecordedPositionVotes = candidates.some((candidate) =>
+    POSITIONS.some((position) => getCandidateVotes(candidate, position.id) > 0),
+  );
+  if (!hasRecordedPositionVotes) {
+    return [
+      ...POSITIONS.map((position, index) => ({
+        rank: String(index + 1),
+        position: position.label,
+        name: candidates.some((candidate) => candidate.grade === position.grade) ? "Belum ada suara" : "Belum ada kandidat",
+        votes: 0,
+        unavailable: true,
+      })),
+      ...Array.from({ length: 4 }, (_, index) => ({
+        rank: `Peringkat ${index + 5}`,
+        position: "Belum dapat ditetapkan",
+        name: "—",
+        votes: null,
+        unavailable: true,
+      })),
+    ];
+  }
+
+  const officeRows: FinalResultRow[] = POSITIONS.map((position) => {
+    const eligible = candidates.filter((item) => item.grade === position.grade);
+    if (!eligible.length) {
+      return { rank: String(POSITIONS.indexOf(position) + 1), position: position.label, name: "Belum ada kandidat", votes: null, unavailable: true };
+    }
+
+    const highestVotes = Math.max(...eligible.map((item) => getCandidateVotes(item, position.id)));
+    if (highestVotes === 0) {
+      return { rank: String(POSITIONS.indexOf(position) + 1), position: position.label, name: "Belum ada suara", votes: 0, unavailable: true };
+    }
+    const winners = eligible.filter((item) => getCandidateVotes(item, position.id) === highestVotes);
+    winners.forEach((item) => selectedWinnerIds.add(item.id));
+    return {
+      rank: String(POSITIONS.indexOf(position) + 1),
+      position: position.label,
+      name: winners.map((item) => item.name).join(" / "),
+      votes: highestVotes,
+      tied: winners.length > 1,
+    };
+  });
+
+  const remainingCandidates = candidates
+    .filter((item) => !selectedWinnerIds.has(item.id))
+    .map((item) => ({
+      candidate: item,
+      votes: getCandidateVotes(item, item.grade === "XI" ? "KETUA_UMUM" : "KETUA_3"),
+    }))
+    .sort((left, right) =>
+      right.votes - left.votes ||
+      left.candidate.grade.localeCompare(right.candidate.grade) ||
+      left.candidate.candidateNo - right.candidate.candidateNo ||
+      left.candidate.name.localeCompare(right.candidate.name, "id"),
+    )
+    .slice(0, 4);
+
+  let currentRankNumber = 5;
+  const additionalRows: FinalResultRow[] = remainingCandidates.map((item, index) => {
+    const sameAsPrevious = index > 0 && remainingCandidates[index - 1].votes === item.votes;
+    const sameAsNext = index < remainingCandidates.length - 1 && remainingCandidates[index + 1].votes === item.votes;
+    if (index > 0 && !sameAsPrevious) currentRankNumber = officeRows.length + index + 1;
+    return {
+      rank: `Peringkat ${currentRankNumber}${sameAsPrevious || sameAsNext ? " (seri)" : ""}`,
+      position: item.candidate.grade === "XI" ? "Suara Ketua Umum · Kelas XI" : "Suara Ketua 2 · Kelas X",
+      name: item.candidate.name,
+      votes: item.votes,
+      tied: sameAsPrevious || sameAsNext,
+    };
+  });
+
+  while (additionalRows.length < 4) {
+    const missingRank = officeRows.length + additionalRows.length + 1;
+    additionalRows.push({
+      rank: `Peringkat ${missingRank}`,
+      position: "Belum dapat ditetapkan",
+      name: "—",
+      votes: null,
+      unavailable: true,
+    });
+  }
+  return [...officeRows, ...additionalRows];
+}
+
+function formatIndonesianNumber(value: number) {
+  return value.toLocaleString("id-ID");
+}
+
+function createPilketosResultsPdf(election: Election, stats: ParticipationStats | null, rows: FinalResultRow[]) {
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 15;
+  const dark: [number, number, number] = [28, 43, 59];
+  const gold: [number, number, number] = [181, 137, 50];
+  const slate: [number, number, number] = [89, 101, 115];
+  const pale: [number, number, number] = [246, 248, 250];
+  const white: [number, number, number] = [255, 255, 255];
+  const totalVoters = stats?.totalVoters ?? 0;
+  const totalVoted = stats?.totalVoted ?? 0;
+  const participationRate = totalVoters > 0 ? (totalVoted / totalVoters) * 100 : 0;
+
+  doc.setFillColor(...dark);
+  doc.rect(0, 0, pageWidth, 3, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(15);
+  doc.setTextColor(...dark);
+  doc.text("SMK NEGERI 1 WONOGIRI", pageWidth / 2, 14, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(...slate);
+  doc.text("PEMILIHAN KETUA OSIS · MASA BAKTI 2026/2027", pageWidth / 2, 20, { align: "center" });
+  doc.setDrawColor(...gold);
+  doc.setLineWidth(0.8);
+  doc.line(margin, 25, pageWidth - margin, 25);
+  doc.setDrawColor(...dark);
+  doc.setLineWidth(0.25);
+  doc.line(margin, 27, pageWidth - margin, 27);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(...dark);
+  doc.text("BERITA ACARA HASIL PEMILIHAN KETUA OSIS", pageWidth / 2, 36, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.text(`MASA BAKTI ${PILKETOS_TERM}`, pageWidth / 2, 42, { align: "center" });
+
+  const introduction = [
+    "Pada hari ............ tanggal ............ bulan ............ tahun ............, panitia penyelenggara",
+    `menetapkan rekapitulasi hasil ${election.title} SMK Negeri 1 Wonogiri sebagai berikut:`,
+  ];
+  doc.setFontSize(8.5);
+  doc.setTextColor(...dark);
+  doc.text(introduction, margin, 51, { lineHeightFactor: 1.45 });
+
+  autoTable(doc, {
+    startY: 60,
+    margin: { left: margin, right: margin },
+    head: [["No.", "Jabatan / Peringkat", "Nama kandidat", "Perolehan suara"]],
+    body: rows.map((row) => [
+      row.rank,
+      row.position,
+      `${row.name}${row.tied && !row.rank.startsWith("Peringkat") ? " (seri)" : ""}`,
+      row.votes === null ? "—" : formatIndonesianNumber(row.votes),
+    ]),
+    theme: "grid",
+    styles: { font: "helvetica", fontSize: 7.5, textColor: dark, cellPadding: 1.7, minCellHeight: 7.6, lineColor: [216, 222, 228], lineWidth: 0.15 },
+    headStyles: { fillColor: dark, textColor: white, fontStyle: "bold", fontSize: 7.5, halign: "center" },
+    alternateRowStyles: { fillColor: pale },
+    columnStyles: {
+      0: { cellWidth: 20, halign: "center" },
+      1: { cellWidth: 48 },
+      2: { cellWidth: 75 },
+      3: { cellWidth: 37, halign: "center" },
+    },
+  });
+
+  const resultTableEndY = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 130;
+  const summaryHeadingY = resultTableEndY + 6;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(...dark);
+  doc.text("RINGKASAN PARTISIPASI PEMILIH", margin, summaryHeadingY);
+  autoTable(doc, {
+    startY: summaryHeadingY + 2,
+    margin: { left: margin, right: margin },
+    body: [
+      ["Total pemilih terdaftar", formatIndonesianNumber(totalVoters)],
+      ["Pemilih yang menggunakan hak pilih", formatIndonesianNumber(totalVoted)],
+      ["Persentase partisipasi pemilih", `${participationRate.toFixed(2).replace(".", ",")}%`],
+      ["Suara tidak sah yang tercatat", "0"],
+    ],
+    theme: "grid",
+    styles: { font: "helvetica", fontSize: 7.5, textColor: dark, cellPadding: 1.5, minCellHeight: 6.3, lineColor: [216, 222, 228], lineWidth: 0.15 },
+    columnStyles: { 0: { cellWidth: 135, fontStyle: "bold" }, 1: { cellWidth: 45, halign: "right" } },
+  });
+
+  const summaryEndY = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? summaryHeadingY + 30;
+  const noteY = summaryEndY + 4;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(6.8);
+  doc.setTextColor(...slate);
+  const notes = [
+    "Peringkat 5–8 memakai satu rekap per kandidat: suara Ketua Umum untuk kelas XI dan suara Ketua 2 untuk kelas X.",
+    "Suara tidak sah yang tercatat berjumlah 0; ballot tidak valid ditolak sistem dan tidak disimpan sebagai suara.",
+    "Apabila terdapat perolehan sama, kandidat ditandai seri. Tanggal pelaksanaan diisi oleh panitia sebelum pengesahan.",
+  ];
+  doc.text(notes, margin, noteY, { lineHeightFactor: 1.35 });
+
+  doc.setFontSize(7.2);
+  doc.setTextColor(...dark);
+  doc.text("Berita acara ini dibuat dengan sebenarnya untuk digunakan sebagaimana mestinya.", margin, noteY + 10);
+
+  const signaturesY = Math.max(noteY + 20, 211);
+  doc.setFontSize(7.5);
+  doc.setTextColor(...dark);
+  doc.text("Wonogiri, ................................ 2026", pageWidth - margin, signaturesY, { align: "right" });
+  doc.text("Sekretaris", pageWidth * 0.29, signaturesY + 7, { align: "center" });
+  doc.text("Ketua Penyelenggara", pageWidth * 0.71, signaturesY + 7, { align: "center" });
+  doc.setDrawColor(...slate);
+  doc.setLineWidth(0.2);
+  doc.line(pageWidth * 0.12, signaturesY + 27, pageWidth * 0.46, signaturesY + 27);
+  doc.line(pageWidth * 0.54, signaturesY + 27, pageWidth * 0.88, signaturesY + 27);
+
+  doc.text("Disahkan oleh,", pageWidth / 2, signaturesY + 34, { align: "center" });
+  doc.setFont("helvetica", "bold");
+  doc.text("Waka Kesiswaan SMKN 1 Wonogiri", pageWidth / 2, signaturesY + 39, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.line(pageWidth * 0.35, signaturesY + 57, pageWidth * 0.65, signaturesY + 57);
+  doc.setFont("helvetica", "bold");
+  doc.text("Bagyo Angono S.S., M.Pd.", pageWidth / 2, signaturesY + 62, { align: "center" });
+
+  doc.save("Berita-Acara-Pilketos-SMKN-1-Wonogiri-2026-2027.pdf");
+}
 
 function toJakartaInput(value?: string | null) {
   if (!value) return "";
@@ -306,6 +538,20 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
     XI: election?.candidates.filter((item) => item.grade === "XI").length || 0,
   };
   const readyToOpen = gradeCounts.X === 4 && gradeCounts.XI === 4;
+  const finalResultRows = election ? getFinalResultRows(election.candidates) : [];
+  const totalVoters = stats?.totalVoters ?? 0;
+  const totalVoted = stats?.totalVoted ?? 0;
+  const participationRate = totalVoters > 0 ? (totalVoted / totalVoters) * 100 : 0;
+
+  function downloadResultsPdf() {
+    if (!election) return;
+    try {
+      createPilketosResultsPdf(election, stats, finalResultRows);
+      setNotice({ type: "success", text: "Berita acara hasil Pilketos berhasil diunduh dalam format PDF." });
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "PDF berita acara tidak dapat dibuat." });
+    }
+  }
 
   return (
     <div className="text-left">
@@ -368,7 +614,8 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
         </>}
         {activeSection === "results" && <section className={`rounded-3xl border p-5 sm:p-6 ${card}`}>
           <div><h3 className="font-black">Rekap skor per jabatan</h3><p className={`mt-1 text-xs ${muted}`}>Setiap kandidat memiliki skor terpisah untuk jabatan yang dipilih.</p></div>
-          {election ? <div className="mt-5 grid gap-4 xl:grid-cols-2">
+          {election ? <>
+          <div className="mt-5 grid gap-4 xl:grid-cols-2">
             {POSITIONS.map((position) => {
               const candidates = election.candidates.filter((item) => item.grade === position.grade);
               const total = candidates.reduce((sum, item) => sum + (item.voteCounts?.[position.id] || 0), 0);
@@ -384,7 +631,61 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
                 </div>
               </div>;
             })}
-          </div> : <div className={`mt-5 rounded-2xl border border-dashed border-current/15 p-8 text-center text-sm ${muted}`}>Belum ada data pemilihan untuk ditampilkan.</div>}
+          </div>
+          <section className={`mt-5 rounded-2xl border border-amber-400/25 bg-amber-400/[.04] p-4 sm:p-5`}>
+            <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+              <div>
+                <h4 className="font-black">Hasil Final Pilketos {PILKETOS_TERM}</h4>
+                <p className={`mt-1 max-w-3xl text-xs leading-relaxed ${muted}`}>
+                  Empat pemenang dihitung dari suara jabatannya masing-masing. Peringkat 5–8 mengecualikan pemenang yang sudah tercantum; kandidat kelas XI memakai suara Ketua Umum dan kelas X memakai suara Ketua 2. Suara antarjabatan tidak dijumlahkan.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={downloadResultsPdf}
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-black text-slate-950 transition hover:bg-amber-300"
+              >
+                <Download className="h-4 w-4" /> Unduh berita acara PDF
+              </button>
+            </div>
+
+            <div className="mt-4 overflow-hidden rounded-xl border border-current/10">
+              <div className={`grid grid-cols-[minmax(0,1fr)_auto] gap-3 px-3 py-2.5 text-[10px] font-black uppercase tracking-wider ${dark ? "bg-white/[.06]" : "bg-slate-50"}`}>
+                <span>Jabatan / peringkat · nama kandidat</span><span>Perolehan</span>
+              </div>
+              <div className="divide-y divide-current/10">
+                {finalResultRows.map((row, index) => (
+                  <div key={`${row.rank}-${row.position}-${index}`} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2.5">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-black uppercase tracking-wide text-amber-600">{row.rank} · {row.position}</p>
+                      <p className="mt-0.5 truncate text-sm font-bold">{row.name}{row.tied && !row.rank.startsWith("Peringkat") ? " (seri)" : ""}</p>
+                    </div>
+                    <span className="rounded-full bg-amber-400/15 px-3 py-1 text-sm font-black text-amber-600">
+                      {row.votes === null ? "—" : `${formatIndonesianNumber(row.votes)} suara`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              {[
+                { label: "Total pemilih terdaftar", value: formatIndonesianNumber(totalVoters) },
+                { label: "Menggunakan hak pilih", value: formatIndonesianNumber(totalVoted) },
+                { label: "Persentase pemilih", value: `${participationRate.toFixed(2).replace(".", ",")}%` },
+                { label: "Suara tidak sah tercatat", value: "0" },
+              ].map((metric) => (
+                <div key={metric.label} className={`rounded-xl border border-current/10 px-3 py-3 ${dark ? "bg-slate-950/30" : "bg-white"}`}>
+                  <p className={`text-[9px] font-black uppercase tracking-wider ${muted}`}>{metric.label}</p>
+                  <p className="mt-1 text-lg font-black text-amber-600">{metric.value}</p>
+                </div>
+              ))}
+            </div>
+            <p className={`mt-3 text-[10px] leading-relaxed ${muted}`}>
+              Persentase dihitung dari pemilih unik yang telah menggunakan hak pilih dibanding total siswa aktif. Ballot tidak valid ditolak oleh sistem dan tidak disimpan; angka 0 menunjukkan suara tidak sah yang tercatat.
+            </p>
+          </section>
+          </> : <div className={`mt-5 rounded-2xl border border-dashed border-current/15 p-8 text-center text-sm ${muted}`}>Belum ada data pemilihan untuk ditampilkan.</div>}
         </section>}
         {activeSection === "settings" && <form onSubmit={saveElection} className={`rounded-3xl border p-5 sm:p-6 ${card}`}>
           <div className="flex items-center gap-3"><Vote className="h-5 w-5 text-amber-500" /><div><h3 className="font-black">Pengaturan pemilihan</h3><p className={`text-xs ${muted}`}>Informasi yang tampil pada landing page.</p></div></div>
