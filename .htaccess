@@ -7,6 +7,14 @@
     RewriteEngine On
     RewriteBase /id/
 
+    # Block failed-deploy backups and server-only build output before the
+    # physical-file and SPA rules can expose them.
+    # BEGIN SMKN DEPLOY REWRITE GUARD
+    RewriteRule ^\.deploy_protect_[^/]+(/|$) - [F,L,NC]
+    RewriteRule ^dist/server\.cjs(\.map)?$ - [F,L,NC]
+    RewriteRule ^dist/.*\.map$ - [F,L,NC]
+    # END SMKN DEPLOY REWRITE GUARD
+
     # [A0] Redirect /id (no trailing slash) → /id/ so Apache/LiteSpeed enters this .htaccess
     RewriteCond %{REQUEST_URI} ^/id$
     RewriteRule ^ /id/ [R=301,L]
@@ -47,9 +55,16 @@
 </IfModule>
 
 # ─── 2. SECURITY ─────────────────────────────────────────────────────────────
-<FilesMatch "\.(env|ts|tsx|md|lock|log)$">
+<FilesMatch "\.(env|ts|tsx|md|lock|log)(\.[0-9]+)?$">
     Require all denied
 </FilesMatch>
+
+<FilesMatch "^(app\.js|server\.cjs(\.map)?|.*\.map)$">
+    Require all denied
+</FilesMatch>
+# BEGIN SMKN DEPLOY FILE GUARD
+# This marker keeps deploy.sh from adding duplicate file-deny rules.
+# END SMKN DEPLOY FILE GUARD
 
 <IfModule mod_rewrite.c>
     RewriteRule ^src/.*$ - [F,L]

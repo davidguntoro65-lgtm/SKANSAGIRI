@@ -36,6 +36,8 @@
 set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ACCOUNT_HOME="$(cd "$APP_DIR/../.." && pwd -P)"
+PRIVATE_DEPLOY_BACKUP_ROOT="$ACCOUNT_HOME/.smkn-deploy-protect"
 LOG_FILE="$APP_DIR/deploy.log"
 MAX_LOG_LINES=2000
 
@@ -97,7 +99,15 @@ activate_cpanel_node_environment() {
     # its activation script. Calling nodevenv/bin/node directly can fail before
     # Prisma starts (for example, by looking for app-local activate helpers).
     # shellcheck disable=SC1090
-    if ! . "$activate_script"; then
+    local nounset_was_enabled=0 activation_status=0
+    case "$-" in
+      *u*) nounset_was_enabled=1; set +u ;;
+    esac
+    . "$activate_script" || activation_status=$?
+    if [ "$nounset_was_enabled" -eq 1 ]; then
+      set -u
+    fi
+    if [ "$activation_status" -ne 0 ]; then
       log_err "Gagal mengaktifkan environment Node cPanel: $activate_script"
       return 1
     fi
@@ -137,6 +147,7 @@ rotate_log() {
 backup_protected() {
   local protect_dir="$1"
   mkdir -p "$protect_dir" || { log_err "Tidak bisa membuat direktori backup: $protect_dir"; return 1; }
+  chmod 700 "$protect_dir" || { log_err "Tidak bisa mengunci izin direktori backup: $protect_dir"; return 1; }
   local backup_ok=1
   for item in "${PROTECTED_FILES[@]}"; do
     local src="$APP_DIR/$item"
@@ -226,6 +237,120 @@ verify_restore() {
   return 0
 }
 
+ensure_private_backup_root() {
+  if ! mkdir -p "$PRIVATE_DEPLOY_BACKUP_ROOT"; then
+    log_err "Tidak bisa membuat direktori backup privat di luar webroot."
+    return 1
+  fi
+  if ! chmod 700 "$PRIVATE_DEPLOY_BACKUP_ROOT"; then
+    log_err "Tidak bisa mengunci izin direktori backup privat."
+    return 1
+  fi
+}
+
+MOVED_BACKUP_DIR=""
+relocate_backup_private() {
+  local source="$1" base destination
+  MOVED_BACKUP_DIR="$source"
+  case "$source" in
+    "$APP_DIR"/.deploy_protect_*) ;;
+    *) return 0 ;;
+  esac
+  [ -d "$source" ] || return 0
+  ensure_private_backup_root || return 1
+
+  base="$(basename "$source")"
+  destination="$PRIVATE_DEPLOY_BACKUP_ROOT/$base"
+  if [ -e "$destination" ]; then
+    destination="$PRIVATE_DEPLOY_BACKUP_ROOT/$base.migrated.$(date +%s).$$"
+  fi
+  if ! mv -T -- "$source" "$destination"; then
+    log_err "Tidak bisa memindahkan backup keluar dari webroot: $source"
+    return 1
+  fi
+  if ! chmod 700 "$destination"; then
+    log_err "Backup sudah dipindahkan, tetapi izin privat gagal diterapkan: $destination"
+    MOVED_BACKUP_DIR="$destination"
+    return 1
+  fi
+  MOVED_BACKUP_DIR="$destination"
+  log_ok "Backup dipindahkan ke penyimpanan privat di luar webroot."
+}
+
+relocate_legacy_backup_dirs() {
+  local legacy_dir
+  for legacy_dir in "$APP_DIR"/.deploy_protect_*; do
+    [ -d "$legacy_dir" ] || continue
+    if ! relocate_backup_private "$legacy_dir"; then
+      return 1
+    fi
+  done
+}
+
+install_production_access_guards() {
+  local htaccess="$APP_DIR/.htaccess" temp
+  [ -f "$htaccess" ] || {
+    log_err ".htaccess tidak ditemukan; aturan keamanan tidak dapat diterapkan."
+    return 1
+  }
+
+  if ! grep -qF "# BEGIN SMKN DEPLOY REWRITE GUARD" "$htaccess"; then
+    temp="$(mktemp "$APP_DIR/.htaccess.guard.XXXXXX")" || {
+      log_err "Tidak bisa membuat file sementara untuk mengamankan .htaccess."
+      return 1
+    }
+    if ! awk '
+      {
+        print
+        if (!inserted && tolower($0) ~ /^[[:space:]]*rewriteengine[[:space:]]+on[[:space:]]*$/) {
+          print "    # BEGIN SMKN DEPLOY REWRITE GUARD"
+          print "    RewriteRule ^\\.deploy_protect_[^/]+(/|$) - [F,L,NC]"
+          print "    RewriteRule ^dist/server\\.cjs(\\.map)?$ - [F,L,NC]"
+          print "    RewriteRule ^dist/.*\\.map$ - [F,L,NC]"
+          print "    # END SMKN DEPLOY REWRITE GUARD"
+          inserted=1
+        }
+      }
+      END { if (!inserted) exit 42 }
+    ' "$htaccess" > "$temp"; then
+      rm -f "$temp"
+      log_err "Tidak menemukan RewriteEngine On di .htaccess; deploy dihentikan demi keamanan."
+      return 1
+    fi
+    if ! chmod --reference="$htaccess" "$temp" || ! mv -f -- "$temp" "$htaccess"; then
+      rm -f "$temp"
+      log_err "Tidak bisa memasang aturan rewrite keamanan di .htaccess."
+      return 1
+    fi
+  fi
+
+  if ! grep -qF "# BEGIN SMKN DEPLOY FILE GUARD" "$htaccess"; then
+    temp="$(mktemp "$APP_DIR/.htaccess.guard.XXXXXX")" || {
+      log_err "Tidak bisa membuat file sementara untuk aturan file .htaccess."
+      return 1
+    }
+    if ! cat "$htaccess" > "$temp" || ! cat >> "$temp" <<'ACCESS_GUARD'
+
+# BEGIN SMKN DEPLOY FILE GUARD
+<FilesMatch "^(app\.js|server\.cjs(\.map)?|.*\.map|.*\.log(\.[0-9]+)?)$">
+    Require all denied
+</FilesMatch>
+# END SMKN DEPLOY FILE GUARD
+ACCESS_GUARD
+    then
+      rm -f "$temp"
+      log_err "Tidak bisa menulis aturan file keamanan ke .htaccess."
+      return 1
+    fi
+    if ! chmod --reference="$htaccess" "$temp" || ! mv -f -- "$temp" "$htaccess"; then
+      rm -f "$temp"
+      log_err "Tidak bisa memasang aturan file keamanan di .htaccess."
+      return 1
+    fi
+  fi
+  log_ok "Akses HTTP ke backup, server bundle, source map, dan log terlindungi."
+}
+
 # =============================================================================
 # FASE 2 — dijalankan setelah git reset --hard dari inode BARU
 # Dipanggil via: exec bash "$0" --post-reset PROTECT_DIR BRANCH COMMIT_BEFORE
@@ -257,11 +382,25 @@ if [ "${1:-}" = "--post-reset" ]; then
   }
   trap cleanup_phase2 EXIT
 
-  # ── Pulihkan file yang dilindungi ─────────────────────────────────────────
-  log_info "[4/6] Memulihkan file yang dilindungi..."
+  # ── Pindahkan backup lama keluar webroot sebelum pemulihan ─────────────────
+  log_info "[4/6] Mengamankan backup dan memulihkan file yang dilindungi..."
+  if ! relocate_backup_private "$PROTECT_DIR"; then
+    log_err "Backup pemulihan tidak berhasil dipindahkan ke lokasi privat."
+    exit 1
+  fi
+  PROTECT_DIR="$MOVED_BACKUP_DIR"
+  if ! relocate_legacy_backup_dirs; then
+    log_err "Backup deploy lama tidak berhasil dipindahkan; deploy dibatalkan."
+    exit 1
+  fi
+
   if ! restore_protected "$PROTECT_DIR"; then
     log_err "Restore gagal. Backup ada di: $PROTECT_DIR"
     log_err "Backup konfigurasi tetap tersedia di: $PROTECT_DIR"
+    exit 1
+  fi
+  if ! install_production_access_guards; then
+    log_err "Aturan akses .htaccess gagal diterapkan; deploy dibatalkan."
     exit 1
   fi
 
@@ -479,6 +618,9 @@ if [ "${1:-}" = "--post-reset" ]; then
 
       if (
         cd "${PRISMA_RUNNER_CWD:-$APP_DIR}" &&
+          CHECKPOINT_DISABLE=1 \
+          TOKIO_WORKER_THREADS="${PRISMA_TOKIO_WORKER_THREADS:-1}" \
+          RUST_BACKTRACE="${PRISMA_RUST_BACKTRACE:-1}" \
           PRISMA_APP_DIR="$APP_DIR" "$node_bin" "$APP_DIR/scripts/run-with-timeout.cjs" \
             "$prisma_timeout_seconds" "${PRISMA_RUNNER[@]}" "$@"
       ) 2>&1 |
@@ -497,6 +639,7 @@ if [ "${1:-}" = "--post-reset" ]; then
     }
 
     log_info "Memastikan Prisma CLI dapat dijalankan ($PRISMA_RUNNER_LABEL)..."
+    log_info "Prisma CLI resource settings: checkpoint disabled, Tokio workers=${PRISMA_TOKIO_WORKER_THREADS:-1}, Rust backtrace enabled."
     if ! run_prisma_logged prisma-cli --version; then
       return 1
     fi
@@ -504,9 +647,12 @@ if [ "${1:-}" = "--post-reset" ]; then
       if [ "$PRISMA_COMMAND_STATUS" -eq 124 ] || [ "$PRISMA_COMMAND_STATUS" -eq 137 ]; then
         log_err "Pemeriksaan Prisma CLI melewati batas ${prisma_timeout_seconds} detik."
         log_err "Database belum dihubungi; periksa CLI bundle dan kompatibilitas Node/engine cPanel."
-      else
-        log_err "Prisma CLI gagal dijalankan (exit $PRISMA_COMMAND_STATUS); lihat output [prisma-cli] di atas."
       fi
+      if printf '%s\n' "$PRISMA_COMMAND_OUTPUT" |
+        grep -qE 'Resource temporarily unavailable|EAGAIN|failed to spawn thread'; then
+        log_err "Prisma CLI atau proses turunannya mencapai batas proses/thread hosting."
+      fi
+      log_err "Prisma CLI gagal dijalankan (exit $PRISMA_COMMAND_STATUS); lihat output [prisma-cli] di atas."
       return 1
     fi
 
@@ -594,6 +740,10 @@ PRISMA_CONFIG
       if [ "$migration_status" -eq 124 ] || [ "$migration_status" -eq 137 ]; then
         log_err "Migrasi melewati batas ${prisma_timeout_seconds} detik setelah Prisma CLI berhasil dijalankan."
         log_err "Periksa koneksi PostgreSQL dari cPanel: host/port, firewall atau allowlist, SSL, dan lock migrasi."
+      fi
+      if printf '%s\n' "$migration_output" |
+        grep -qE 'Resource temporarily unavailable|EAGAIN|failed to spawn thread|Could not parse schema engine response'; then
+        log_err "Schema engine gagal membuat proses/thread atau mengembalikan panic; periksa batas proses hosting dan backtrace di atas."
       fi
       log_err "Prisma migration mengembalikan error — deploy dibatalkan sebelum restart."
       if printf '%s\n' "$migration_output" | grep -q 'P1001'; then
@@ -751,7 +901,17 @@ fi
 # FASE 1 — Jalankan git ops, lalu handoff ke fase 2
 # =============================================================================
 BRANCH="${1:-main}"
-PROTECT_DIR="$APP_DIR/.deploy_protect_$$"
+if ! ensure_private_backup_root; then
+  exit 1
+fi
+PROTECT_DIR="$(mktemp -d "$PRIVATE_DEPLOY_BACKUP_ROOT/deploy.XXXXXX")" || {
+  log_err "Tidak bisa membuat direktori backup deploy privat."
+  exit 1
+}
+chmod 700 "$PROTECT_DIR" || {
+  log_err "Tidak bisa mengunci izin direktori backup deploy privat."
+  exit 1
+}
 
 on_error() {
   local line="$1"
