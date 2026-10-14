@@ -42,7 +42,7 @@ const REQUIRED_HEADERS: Record<ImportType, string[]> = {
   mapel: ["code", "name"],
   kelas: ["code", "name", "tingkat", "kodeTahunAjaran"],
   guru: ["nip", "namaLengkap"],
-  siswa: ["nisn", "nis", "namaLengkap", "kodeKelas", "kodeTahunAjaran", "password"],
+  siswa: ["nisn", "nis", "namaLengkap", "kodeKelas", "kodeTahunAjaran"],
   "assignment-guru": ["nip", "kodeMapel", "kodeKelas", "kodeTahunAjaran"],
   "enrollment-siswa": ["nisn", "kodeKelas", "kodeTahunAjaran"],
 };
@@ -141,7 +141,9 @@ function hashPasswordAsync(password: string, salt = crypto.randomBytes(16).toStr
 }
 
 function studentAccountEmail(nis: string) {
-  return `siswa.${nis.toLowerCase().replace(/[^a-z0-9._-]/g, "-")}@akun.smkn1wonogiri.local`;
+  const normalizedNis = nis.toLowerCase().replace(/[^a-z0-9._-]/g, "-");
+  const uniqueSuffix = crypto.createHash("sha256").update(nis).digest("hex").slice(0, 12);
+  return `siswa.${normalizedNis}.${uniqueSuffix}@akun.smkn1wonogiri.local`;
 }
 
 function maskPreviewRows(rows: PreviewRow[]) {
@@ -156,8 +158,20 @@ function asBoolean(value: unknown) {
 }
 
 function parseDate(value: unknown): Date | null {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const date = new Date(Date.UTC(1899, 11, 30) + Math.floor(value) * 24 * 60 * 60 * 1000);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
   const text = clean(value);
   if (!text) return null;
+  const localDate = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (localDate) {
+    const [, day, month, year] = localDate;
+    const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+    if (date.getUTCFullYear() !== Number(year) || date.getUTCMonth() !== Number(month) - 1 || date.getUTCDate() !== Number(day)) return null;
+    return date;
+  }
   const date = new Date(text);
   return Number.isNaN(date.getTime()) ? null : date;
 }
@@ -185,6 +199,7 @@ function parseWorkbook(fileBase64: string, type: ImportType) {
     });
     return values;
   }).filter((row) => Object.values(row).some((value) => clean(value)));
+  if (!rows.length) throw new Error("File belum berisi baris data untuk diimpor.");
   return { checksum, rows };
 }
 
@@ -195,7 +210,14 @@ async function referenceMaps() {
     db.subject.findMany({ select: { id: true, code: true } }),
     db.academicClass.findMany({ select: { id: true, code: true, academicYearId: true } }),
     db.coreTeacher.findMany({ select: { id: true, nip: true } }),
-    db.coreStudent.findMany({ select: { id: true, nisn: true, nis: true } }),
+    db.coreStudent.findMany({
+      select: {
+        id: true,
+        nisn: true,
+        nis: true,
+        user: { select: { id: true, email: true } },
+      },
+    }),
   ]);
   return {
     years: new Map(years.map((item) => [item.code, item])),
@@ -210,10 +232,22 @@ async function referenceMaps() {
 
 async function validateRows(type: ImportType, rows: Record<string, unknown>[]): Promise<PreviewRow[]> {
   const refs = await referenceMaps();
+  const accountEmails = type === "siswa"
+    ? [...new Set(rows.map((values) => {
+      const nisn = clean(values.nisn);
+      const existing = refs.students.get(nisn) as { user?: { email: string } | null } | undefined;
+      return clean(values.email).toLowerCase() || existing?.user?.email || studentAccountEmail(clean(values.nis));
+    }))]
+    : [];
+  const emailOwners = accountEmails.length
+    ? await db.coreUser.findMany({ where: { email: { in: accountEmails } }, select: { id: true, email: true } })
+    : [];
+  const emailOwnerByEmail = new Map(emailOwners.map((user) => [user.email, user]));
   const seen = new Set<string>();
   const seenStudentNisn = new Set<string>();
   const seenStudentNis = new Set<string>();
   const seenStudentEmails = new Set<string>();
+  const seenAccountEmails = new Set<string>();
   const result: PreviewRow[] = [];
   const keyFor = (values: Record<string, unknown>) => {
     switch (type) {
@@ -240,13 +274,23 @@ async function validateRows(type: ImportType, rows: Record<string, unknown>[]): 
       const nisn = clean(values.nisn);
       const nis = clean(values.nis);
       const email = clean(values.email).toLowerCase();
+      const existingStudent = refs.students.get(nisn) as { user?: { id: string; email: string } | null } | undefined;
+      const accountEmail = email || existingStudent?.user?.email || studentAccountEmail(nis);
       if (seenStudentNisn.has(nisn)) errors.push(`NISN "${nisn}" duplikat di dalam file.`);
       if (seenStudentNis.has(nis)) errors.push(`NIS "${nis}" duplikat di dalam file.`);
       if (email && seenStudentEmails.has(email)) errors.push(`Email "${email}" duplikat di dalam file.`);
+      if (seenAccountEmails.has(accountEmail)) errors.push(`Email akun "${accountEmail}" duplikat di dalam file.`);
       seenStudentNisn.add(nisn);
       seenStudentNis.add(nis);
       if (email) seenStudentEmails.add(email);
-      if (clean(values.password).length < 8) errors.push("Password awal wajib diisi minimal 8 karakter.");
+      seenAccountEmails.add(accountEmail);
+      const emailOwner = emailOwnerByEmail.get(accountEmail);
+      if (emailOwner && emailOwner.id !== existingStudent?.user?.id) {
+        errors.push(`Email akun "${accountEmail}" sudah digunakan akun lain.`);
+      }
+      const password = clean(values.password);
+      if (password && password.length < 8) errors.push("Password awal harus minimal 8 karakter.");
+      if (!password && !existingStudent?.user?.id) errors.push("Password awal wajib diisi minimal 8 karakter untuk akun baru.");
       const existingByNis = refs.studentsByNis.get(nis) as { nisn: string } | undefined;
       if (existingByNis && existingByNis.nisn !== nisn) errors.push(`NIS "${nis}" sudah digunakan siswa lain.`);
     }
@@ -268,6 +312,13 @@ async function validateRows(type: ImportType, rows: Record<string, unknown>[]): 
       if (!refs.students.has(clean(values.nisn))) errors.push(`NISN "${clean(values.nisn)}" tidak ditemukan.`);
       if (!refs.classes.has(clean(values.kodeKelas))) errors.push(`Kode kelas "${clean(values.kodeKelas)}" tidak ditemukan.`);
       if (!refs.years.has(clean(values.kodeTahunAjaran)) ) errors.push(`Kode tahun ajaran "${clean(values.kodeTahunAjaran)}" tidak ditemukan.`);
+    }
+    if (["siswa", "assignment-guru", "enrollment-siswa"].includes(type)) {
+      const classroom = refs.classes.get(clean(values.kodeKelas));
+      const year = refs.years.get(clean(values.kodeTahunAjaran));
+      if (classroom && year && classroom.academicYearId !== year.id) {
+        errors.push(`Kelas "${clean(values.kodeKelas)}" bukan bagian dari tahun ajaran "${clean(values.kodeTahunAjaran)}".`);
+      }
     }
     if (values.status && !VALID_STATUSES.has(clean(values.status).toUpperCase())) errors.push("Status harus ACTIVE, INACTIVE, atau ARCHIVED.");
     result.push({ row: index + 2, values, status: errors.length ? (errors.some((error) => error.startsWith("Duplikat")) ? "DUPLICATE" : "ERROR") : "VALID", errors });
@@ -291,18 +342,42 @@ async function audit(action: string, entity: string, entityId: string | undefine
   await db.coreAuditLog.create({ data: { action, entity, entityId, actor: "ADMIN_SESSION", metadata: metadata as any } });
 }
 
-async function commitRows(type: ImportType, rows: PreviewRow[], actor: string) {
+async function commitRows(type: ImportType, rows: PreviewRow[], actor: string, jobId: string) {
   const validRows = rows.filter((row) => row.status === "VALID" || row.status === "UNCHANGED");
-  const preparedRows = await Promise.all(validRows.map(async (row) => ({
-    ...row,
-    ...(type === "siswa" ? { passwordHash: await hashPasswordAsync(clean(row.values.password)) } : {}),
-  })));
+  const preparedRows: Array<PreviewRow & { passwordHash?: string }> = new Array(validRows.length);
+  let nextRow = 0;
+  const hashWorkers = Math.min(4, validRows.length);
+  await Promise.all(Array.from({ length: hashWorkers }, async () => {
+    while (nextRow < validRows.length) {
+      const index = nextRow++;
+      const row = validRows[index];
+      const password = type === "siswa" ? clean(row.values.password) : "";
+      const passwordHash = password ? await hashPasswordAsync(password) : undefined;
+      preparedRows[index] = { ...row, ...(passwordHash ? { passwordHash } : {}) };
+    }
+  }));
 
   return db.$transaction(async (tx) => {
+    const claimedJob = await tx.coreImportJob.updateMany({
+      where: { id: jobId, templateType: type, status: "PREVIEWED" },
+      data: { status: "COMMITTED", committedAt: new Date(), successRows: validRows.length, errorRows: 0 },
+    });
+    if (claimedJob.count !== 1) throw new Error("IMPORT_ALREADY_PROCESSED");
+
     let success = 0;
     const studentRoleAssignments: { userId: string; roleId: string }[] = [];
     let studentRoleId: string | null = null;
-    let studentsByNisn = new Map<string, { id: string; user: { id: string; email: string } | null }>();
+    let studentsByNisn = new Map<string, {
+      id: string;
+      nisn: string;
+      email: string | null;
+      phone: string | null;
+      gender: string | null;
+      birthPlace: string | null;
+      birthDate: Date | null;
+      status: "ACTIVE" | "INACTIVE" | "ARCHIVED";
+      user: { id: string; email: string; status: "INVITED" | "ACTIVE" | "DISABLED" } | null;
+    }>();
     let yearsByCode = new Map<string, { id: string }>();
     let classesByCode = new Map<string, { id: string }>();
     let usersByEmail = new Map<string, { id: string; email: string }>();
@@ -314,7 +389,17 @@ async function commitRows(type: ImportType, rows: PreviewRow[], actor: string) {
       const [students, years, classes, role] = await Promise.all([
         tx.coreStudent.findMany({
           where: { nisn: { in: nisns } },
-          select: { id: true, nisn: true, user: { select: { id: true, email: true } } },
+          select: {
+            id: true,
+            nisn: true,
+            email: true,
+            phone: true,
+            gender: true,
+            birthPlace: true,
+            birthDate: true,
+            status: true,
+            user: { select: { id: true, email: true, status: true } },
+          },
         }),
         tx.academicYear.findMany({ where: { code: { in: yearCodes } }, select: { id: true, code: true } }),
         tx.academicClass.findMany({ where: { code: { in: classCodes } }, select: { id: true, code: true } }),
@@ -340,7 +425,8 @@ async function commitRows(type: ImportType, rows: PreviewRow[], actor: string) {
     }
 
     for (const { values, passwordHash } of preparedRows) {
-      const status = statusValue(values.status) as "ACTIVE" | "INACTIVE" | "ARCHIVED";
+      const existingStudent = type === "siswa" ? studentsByNisn.get(clean(values.nisn)) : undefined;
+      const status = (clean(values.status) ? statusValue(values.status) : existingStudent?.status || "ACTIVE") as "ACTIVE" | "INACTIVE" | "ARCHIVED";
       if (type === "tahun-ajaran") {
         const code = clean(values.code);
         if (asBoolean(values.isActive)) await tx.academicYear.updateMany({ data: { isActive: false }, where: { isActive: true } });
@@ -366,16 +452,31 @@ async function commitRows(type: ImportType, rows: PreviewRow[], actor: string) {
       } else if (type === "siswa") {
         const nisn = clean(values.nisn);
         const nis = clean(values.nis);
-        const email = clean(values.email).toLowerCase() || null;
-        const phone = clean(values.noTelp || values.noHp) || null;
-        if (!passwordHash) throw new Error("Hash password awal siswa tidak berhasil disiapkan.");
-        const existingUser = studentsByNisn.get(nisn)?.user || null;
-        const accountEmail = email || existingUser?.email || studentAccountEmail(nis);
+        const suppliedEmail = clean(values.email).toLowerCase() || null;
+        const email = suppliedEmail || existingStudent?.email || null;
+        const phone = clean(values.noTelp || values.noHp) || existingStudent?.phone || null;
+        const gender = clean(values.jenisKelamin) || existingStudent?.gender || null;
+        const birthPlace = clean(values.tempatLahir) || existingStudent?.birthPlace || null;
+        const birthDate = clean(values.tanggalLahir) ? parseDate(values.tanggalLahir) : existingStudent?.birthDate || null;
+        const existingUser = existingStudent?.user || null;
+        const accountEmail = suppliedEmail || existingUser?.email || studentAccountEmail(nis);
+        const userStatus = clean(values.status) || !existingUser
+          ? (status === "ACTIVE" ? "ACTIVE" : "DISABLED")
+          : undefined;
         const emailOwner = usersByEmail.get(accountEmail);
         if (emailOwner && emailOwner.id !== existingUser?.id) throw new Error(`Email akun siswa "${accountEmail}" sudah digunakan akun lain.`);
+        if (!existingUser && !passwordHash) throw new Error("Hash password awal siswa tidak berhasil disiapkan.");
         const coreUser = existingUser
-          ? await tx.coreUser.update({ where: { id: existingUser.id }, data: { ...(email ? { email } : {}), fullName: clean(values.namaLengkap), status: status === "ACTIVE" ? "ACTIVE" : "DISABLED", passwordHash, passwordChangeRecommended: true } })
-          : await tx.coreUser.create({ data: { email: accountEmail, fullName: clean(values.namaLengkap), status: status === "ACTIVE" ? "ACTIVE" : "DISABLED", passwordHash, passwordChangeRecommended: true } });
+          ? await tx.coreUser.update({
+            where: { id: existingUser.id },
+            data: {
+              ...(suppliedEmail ? { email: suppliedEmail } : {}),
+              fullName: clean(values.namaLengkap),
+              ...(userStatus ? { status: userStatus } : {}),
+              ...(passwordHash ? { passwordHash, passwordChangeRecommended: true } : {}),
+            },
+          })
+          : await tx.coreUser.create({ data: { email: accountEmail, fullName: clean(values.namaLengkap), status: userStatus!, passwordHash: passwordHash!, passwordChangeRecommended: true } });
         if (existingUser?.email !== coreUser.email) {
           const formerOwner = existingUser?.email ? usersByEmail.get(existingUser.email) : undefined;
           if (formerOwner?.id === existingUser?.id) usersByEmail.delete(existingUser!.email);
@@ -383,8 +484,8 @@ async function commitRows(type: ImportType, rows: PreviewRow[], actor: string) {
         usersByEmail.set(accountEmail, { id: coreUser.id, email: accountEmail });
         const student = await tx.coreStudent.upsert({
           where: { nisn },
-          update: { nis, fullName: clean(values.namaLengkap), email, phone, gender: clean(values.jenisKelamin) || null, birthPlace: clean(values.tempatLahir) || null, birthDate: parseDate(values.tanggalLahir), status, userId: coreUser.id },
-          create: { nisn, nis, fullName: clean(values.namaLengkap), email, phone, gender: clean(values.jenisKelamin) || null, birthPlace: clean(values.tempatLahir) || null, birthDate: parseDate(values.tanggalLahir), status, userId: coreUser.id },
+          update: { nis, fullName: clean(values.namaLengkap), email, phone, gender, birthPlace, birthDate, status, userId: coreUser.id },
+          create: { nisn, nis, fullName: clean(values.namaLengkap), email, phone, gender, birthPlace, birthDate, status, userId: coreUser.id },
         });
         if (studentRoleId) studentRoleAssignments.push({ userId: coreUser.id, roleId: studentRoleId });
         const year = yearsByCode.get(clean(values.kodeTahunAjaran));
@@ -1810,10 +1911,12 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
       const rows = await validateRows(type, parsed.rows);
       const invalid = rows.filter((row) => row.status === "ERROR" || row.status === "DUPLICATE");
       if (invalid.length) return fail(res, 422, "VALIDATION_FAILED", "Perbaiki semua error sebelum commit.", { errors: maskPreviewRows(invalid.slice(0, 200)) });
-      const successRows = await commitRows(type, rows, "ADMIN_SESSION");
-      const updated = await db.coreImportJob.update({ where: { id: job.id }, data: { status: "COMMITTED", successRows, errorRows: 0, committedAt: new Date() } });
-      return ok(res, { jobId: updated.id, status: updated.status, successRows });
+      const successRows = await commitRows(type, rows, "ADMIN_SESSION", job.id);
+      return ok(res, { jobId: job.id, status: "COMMITTED", successRows });
     } catch (error) {
+      if (error instanceof Error && error.message === "IMPORT_ALREADY_PROCESSED") {
+        return fail(res, 409, "IMPORT_ALREADY_PROCESSED", "Import ini sudah diproses.");
+      }
       return fail(res, 500, "COMMIT_FAILED", error instanceof Error ? error.message : "Import gagal disimpan.");
     }
   });
