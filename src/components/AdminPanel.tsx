@@ -914,6 +914,20 @@ export default function AdminPanel({
       showFeedback("Judul Warta, Cuplikan Kutipan, dan Gambar Utama wajib diisi!", "error");
       return;
     }
+    const sourceUrl = item.sourceUrl?.trim() || item.excerpt.match(/https?:\/\/[^\s<>"']+/i)?.[0]?.replace(/[),.;!?]+$/, "");
+    if (!sourceUrl) {
+      showFeedback("Tambahkan tautan sumber agar kartu berita dapat dibuka.", "error");
+      return;
+    }
+    try {
+      const parsedSourceUrl = new URL(sourceUrl);
+      if (parsedSourceUrl.protocol !== "http:" && parsedSourceUrl.protocol !== "https:") {
+        throw new Error("unsupported protocol");
+      }
+    } catch {
+      showFeedback("Tautan sumber harus berupa URL http:// atau https:// yang valid.", "error");
+      return;
+    }
     let updated: NewsArticle[];
     if (isNew) {
       const id = "news-" + Date.now();
@@ -1620,7 +1634,7 @@ export default function AdminPanel({
                         });
                       } else if (activeTab === "news") {
                         setEditingItem({
-                          id: "", category: "PRESTASI NASIONAL", title: "", excerpt: "",
+                          id: "", category: "PRESTASI NASIONAL", title: "", excerpt: "", sourceUrl: "",
                           date: getTodayNewsDate(), readTime: "4 min read",
                           image: "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=800&q=80",
                           author: "Superadmin Humas", authorRole: "Koordinator Publikasi"
@@ -2581,6 +2595,21 @@ export default function AdminPanel({
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                          <label className="block text-xs font-mono uppercase tracking-wider text-slate-400 mb-2">Tautan Sumber Berita</label>
+                          <input
+                            type="url"
+                            value={editingItem.sourceUrl || ""}
+                            onChange={(e) => setEditingItem({ ...editingItem, sourceUrl: e.target.value })}
+                            placeholder="https://alamat-sumber-berita..."
+                            className={`w-full text-xs p-3 rounded-lg border outline-none ${
+                              isDarkTheme ? "bg-slate-950 border-white/5 text-white focus:border-amber-500" : "bg-slate-50 border-slate-200 focus:border-amber-600"
+                            }`}
+                          />
+                          <p className={`mt-2 text-xs leading-relaxed ${isDarkTheme ? "text-slate-500" : "text-slate-500"}`}>
+                            Tautan ini wajib agar kartu dapat dibuka. Jika kosong, URL dari narasi berita digunakan bila tersedia.
+                          </p>
+                        </div>
                         <div>
                           <label className="block text-xs font-mono uppercase tracking-wider text-slate-400 mb-2">Nama Penulis Berita</label>
                           <input

@@ -1,11 +1,27 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  Newspaper, Calendar, Clock, Star, Search, Tag, ChevronRight, Sparkles
+  Newspaper, Calendar, Clock, Star, Search, Tag, ChevronRight, Sparkles, ExternalLink
 } from "lucide-react";
 import { DataStore } from "../dataStore";
 import { NewsArticle } from "../data";
 import { splitNewsParagraphs } from "../utils/newsFormatting";
+
+function getArticleSourceUrl(article: NewsArticle): string | null {
+  const excerptUrl = article.excerpt.match(/https?:\/\/[^\s<>"']+/i)?.[0]?.replace(/[),.;!?]+$/, "");
+  const candidates = [article.sourceUrl?.trim(), excerptUrl].filter((value): value is string => Boolean(value));
+
+  for (const candidate of candidates) {
+    try {
+      const url = new URL(candidate);
+      if (url.protocol === "http:" || url.protocol === "https:") return url.href;
+    } catch {
+      // Ignore malformed source links and try the URL embedded in the article text.
+    }
+  }
+
+  return null;
+}
 
 export default function Berita({ theme }: { theme: "light" | "dark" }) {
   const [news, setNews] = useState<NewsArticle[]>(() => DataStore.getNews());
@@ -268,14 +284,9 @@ export default function Berita({ theme }: { theme: "light" | "dark" }) {
 
               {/* Grid of remaining articles */}
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 md:gap-8">
-                {rest.map((item, idx) => (
-                  <motion.article
-                    key={item.id}
-                    initial={{ opacity: 0, y: 24 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.6, delay: idx * 0.07, ease: [0.22, 1, 0.36, 1] }}
-                    className="group flex flex-col"
-                  >
+                {rest.map((item, idx) => {
+                  const sourceUrl = getArticleSourceUrl(item);
+                  const card = (
                     <div className={`rounded-xl overflow-hidden border flex flex-col h-full transition-all duration-400 ${
                       isDark
                         ? "bg-slate-900/40 border-white/5 hover:border-amber-500/15 shadow-xl shadow-black/20 hover:shadow-amber-500/5"
@@ -352,10 +363,43 @@ export default function Berita({ theme }: { theme: "light" | "dark" }) {
                             </span>
                           </div>
                         </div>
+                        <div className={`mt-3 flex items-center gap-1.5 text-[10px] font-bold ${
+                          sourceUrl
+                            ? isDark ? "text-amber-400" : "text-amber-700"
+                            : isDark ? "text-slate-600" : "text-slate-400"
+                        }`}>
+                          {sourceUrl ? <><span>Buka sumber berita</span><ExternalLink className="h-3 w-3" aria-hidden="true" /></> : "Tautan sumber belum tersedia"}
+                        </div>
                       </div>
                     </div>
-                  </motion.article>
-                ))}
+                  );
+
+                  return (
+                    <motion.article
+                      key={item.id}
+                      initial={{ opacity: 0, y: 24 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.6, delay: idx * 0.07, ease: [0.22, 1, 0.36, 1] }}
+                      className="group flex flex-col"
+                    >
+                      {sourceUrl ? (
+                        <a
+                          href={sourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`Buka sumber berita: ${item.title}`}
+                          className="block h-full rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-amber-500"
+                        >
+                          {card}
+                        </a>
+                      ) : (
+                        <div title="Tambahkan tautan sumber di modul admin berita">
+                          {card}
+                        </div>
+                      )}
+                    </motion.article>
+                  );
+                })}
               </div>
             </motion.div>
           )}

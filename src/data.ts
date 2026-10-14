@@ -66,6 +66,7 @@ export interface NewsArticle {
   date: string;
   readTime: string;
   image: string | null;
+  sourceUrl?: string;
   author: string;
   authorRole: string;
 }
