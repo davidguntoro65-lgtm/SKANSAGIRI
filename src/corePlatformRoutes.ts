@@ -1615,7 +1615,7 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
             data: {
               email: email || studentAccountEmail(nis),
               fullName,
-              ...(status !== "ACTIVE" ? { status: "DISABLED" as const } : {}),
+              status: status === "ACTIVE" ? "ACTIVE" : "DISABLED",
             },
           });
         }
