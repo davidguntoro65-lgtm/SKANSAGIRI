@@ -27,6 +27,7 @@ const HARD_MAX_FILE_BYTES = 40 * 1024 * 1024;
 const MAX_TRAINING_PHOTO_BYTES = 20 * 1024 * 1024;
 const MAX_TRAINING_PHOTOS = 6;
 const MAX_TRAINING_MATERIALS = 10;
+const MAX_TRAINING_LINKS = 10;
 const DRIVE_OAUTH_SETTING_KEY = "diklat-google-drive-oauth";
 const DRIVE_OAUTH_STATE_PREFIX = "diklat-google-drive-oauth-state:";
 const PAGE_SIZE_MAX = 50;
@@ -83,6 +84,18 @@ function fail(res: Response, status: number, code: string, message: string) {
 
 function clean(value: unknown, maxLength = 500) {
   return String(value ?? "").trim().slice(0, maxLength);
+}
+
+function normalizeExternalDocumentUrl(value: unknown): string | null {
+  const raw = String(value ?? "").trim();
+  if (!raw || raw.length > 2_048) return null;
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:" || !url.hostname || url.username || url.password) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
 
 function parseIntBounded(value: unknown, fallback: number, min: number, max: number) {
@@ -669,6 +682,11 @@ function parseListQuery(req: Request) {
 
 function publicDocumentShape(document: any) {
   const driveFile = document.driveFile;
+  const externalUrl = document.externalUrl || null;
+  let externalHost = "";
+  if (externalUrl) {
+    try { externalHost = new URL(externalUrl).hostname; } catch { /* legacy invalid link */ }
+  }
   return {
     id: document.id,
     trainingId: document.trainingId,
@@ -676,9 +694,10 @@ function publicDocumentShape(document: any) {
     title: document.title,
     description: document.description,
     category: document.category,
-    driveFileName: driveFile?.name || "",
+    driveFileName: driveFile?.name || (externalHost ? `Tautan web · ${externalHost}` : ""),
     mimeType: driveFile?.mimeType || "",
     sizeBytes: Number(driveFile?.sizeBytes || 0),
+    externalUrl,
     downloadUrl: `${API}/public/documents/${document.id}/download`,
     sortOrder: document.sortOrder,
     status: document.status,
@@ -891,7 +910,13 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
       where: { slug: clean(req.params.slug, 100) },
       include: {
         documents: {
-          where: { status: "PUBLISHED", driveFile: { is: { verificationStatus: "STORED" } } },
+          where: {
+            status: "PUBLISHED",
+            OR: [
+              { externalUrl: { not: null } },
+              { driveFile: { is: { verificationStatus: "STORED" } } },
+            ],
+          },
           include: { driveFile: true },
           orderBy: [{ type: "asc" }, { sortOrder: "asc" }, { createdAt: "desc" }],
         },
@@ -941,10 +966,15 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
       ...(trainingId ? { trainingId } : {}),
       ...(category ? { category: { equals: category, mode: "insensitive" } } : {}),
       ...(q ? { OR: [{ title: { contains: q, mode: "insensitive" } }, { description: { contains: q, mode: "insensitive" } }, { category: { contains: q, mode: "insensitive" } }] } : {}),
+      AND: [{
+        OR: [
+          { externalUrl: { not: null } },
+          { driveFile: { is: { verificationStatus: "STORED" } } },
+        ],
+      }],
       training: {
         OR: [{ status: "PUBLISHED" }, ...(settings.archiveVisible ? [{ status: "ARCHIVED", archiveVisible: true }] : [])],
       },
-      driveFile: { is: { verificationStatus: "STORED" } },
     };
     const [documents, total] = await Promise.all([
       db.diklatDocument.findMany({
@@ -973,7 +1003,10 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
         where: {
           status: "PUBLISHED",
           training: { OR: visibleTrainingStates },
-          driveFile: { is: { verificationStatus: "STORED" } },
+          OR: [
+            { externalUrl: { not: null } },
+            { driveFile: { is: { verificationStatus: "STORED" } } },
+          ],
           NOT: { category: "" },
         },
         select: { category: true },
@@ -993,6 +1026,7 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
     const visible = document?.training.status === "PUBLISHED" ||
       (document?.training.status === "ARCHIVED" && settings.archiveVisible && document.training.archiveVisible);
     if (!document || document.status !== "PUBLISHED" || !visible) return fail(res, 404, "DOCUMENT_NOT_FOUND", "Dokumen tidak tersedia.");
+    if (document.externalUrl) return res.redirect(302, document.externalUrl);
     return streamDriveFile(res, document.driveFile);
   }));
 
@@ -1373,6 +1407,66 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
     return ok(res, { deleted: true });
   }));
 
+  app.post(`${API}/admin/trainings/:id/links`, admin, route(async (req, res) => {
+    const trainingId = clean(req.params.id, 100);
+    const training = await db.diklatTraining.findUnique({ where: { id: trainingId }, select: { id: true } });
+    if (!training) return fail(res, 404, "TRAINING_NOT_FOUND", "Diklat tidak ditemukan.");
+
+    const rawLinks = req.body?.links;
+    if (!Array.isArray(rawLinks) || rawLinks.length < 1 || rawLinks.length > MAX_TRAINING_LINKS * 2) {
+      return fail(res, 400, "INVALID_LINKS", `Tambahkan 1–${MAX_TRAINING_LINKS * 2} link Materi/LKPD.`);
+    }
+    const links = rawLinks.map((item: any) => ({
+      type: clean(item?.type, 20).toUpperCase(),
+      title: clean(item?.title, 160),
+      externalUrl: normalizeExternalDocumentUrl(item?.url),
+    }));
+    if (links.some((item: any) => !DOCUMENT_TYPES.has(item.type) || !item.title || !item.externalUrl)) {
+      return fail(res, 400, "INVALID_LINK", "Setiap link harus memiliki jenis, judul, dan URL HTTPS yang valid.");
+    }
+    const requestedMaterialLinks = links.filter((item: any) => item.type === "MATERIAL").length;
+    const requestedLkpdLinks = links.length - requestedMaterialLinks;
+    if (requestedMaterialLinks > MAX_TRAINING_LINKS || requestedLkpdLinks > MAX_TRAINING_LINKS) {
+      return fail(res, 400, "LINK_LIMIT_REACHED", `Maksimal ${MAX_TRAINING_LINKS} link Materi dan ${MAX_TRAINING_LINKS} link LKPD per Diklat.`);
+    }
+
+    let insertedCount: number | null;
+    try {
+      insertedCount = await db.$transaction(async (tx) => {
+        const [materialCount, lkpdCount] = await Promise.all([
+          tx.diklatDocument.count({ where: { trainingId, type: "MATERIAL", externalUrl: { not: null } } }),
+          tx.diklatDocument.count({ where: { trainingId, type: "LKPD", externalUrl: { not: null } } }),
+        ]);
+        if (materialCount + requestedMaterialLinks > MAX_TRAINING_LINKS ||
+          lkpdCount + requestedLkpdLinks > MAX_TRAINING_LINKS) return null;
+
+        let nextSortOrder = { MATERIAL: materialCount, LKPD: lkpdCount };
+        const data = links.map((link: any) => ({
+          trainingId,
+          type: link.type as "MATERIAL" | "LKPD",
+          title: link.title,
+          externalUrl: link.externalUrl as string,
+          description: "",
+          category: "",
+          sortOrder: nextSortOrder[link.type as "MATERIAL" | "LKPD"]++,
+          status: "PUBLISHED" as const,
+        }));
+        await tx.diklatDocument.createMany({ data });
+        return links.length;
+      }, { isolationLevel: "Serializable", timeout: 10_000 });
+    } catch (error) {
+      if ((error as any)?.code === "P2034") {
+        return fail(res, 409, "LINK_LIMIT_CHANGED", "Jumlah link berubah saat disimpan. Muat ulang daftar lalu coba kembali.");
+      }
+      throw error;
+    }
+    if (insertedCount == null) return fail(res, 409, "LINK_LIMIT_REACHED", `Maksimal ${MAX_TRAINING_LINKS} link Materi dan ${MAX_TRAINING_LINKS} link LKPD per Diklat.`);
+    await audit("ADMIN_SESSION", "DIKLAT_DOCUMENT_LINKS_CREATED", "DiklatDocument", undefined, {
+      trainingId, materialLinks: requestedMaterialLinks, lkpdLinks: requestedLkpdLinks,
+    });
+    return ok(res, { created: insertedCount });
+  }));
+
   app.post(`${API}/admin/trainings/:id/documents`, admin, uploadSingle("file"), route(async (req, res) => {
     const training = await db.diklatTraining.findUnique({ where: { id: clean(req.params.id, 100) } });
     const type = clean(req.body?.type, 20).toUpperCase();
@@ -1428,9 +1522,21 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
     if (!title) return fail(res, 400, "VALIDATION_ERROR", "Judul dokumen wajib diisi.");
     const status = clean(req.body?.status, 20).toUpperCase();
     if (!DOCUMENT_STATES.has(status)) return fail(res, 400, "INVALID_STATUS", "Status dokumen tidak valid.");
+    const data: any = {
+      title,
+      description: clean(req.body?.description, 2_000),
+      category: clean(req.body?.category, 120),
+      sortOrder: parseIntBounded(req.body?.sortOrder, 0, -100_000, 100_000),
+      status,
+    };
+    if (existing.externalUrl) {
+      const externalUrl = normalizeExternalDocumentUrl(req.body?.externalUrl);
+      if (!externalUrl) return fail(res, 400, "INVALID_LINK", "URL harus berupa tautan HTTPS yang valid.");
+      data.externalUrl = externalUrl;
+    }
     const document = await db.diklatDocument.update({
       where: { id },
-      data: { title, description: clean(req.body?.description, 2_000), category: clean(req.body?.category, 120), sortOrder: parseIntBounded(req.body?.sortOrder, 0, -100_000, 100_000), status },
+      data,
       include: { driveFile: true },
     });
     await audit("ADMIN_SESSION", "DIKLAT_DOCUMENT_UPDATED", "DiklatDocument", id, { status });

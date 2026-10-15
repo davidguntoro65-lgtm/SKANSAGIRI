@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import {
   ArrowDownToLine, ArrowLeft, ArrowRight, BookOpen, CalendarDays, Check, ChevronDown,
   ChevronLeft, ClipboardList, FileText, FolderArchive, GraduationCap, Landmark, Menu, Search,
-  Send, ShieldCheck, Upload, X,
+  ExternalLink, Send, ShieldCheck, Upload, X,
 } from "lucide-react";
 import { apiFetch, apiPath, getAppPath, navigate } from "../utils/navigation";
 import { useBranding } from "../hooks/useBranding";
@@ -20,7 +20,7 @@ type Training = {
 type DocumentItem = {
   id: string; trainingId: string; type: DocumentType; title: string; description?: string | null;
   category?: string | null; driveFileName: string; mimeType?: string | null; sizeBytes?: number | null;
-  downloadUrl?: string | null; sortOrder: number; status: Status; createdAt: string;
+  downloadUrl?: string | null; externalUrl?: string | null; sortOrder: number; status: Status; createdAt: string;
 };
 type TaskType = {
   id: string; trainingId: string; name: string; description?: string | null; sortOrder: number;
@@ -179,7 +179,9 @@ function DocumentRow({ item }: { item: DocumentItem }) {
       <p className="mt-1 text-xs text-[#89939a]">{[item.category, item.driveFileName, formatBytes(item.sizeBytes)].filter(Boolean).join(" · ")}</p>
       {downloadError && <p role="alert" className="mt-2 text-xs text-[#9b493d]">{downloadError}</p>}
     </div>
-    <button disabled={downloading} onClick={() => void download()} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-[#dce4e6] px-4 py-2.5 text-sm font-bold text-[#315b78] transition hover:border-[#315b78] hover:bg-[#f2f6f7] disabled:cursor-wait disabled:opacity-60"><ArrowDownToLine size={16} /> {downloading ? "Menyiapkan…" : "Unduh"}</button>
+    {item.externalUrl
+      ? <a href={apiPath(item.downloadUrl || "")} target="_blank" rel="noopener noreferrer" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-[#dce4e6] px-4 py-2.5 text-sm font-bold text-[#315b78] transition hover:border-[#315b78] hover:bg-[#f2f6f7]"><ExternalLink size={16} /> Buka / unduh</a>
+      : <button disabled={downloading} onClick={() => void download()} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-[#dce4e6] px-4 py-2.5 text-sm font-bold text-[#315b78] transition hover:border-[#315b78] hover:bg-[#f2f6f7] disabled:cursor-wait disabled:opacity-60"><ArrowDownToLine size={16} /> {downloading ? "Menyiapkan…" : "Unduh"}</button>}
   </article>;
 }
 

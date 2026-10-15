@@ -656,6 +656,7 @@ model DiklatDocument {
   id          String            @id @default(uuid())
   trainingId  String
   driveFileId String?           @unique
+  externalUrl String?
   type        String
   title       String
   description String            @default("")

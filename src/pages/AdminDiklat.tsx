@@ -26,7 +26,7 @@ type TaskType = {
 };
 type DocumentItem = {
   id: string; trainingId: string; type: "MATERIAL" | "LKPD"; title: string; description?: string | null;
-  category?: string | null; driveFileName: string; mimeType?: string | null; sizeBytes?: number | null;
+  category?: string | null; driveFileName: string; mimeType?: string | null; sizeBytes?: number | null; externalUrl?: string | null;
   downloadUrl?: string | null; sortOrder: number; status: Status; createdAt: string;
 };
 type Submission = {
@@ -60,6 +60,7 @@ type TaskDraft = {
 };
 type DocumentDraft = { type: "MATERIAL" | "LKPD"; title: string; description: string; category: string; sortOrder: string; status: Status };
 type DocumentFileInput = { id: number; files: File[] };
+type DocumentLinkDraft = { id: number; type: "MATERIAL" | "LKPD"; title: string; url: string };
 
 const TOKEN_KEY = "smkn1_adm_token";
 const PAGE_SIZE = 10;
@@ -67,6 +68,7 @@ const MAX_DOCUMENT_FILE_BYTES = 40 * 1024 * 1024;
 const MAX_TRAINING_MATERIALS = 10;
 const MAX_TRAINING_PHOTOS = 6;
 const MAX_TRAINING_PHOTO_BYTES = 20 * 1024 * 1024;
+const MAX_TRAINING_LINKS = 10;
 const emptyTraining: TrainingDraft = { title: "", summary: "", description: "", category: "", period: "", year: "", status: "DRAFT", acceptsSubmissions: false, archiveVisible: false, sortOrder: "0" };
 const emptyTask: TaskDraft = { name: "", description: "", sortOrder: "0", active: true, deadline: "", maxFileSizeMb: "", allowedMimeTypes: "" };
 const emptyDoc: DocumentDraft = { type: "MATERIAL", title: "", description: "", category: "", sortOrder: "0", status: "PUBLISHED" };
@@ -201,7 +203,10 @@ export default function AdminDiklat({ theme = "light" }: Props) {
   const [documentFileInputs, setDocumentFileInputs] = useState<DocumentFileInput[]>([{ id: 0, files: [] }]);
   const [nextDocumentFileInputId, setNextDocumentFileInputId] = useState(1);
   const [documentFileInputVersion, setDocumentFileInputVersion] = useState(0);
+  const [documentLinkDrafts, setDocumentLinkDrafts] = useState<DocumentLinkDraft[]>([{ id: 0, type: "MATERIAL", title: "", url: "" }]);
+  const [nextDocumentLinkDraftId, setNextDocumentLinkDraftId] = useState(1);
   const [editingDocument, setEditingDocument] = useState<DocumentItem | null>(null);
+  const [editingDocumentUrl, setEditingDocumentUrl] = useState("");
   const [submissionItems, setSubmissionItems] = useState<Submission[]>([]);
   const [submissionTaskTypes, setSubmissionTaskTypes] = useState<TaskType[]>([]);
   const [submissionPagination, setSubmissionPagination] = useState<Pagination | null>(null);
@@ -225,6 +230,18 @@ export default function AdminDiklat({ theme = "light" }: Props) {
   const existingMaterialCount = trainingDetail?.documents.filter(item => item.type === "MATERIAL").length ?? selectedTraining?.counts.materials ?? 0;
   const remainingMaterialSlots = Math.max(0, MAX_TRAINING_MATERIALS - existingMaterialCount);
   const tooManyMaterialFiles = documentDraft.type === "MATERIAL" && selectedDocumentFiles.length > remainingMaterialSlots;
+  const existingMaterialLinkCount = trainingDetail?.documents.filter(item => item.type === "MATERIAL" && item.externalUrl).length ?? 0;
+  const existingLkpdLinkCount = trainingDetail?.documents.filter(item => item.type === "LKPD" && item.externalUrl).length ?? 0;
+  const filledLinkDrafts = documentLinkDrafts.filter(item => item.title.trim() || item.url.trim());
+  const pendingMaterialLinkCount = filledLinkDrafts.filter(item => item.type === "MATERIAL").length;
+  const pendingLkpdLinkCount = filledLinkDrafts.filter(item => item.type === "LKPD").length;
+  const tooManyMaterialLinks = existingMaterialLinkCount + pendingMaterialLinkCount > MAX_TRAINING_LINKS;
+  const tooManyLkpdLinks = existingLkpdLinkCount + pendingLkpdLinkCount > MAX_TRAINING_LINKS;
+  const incompleteDocumentLinks = filledLinkDrafts.some(item => !item.title.trim() || !item.url.trim());
+  const reservedMaterialLinkSlots = existingMaterialLinkCount + documentLinkDrafts.filter(item => item.type === "MATERIAL").length;
+  const reservedLkpdLinkSlots = existingLkpdLinkCount + documentLinkDrafts.filter(item => item.type === "LKPD").length;
+  const canAddDocumentLink = documentLinkDrafts.length < MAX_TRAINING_LINKS * 2 &&
+    (reservedMaterialLinkSlots < MAX_TRAINING_LINKS || reservedLkpdLinkSlots < MAX_TRAINING_LINKS);
 
   const success = (text: string) => setNotice({ type: "success", text });
   const failure = (error: unknown, fallback: string) => setNotice({ type: "error", text: error instanceof Error ? error.message : fallback });
@@ -244,6 +261,10 @@ export default function AdminDiklat({ theme = "light" }: Props) {
     finally { setLoading(false); }
   }, [loadOverview]);
   useEffect(() => { void reload(); }, [reload]);
+  useEffect(() => {
+    setDocumentLinkDrafts([{ id: 0, type: "MATERIAL", title: "", url: "" }]);
+    setNextDocumentLinkDraftId(1);
+  }, [selectedTrainingId]);
 
   useEffect(() => {
     if (!selectedTraining) { setTrainingDetail(null); setDetailWarning(""); return; }
@@ -553,10 +574,88 @@ export default function AdminDiklat({ theme = "light" }: Props) {
       setSaving(false);
     }
   };
+  const addDocumentLinkRow = () => {
+    const remainingMaterialLinks = MAX_TRAINING_LINKS - existingMaterialLinkCount - documentLinkDrafts.filter(item => item.type === "MATERIAL").length;
+    const remainingLkpdLinks = MAX_TRAINING_LINKS - existingLkpdLinkCount - documentLinkDrafts.filter(item => item.type === "LKPD").length;
+    if (documentLinkDrafts.length >= MAX_TRAINING_LINKS * 2 || (remainingMaterialLinks <= 0 && remainingLkpdLinks <= 0)) {
+      failure(new Error("Batas link untuk Materi dan LKPD sudah tercapai."), "Batas jumlah link tercapai.");
+      return;
+    }
+    const previousType = documentLinkDrafts[documentLinkDrafts.length - 1]?.type;
+    const type = previousType === "MATERIAL" && remainingMaterialLinks > 0
+      ? "MATERIAL"
+      : previousType === "LKPD" && remainingLkpdLinks > 0
+        ? "LKPD"
+        : remainingMaterialLinks > 0 ? "MATERIAL" : "LKPD";
+    setDocumentLinkDrafts(current => [...current, { id: nextDocumentLinkDraftId, type, title: "", url: "" }]);
+    setNextDocumentLinkDraftId(current => current + 1);
+  };
+  const removeDocumentLinkRow = (id: number) => {
+    setDocumentLinkDrafts(current => current.length > 1
+      ? current.filter(item => item.id !== id)
+      : current.map(item => item.id === id ? { ...item, title: "", url: "" } : item));
+  };
+  const saveDocumentLinks = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!selectedTraining) return;
+    const hasPartialRow = documentLinkDrafts.some(item => {
+      const hasTitle = Boolean(item.title.trim());
+      const hasUrl = Boolean(item.url.trim());
+      return hasTitle !== hasUrl;
+    });
+    if (hasPartialRow) {
+      failure(new Error("Lengkapi judul dan URL pada setiap baris link yang diisi."), "Data link belum lengkap.");
+      return;
+    }
+    const links = documentLinkDrafts
+      .filter(item => item.title.trim() && item.url.trim())
+      .map(item => ({ type: item.type, title: item.title.trim(), url: item.url.trim() }));
+    if (!links.length) {
+      failure(new Error("Tambahkan judul dan link Materi atau LKPD terlebih dahulu."), "Link belum diisi.");
+      return;
+    }
+    const materialLinks = links.filter(item => item.type === "MATERIAL").length;
+    const lkpdLinks = links.length - materialLinks;
+    if (existingMaterialLinkCount + materialLinks > MAX_TRAINING_LINKS || existingLkpdLinkCount + lkpdLinks > MAX_TRAINING_LINKS) {
+      failure(new Error(`Maksimal ${MAX_TRAINING_LINKS} link Materi dan ${MAX_TRAINING_LINKS} link LKPD per Diklat.`), "Batas jumlah link tercapai.");
+      return;
+    }
+    for (const link of links) {
+      try {
+        const url = new URL(link.url);
+        if (url.protocol !== "https:" || !url.hostname || url.username || url.password) throw new Error();
+      } catch {
+        failure(new Error("Gunakan URL HTTPS yang valid untuk setiap link."), "URL link tidak valid.");
+        return;
+      }
+    }
+
+    setSaving(true);
+    setNotice(null);
+    try {
+      await adminData<{ created: number }>(`/api/v1/diklat/admin/trainings/${selectedTraining.id}/links`, {
+        method: "POST", headers: jsonHeaders(), body: JSON.stringify({ links }),
+      });
+      const nextType = existingMaterialLinkCount + materialLinks < MAX_TRAINING_LINKS ? "MATERIAL" : "LKPD";
+      setDocumentLinkDrafts([{ id: nextDocumentLinkDraftId, type: nextType, title: "", url: "" }]);
+      setNextDocumentLinkDraftId(current => current + 1);
+      success(`${links.length} link Materi/LKPD berhasil ditambahkan.`);
+      try {
+        await loadOverview();
+        setSelectedTrainingId(selectedTraining.id);
+      } catch (error) {
+        failure(new Error(`Link tersimpan, tetapi daftar belum dapat diperbarui. ${error instanceof Error ? error.message : ""}`), "Daftar link belum diperbarui.");
+      }
+    } catch (error) {
+      failure(error, "Link belum berhasil disimpan.");
+    } finally {
+      setSaving(false);
+    }
+  };
   const saveDocumentMetadata = async (event: FormEvent) => {
     event.preventDefault(); if (!editingDocument) return;
     setSaving(true);
-    const body = { title: documentDraft.title.trim(), description: documentDraft.description.trim(), category: documentDraft.category.trim(), sortOrder: Number(documentDraft.sortOrder) || 0, status: documentDraft.status };
+    const body = { title: documentDraft.title.trim(), description: documentDraft.description.trim(), category: documentDraft.category.trim(), sortOrder: Number(documentDraft.sortOrder) || 0, status: documentDraft.status, ...(editingDocument.externalUrl ? { externalUrl: editingDocumentUrl.trim() } : {}) };
     try {
       await adminData(`/api/v1/diklat/admin/documents/${editingDocument.id}`, { method: "PUT", headers: jsonHeaders(), body: JSON.stringify(body) });
       setEditingDocument(null); success("Metadata dokumen berhasil diperbarui."); await loadOverview(); if (selectedTraining) setSelectedTrainingId(selectedTraining.id);
@@ -801,7 +900,30 @@ export default function AdminDiklat({ theme = "light" }: Props) {
                     </div>
                     <button disabled={saving || selectedDocumentFiles.length === 0 || oversizedDocumentFiles.length > 0 || tooManyMaterialFiles} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-[#173653] px-3.5 py-2.5 text-xs font-extrabold text-white disabled:opacity-50">{saving ? <LoaderCircle className="animate-spin" size={14} /> : <Upload size={14} />} {saving ? "Mengunggah berkas…" : selectedDocumentFiles.length > 1 ? `Unggah ${selectedDocumentFiles.length} dokumen` : "Unggah dokumen"}</button>
                   </form>
-                  {trainingDetail?.documents?.length ? <div className="space-y-2">{trainingDetail.documents.map(item => <div key={item.id} className={`flex items-center gap-3 rounded-xl border px-3.5 py-3 ${dark ? "border-white/10" : "border-[#e2e8e8]"}`}><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${dark ? "bg-white/[.05] text-[#d1b66f]" : "bg-[#edf2f1] text-[#557589]"}`}><File size={16} /></span><div className="min-w-0 flex-1"><p className={`truncate text-sm font-bold ${palette.text}`}>{item.title}</p><p className={`mt-0.5 text-[10px] ${palette.muted}`}>{item.type === "LKPD" ? "LKPD" : "Materi"} · {item.driveFileName}</p></div><StatusBadge dark={dark} status={item.status} /><button aria-label={`Edit ${item.title}`} onClick={() => { setEditingDocument(item); setDocumentDraft({ type: item.type, title: item.title, description: item.description || "", category: item.category || "", sortOrder: String(item.sortOrder), status: item.status }); }} className={`rounded-lg p-2 ${palette.muted} hover:text-[#bd9852]`}><Pencil size={15} /></button><button aria-label={`Arsipkan ${item.title}`} onClick={() => void archiveDocument(item)} className="rounded-lg p-2 text-rose-500 hover:bg-rose-500/10"><Archive size={15} /></button></div>)}</div> : <p className={`rounded-xl border border-dashed p-4 text-xs ${dark ? "border-white/10 text-slate-400" : "border-[#dce4e5] text-[#7b8990]"}`}>Daftar dokumen belum tersedia melalui endpoint detail untuk kegiatan ini.</p>}
+                  <form onSubmit={saveDocumentLinks} className={`mb-3 rounded-xl border p-4 ${dark ? "border-white/10 bg-white/[.02]" : "border-[#e2e8e8] bg-[#fafbf8]"}`}>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className={`text-xs font-bold ${palette.text}`}>Tambahkan melalui link</p>
+                        <p className={`mt-1 text-[10px] ${palette.muted}`}>Materi {existingMaterialLinkCount + pendingMaterialLinkCount}/{MAX_TRAINING_LINKS} · LKPD {existingLkpdLinkCount + pendingLkpdLinkCount}/{MAX_TRAINING_LINKS}</p>
+                      </div>
+                      <button type="button" onClick={addDocumentLinkRow} disabled={saving || !canAddDocumentLink} className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-50 ${palette.button}`}><Plus size={14} /> Tambah link</button>
+                    </div>
+                    <div className="mt-3 space-y-3">
+                      {documentLinkDrafts.map((item, index) => <div key={item.id} className={`rounded-lg border p-3 ${dark ? "border-white/10" : "border-[#e2e8e8]"}`}>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <label className={`text-xs font-semibold ${palette.muted}`}>Jenis link<select value={item.type} onChange={event => setDocumentLinkDrafts(current => current.map(row => row.id === item.id ? { ...row, type: event.target.value as DocumentLinkDraft["type"] } : row))} className={`${palette.input} mt-1.5`}><option value="MATERIAL">Materi</option><option value="LKPD">LKPD</option></select></label>
+                          <label className={`text-xs font-semibold ${palette.muted}`}>Judul<input maxLength={160} value={item.title} onChange={event => setDocumentLinkDrafts(current => current.map(row => row.id === item.id ? { ...row, title: event.target.value } : row))} className={`${palette.input} mt-1.5`} placeholder="Contoh: Modul pembelajaran" /></label>
+                          <label className={`text-xs font-semibold sm:col-span-2 ${palette.muted}`}>URL materi/LKPD<input type="url" maxLength={2048} inputMode="url" value={item.url} onChange={event => setDocumentLinkDrafts(current => current.map(row => row.id === item.id ? { ...row, url: event.target.value } : row))} className={`${palette.input} mt-1.5`} placeholder="https://..." /></label>
+                        </div>
+                        <div className="mt-2 flex justify-end"><button type="button" disabled={saving} onClick={() => removeDocumentLinkRow(item.id)} aria-label={`Hapus baris link ${index + 1}`} className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[10px] font-bold text-rose-500 hover:bg-rose-500/10 disabled:opacity-50"><X size={13} /> Hapus baris</button></div>
+                      </div>)}
+                    </div>
+                    <p className={`mt-2 text-[10px] leading-4 ${palette.muted}`}>Maksimal 10 link Materi dan 10 link LKPD per Diklat. Gunakan URL HTTPS dan pastikan aksesnya dibagikan kepada publik; link dibuka di tab baru.</p>
+                    {(tooManyMaterialLinks || tooManyLkpdLinks) && <p role="alert" className="mt-2 rounded-lg border border-rose-300/70 bg-rose-50 px-3 py-2 text-[11px] font-semibold text-rose-700">Batas per jenis adalah 10 link. Hapus baris yang melebihi sisa slot.</p>}
+                    {incompleteDocumentLinks && <p role="status" className={`mt-2 text-[11px] ${palette.muted}`}>Isi judul dan URL pada setiap baris yang digunakan.</p>}
+                    <button disabled={saving || !filledLinkDrafts.length || tooManyMaterialLinks || tooManyLkpdLinks || incompleteDocumentLinks} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-[#173653] px-3.5 py-2.5 text-xs font-extrabold text-white disabled:opacity-50">{saving ? <LoaderCircle className="animate-spin" size={14} /> : <Plus size={14} />}{saving ? "Menyimpan link…" : `Simpan ${filledLinkDrafts.length || ""} link`}</button>
+                  </form>
+                  {trainingDetail?.documents?.length ? <div className="space-y-2">{trainingDetail.documents.map(item => <div key={item.id} className={`flex items-center gap-3 rounded-xl border px-3.5 py-3 ${dark ? "border-white/10" : "border-[#e2e8e8]"}`}><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${dark ? "bg-white/[.05] text-[#d1b66f]" : "bg-[#edf2f1] text-[#557589]"}`}><File size={16} /></span><div className="min-w-0 flex-1"><p className={`truncate text-sm font-bold ${palette.text}`}>{item.title}</p><p className={`mt-0.5 text-[10px] ${palette.muted}`}>{item.type === "LKPD" ? "LKPD" : "Materi"} · {item.driveFileName}</p></div><StatusBadge dark={dark} status={item.status} /><button aria-label={`Edit ${item.title}`} onClick={() => { setEditingDocument(item); setEditingDocumentUrl(item.externalUrl || ""); setDocumentDraft({ type: item.type, title: item.title, description: item.description || "", category: item.category || "", sortOrder: String(item.sortOrder), status: item.status }); }} className={`rounded-lg p-2 ${palette.muted} hover:text-[#bd9852]`}><Pencil size={15} /></button><button aria-label={`Arsipkan ${item.title}`} onClick={() => void archiveDocument(item)} className="rounded-lg p-2 text-rose-500 hover:bg-rose-500/10"><Archive size={15} /></button></div>)}</div> : <p className={`rounded-xl border border-dashed p-4 text-xs ${dark ? "border-white/10 text-slate-400" : "border-[#dce4e5] text-[#7b8990]"}`}>Daftar dokumen belum tersedia melalui endpoint detail untuk kegiatan ini.</p>}
                 </div>
               </div>}
             </PanelCard>
@@ -932,7 +1054,7 @@ export default function AdminDiklat({ theme = "light" }: Props) {
     {editingDocument && <div className="fixed inset-0 z-[110] flex items-end justify-center bg-[#0d2030]/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-5">
       <form onSubmit={saveDocumentMetadata} className={`w-full max-w-xl rounded-t-3xl border p-5 shadow-2xl sm:rounded-3xl sm:p-7 ${dark ? "border-white/10 bg-[#13293a]" : "border-[#dce4e5] bg-[#fffefa]"}`}>
         <div className="flex items-start justify-between"><div><p className="text-[10px] font-extrabold uppercase tracking-[.18em] text-[#8b713e]">Metadata dokumen</p><h2 className={`mt-1 text-xl font-extrabold ${palette.text}`}>Edit informasi dokumen</h2></div><button type="button" onClick={() => setEditingDocument(null)} aria-label="Tutup" className={`rounded-lg p-2 ${palette.muted}`}><X size={18} /></button></div>
-        <div className="mt-5 space-y-4"><label className={`block text-xs font-bold ${palette.muted}`}>Judul<input required value={documentDraft.title} onChange={e => setDocumentDraft({ ...documentDraft, title: e.target.value })} className={`${palette.input} mt-1.5`} /></label><label className={`block text-xs font-bold ${palette.muted}`}>Deskripsi<textarea rows={3} value={documentDraft.description} onChange={e => setDocumentDraft({ ...documentDraft, description: e.target.value })} className={`${palette.input} mt-1.5`} /></label><div className="grid gap-3 sm:grid-cols-2"><label className={`text-xs font-bold ${palette.muted}`}>Kategori<input value={documentDraft.category} onChange={e => setDocumentDraft({ ...documentDraft, category: e.target.value })} className={`${palette.input} mt-1.5`} /></label><label className={`text-xs font-bold ${palette.muted}`}>Urutan<input type="number" value={documentDraft.sortOrder} onChange={e => setDocumentDraft({ ...documentDraft, sortOrder: e.target.value })} className={`${palette.input} mt-1.5`} /></label></div><label className={`block text-xs font-bold ${palette.muted}`}>Status<select value={documentDraft.status} onChange={e => setDocumentDraft({ ...documentDraft, status: e.target.value as Status })} className={`${palette.input} mt-1.5`}><option value="DRAFT">Draft</option><option value="PUBLISHED">Terbit</option><option value="ARCHIVED">Arsip</option></select></label></div>
+        <div className="mt-5 space-y-4"><label className={`block text-xs font-bold ${palette.muted}`}>Judul<input required value={documentDraft.title} onChange={e => setDocumentDraft({ ...documentDraft, title: e.target.value })} className={`${palette.input} mt-1.5`} /></label><label className={`block text-xs font-bold ${palette.muted}`}>Deskripsi<textarea rows={3} value={documentDraft.description} onChange={e => setDocumentDraft({ ...documentDraft, description: e.target.value })} className={`${palette.input} mt-1.5 resize-y`} /></label>{editingDocument.externalUrl && <label className={`block text-xs font-bold ${palette.muted}`}>URL HTTPS<input type="url" required maxLength={2048} value={editingDocumentUrl} onChange={event => setEditingDocumentUrl(event.target.value)} className={`${palette.input} mt-1.5`} /></label>}<div className="grid gap-3 sm:grid-cols-2"><label className={`text-xs font-bold ${palette.muted}`}>Kategori<input value={documentDraft.category} onChange={e => setDocumentDraft({ ...documentDraft, category: e.target.value })} className={`${palette.input} mt-1.5`} /></label><label className={`text-xs font-bold ${palette.muted}`}>Urutan<input type="number" value={documentDraft.sortOrder} onChange={e => setDocumentDraft({ ...documentDraft, sortOrder: e.target.value })} className={`${palette.input} mt-1.5`} /></label></div><label className={`block text-xs font-bold ${palette.muted}`}>Status<select value={documentDraft.status} onChange={e => setDocumentDraft({ ...documentDraft, status: e.target.value as Status })} className={`${palette.input} mt-1.5`}><option value="DRAFT">Draft</option><option value="PUBLISHED">Terbit</option><option value="ARCHIVED">Arsip</option></select></label></div>
         <div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setEditingDocument(null)} className={`rounded-xl border px-4 py-3 text-sm font-bold ${palette.button}`}>Batal</button><button disabled={saving} className="rounded-xl bg-[#173653] px-5 py-3 text-sm font-extrabold text-white disabled:opacity-50">Simpan perubahan</button></div>
       </form>
     </div>}
