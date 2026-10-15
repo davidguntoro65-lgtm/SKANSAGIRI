@@ -375,6 +375,24 @@ export default function AdminDiklat({ theme = "light" }: Props) {
       const currentIds = new Set(entries.flatMap(entry => entry.photo ? [entry.photo.id] : []));
       const removedPhotos = originalPhotos.filter(photo => !currentIds.has(photo.id));
 
+      // Free server-side photo slots before uploading replacements. Without
+      // this order, replacing a photo on a training already at the 6-photo
+      // limit is rejected even though the final selection still has only 6.
+      for (const photo of removedPhotos) {
+        try {
+          await adminData(`/api/v1/diklat/admin/trainings/${savedTraining.id}/photos/${photo.id}`, {
+            method: "DELETE", headers: authHeaders(),
+          });
+          persistedPhotos = persistedPhotos.filter(item => item.id !== photo.id);
+        } catch (error) {
+          setEditingTraining({ ...savedTraining, photos: persistedPhotos });
+          setTrainingPhotoEntries(entries);
+          failure(new Error(`Data diklat sudah tersimpan, tetapi foto lama belum dapat dihapus. ${error instanceof Error ? error.message : ""}`), "Perubahan foto belum lengkap.");
+          setSaving(false);
+          return;
+        }
+      }
+
       for (let index = 0; index < entries.length; index += 1) {
         const entry = entries[index];
         if (!entry.file) continue;
@@ -393,21 +411,6 @@ export default function AdminDiklat({ theme = "light" }: Props) {
           setEditingTraining({ ...savedTraining, photos: persistedPhotos });
           setTrainingPhotoEntries(entries);
           failure(new Error(`Data diklat sudah tersimpan, tetapi foto “${entry.file.name}” belum berhasil diunggah. ${error instanceof Error ? error.message : ""}`), "Foto belum berhasil diunggah.");
-          setSaving(false);
-          return;
-        }
-      }
-
-      for (const photo of removedPhotos) {
-        try {
-          await adminData(`/api/v1/diklat/admin/trainings/${savedTraining.id}/photos/${photo.id}`, {
-            method: "DELETE", headers: authHeaders(),
-          });
-          persistedPhotos = persistedPhotos.filter(item => item.id !== photo.id);
-        } catch (error) {
-          setEditingTraining({ ...savedTraining, photos: persistedPhotos });
-          setTrainingPhotoEntries(entries);
-          failure(new Error(`Data diklat sudah tersimpan, tetapi foto lama belum dapat dihapus. ${error instanceof Error ? error.message : ""}`), "Perubahan foto belum lengkap.");
           setSaving(false);
           return;
         }
