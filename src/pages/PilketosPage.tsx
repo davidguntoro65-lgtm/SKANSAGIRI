@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { GlobalPageBg } from "../components/BackgroundSystem";
 import { useBranding } from "../hooks/useBranding";
-import { apiFetch } from "../utils/navigation";
+import { apiFetch, apiPath } from "../utils/navigation";
 
 type Candidate = {
   id: string;
@@ -24,6 +24,7 @@ type Candidate = {
   candidateNo: number;
   name: string;
   photoData: string | null;
+  photoUrl?: string | null;
 };
 
 type Election = {
@@ -210,16 +211,30 @@ export default function PilketosPage() {
 
   useEffect(() => {
     if (view === "landing") return;
-    const refresh = () => {
+    let timer = 0;
+    let disposed = false;
+    const scheduleRefresh = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        if (document.visibilityState === "visible") {
+          const studentIdentifier = view === "vote" ? identifier.trim() : "";
+          void loadElection(studentIdentifier || undefined).catch(() => {});
+        }
+        if (!disposed) scheduleRefresh();
+      }, 30_000 + Math.random() * 15_000);
+    };
+    const refreshWhenVisible = () => {
       if (document.visibilityState !== "visible") return;
       const studentIdentifier = view === "vote" ? identifier.trim() : "";
       void loadElection(studentIdentifier || undefined).catch(() => {});
+      scheduleRefresh();
     };
-    const timer = window.setInterval(refresh, 15_000);
-    document.addEventListener("visibilitychange", refresh);
+    scheduleRefresh();
+    document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", refresh);
+      disposed = true;
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, [identifier, loadElection, view]);
 
@@ -392,7 +407,7 @@ export default function PilketosPage() {
           )}
         </div>
         {feedback && <Toast feedback={feedback} />}
-         {confirming && votingPhase === "OPEN" && selected.length === POSITIONS.length && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-5 backdrop-blur-sm"><div className="w-full max-w-md rounded-[2rem] bg-white p-7 shadow-2xl"><div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-100 text-amber-700"><Vote className="h-5 w-5" /></div><div><p className="text-xs font-black uppercase tracking-widest text-amber-600">Konfirmasi akhir</p><h3 className="font-black text-slate-950">Simpan empat pilihan?</h3></div></div><p className="mt-5 text-center text-lg font-black text-amber-700">SUDAHKAH BENAR PILIHANMU?</p><p className="mt-1 text-center text-sm font-semibold text-slate-700">Suaramu menentukan kebijakan kedepan</p><p className="mt-4 text-sm leading-relaxed text-slate-600">Semua pilihan akan disimpan sekaligus dan tidak dapat diubah.</p><div className="mt-4 space-y-2">{selected.map(({ position, candidate }) => <div key={position.id} className="flex items-center gap-3 rounded-xl bg-slate-50 p-3"><div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg bg-amber-100 text-sm font-black text-amber-700">{candidate.photoData ? <img src={candidate.photoData} alt="" className="h-full w-full object-contain p-0.5" /> : candidate.candidateNo}</div><div><p className="text-[10px] font-black uppercase tracking-widest text-amber-600">{position.label}</p><p className="text-sm font-black text-slate-950">{candidate.name} · Kelas {candidate.grade}</p></div></div>)}</div><div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button onClick={() => setConfirming(false)} className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-500 hover:text-slate-900">Periksa lagi</button><button onClick={() => void castVote()} disabled={voteBusy} className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white disabled:opacity-50">{voteBusy ? "Menyimpan..." : "Ya, simpan empat pilihan"}</button></div></div></div>}
+         {confirming && votingPhase === "OPEN" && selected.length === POSITIONS.length && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-5 backdrop-blur-sm"><div className="w-full max-w-md rounded-[2rem] bg-white p-7 shadow-2xl"><div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-100 text-amber-700"><Vote className="h-5 w-5" /></div><div><p className="text-xs font-black uppercase tracking-widest text-amber-600">Konfirmasi akhir</p><h3 className="font-black text-slate-950">Simpan empat pilihan?</h3></div></div><p className="mt-5 text-center text-lg font-black text-amber-700">SUDAHKAH BENAR PILIHANMU?</p><p className="mt-1 text-center text-sm font-semibold text-slate-700">Suaramu menentukan kebijakan kedepan</p><p className="mt-4 text-sm leading-relaxed text-slate-600">Semua pilihan akan disimpan sekaligus dan tidak dapat diubah.</p><div className="mt-4 space-y-2">{selected.map(({ position, candidate }) => <div key={position.id} className="flex items-center gap-3 rounded-xl bg-slate-50 p-3"><div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg bg-amber-100 text-sm font-black text-amber-700">{candidate.photoUrl || candidate.photoData ? <img src={candidate.photoUrl ? apiPath(candidate.photoUrl) : candidate.photoData!} alt="" className="h-full w-full object-contain p-0.5" /> : candidate.candidateNo}</div><div><p className="text-[10px] font-black uppercase tracking-widest text-amber-600">{position.label}</p><p className="text-sm font-black text-slate-950">{candidate.name} · Kelas {candidate.grade}</p></div></div>)}</div><div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button onClick={() => setConfirming(false)} className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-500 hover:text-slate-900">Periksa lagi</button><button onClick={() => void castVote()} disabled={voteBusy} className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white disabled:opacity-50">{voteBusy ? "Menyimpan..." : "Ya, simpan empat pilihan"}</button></div></div></div>}
       </main>
     );
   }
@@ -451,7 +466,7 @@ function CandidateGrid({ candidates, selectedCandidateId, blockedCandidateId, on
         const selected = selectedCandidateId === candidate.id;
         const blocked = blockedCandidateId === candidate.id;
         const card = <div style={{ animationDelay: `${Math.min(index * 90, 450)}ms` }} className={`pilketos-card-reveal group relative overflow-hidden rounded-[1.75rem] border bg-white/95 shadow-[0_15px_45px_rgba(15,23,42,.08)] transition duration-500 ${blocked ? "cursor-not-allowed opacity-50" : "hover:-translate-y-1 hover:shadow-[0_24px_60px_rgba(15,23,42,.14)]"} ${selected ? "border-amber-400 ring-4 ring-amber-400/15" : "border-slate-200/90"}`}>
-          <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_50%_15%,rgba(251,191,36,.16),transparent_44%),linear-gradient(145deg,#fffdf7,#f1f5f9)] p-2 sm:p-3">{candidate.photoData ? <img src={candidate.photoData} alt={`Foto ${candidate.name}`} loading="lazy" decoding="async" className="h-full w-full object-contain drop-shadow-[0_14px_18px_rgba(15,23,42,.12)] transition duration-700 ease-out group-hover:scale-[1.025]" /> : <div className="flex h-full w-full items-center justify-center rounded-2xl bg-gradient-to-br from-amber-100 to-orange-50 text-6xl font-black text-amber-300">{candidate.candidateNo}</div>}<div className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-xl bg-slate-950 text-sm font-black text-white shadow-lg">{candidate.candidateNo}</div>{selected && <div className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-amber-400 text-slate-950 shadow-lg"><Check className="h-5 w-5" /></div>}</div>
+          <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_50%_15%,rgba(251,191,36,.16),transparent_44%),linear-gradient(145deg,#fffdf7,#f1f5f9)] p-2 sm:p-3">{candidate.photoUrl || candidate.photoData ? <img src={candidate.photoUrl ? apiPath(candidate.photoUrl) : candidate.photoData!} alt={`Foto ${candidate.name}`} loading="lazy" decoding="async" className="h-full w-full object-contain drop-shadow-[0_14px_18px_rgba(15,23,42,.12)] transition duration-700 ease-out group-hover:scale-[1.025]" /> : <div className="flex h-full w-full items-center justify-center rounded-2xl bg-gradient-to-br from-amber-100 to-orange-50 text-6xl font-black text-amber-300">{candidate.candidateNo}</div>}<div className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-xl bg-slate-950 text-sm font-black text-white shadow-lg">{candidate.candidateNo}</div>{selected && <div className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-amber-400 text-slate-950 shadow-lg"><Check className="h-5 w-5" /></div>}</div>
           <div className="p-5"><p className="text-[10px] font-black uppercase tracking-[.2em] text-amber-600">Kelas {candidate.grade} · Calon nomor {candidate.candidateNo}</p><h3 className="mt-2 text-xl font-black tracking-tight text-slate-950">{candidate.name}</h3>{onSelect && <p className="mt-2 text-xs text-slate-500">{blocked ? "Sudah dipilih untuk jabatan pasangannya." : selected ? "Kandidat ini dipilih." : "Klik kartu untuk memilih kandidat ini."}</p>}</div>
         </div>;
         return onSelect ? <button type="button" key={candidate.id} disabled={blocked} onClick={() => onSelect(candidate.id)} className="block w-full text-left disabled:cursor-not-allowed">{card}</button> : <div key={`${candidate.id}-${index}`}>{card}</div>;

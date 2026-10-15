@@ -3,7 +3,13 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client/index";
 
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
+const poolMax = Number.parseInt(process.env.DATABASE_POOL_MAX || "10", 10);
+const adapter = new PrismaPg({
+  connectionString: process.env.DATABASE_URL!,
+  max: Number.isInteger(poolMax) && poolMax > 0 ? Math.min(poolMax, 50) : 10,
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 10_000,
+});
 
 // Singleton pattern: reuse across hot-reload in development
 const globalForPrisma = globalThis as unknown as { db: PrismaClient };

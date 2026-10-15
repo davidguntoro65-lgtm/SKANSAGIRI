@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect } from "react";
+import { lazy, Suspense, useState, useEffect } from "react";
 import { Vote } from "lucide-react";
 import Navbar from "./components/Navbar";
 import { GlobalPageBg } from "./components/BackgroundSystem";
@@ -18,30 +18,30 @@ import SuccessStories from "./components/SuccessStories";
 import News from "./components/News";
 import PPDBcta from "./components/PPDBcta";
 import Footer from "./components/Footer";
-import AdminPanel from "./components/AdminPanel";
 import WhatsNewNotification from "./components/WhatsNewNotification";
 import InstallAppPrompt from "./components/InstallAppPrompt";
 import PushNotificationPrompt from "./components/PushNotificationPrompt";
-import KepalaSokolah from "./pages/KepalaSokolah";
-import ManajemenSekolah from "./pages/ManajemenSekolah";
-import VisiMisi from "./pages/VisiMisi";
-import TracerStudi from "./pages/TracerStudi";
-import AdminTracerStudi from "./pages/AdminTracerStudi";
-import Berita from "./pages/Berita";
-import HubungiKami from "./pages/HubungiKami";
-import ModulIntegrasi from "./pages/ModulIntegrasi";
-import SuaraSkansagiri from "./pages/SuaraSkansagiri";
-import AdminSuaraSkansagiri from "./pages/AdminSuaraSkansagiri";
-import AduanPublik from "./pages/AduanPublik";
-import AdminAduanPublik from "./pages/AdminAduanPublik";
-import OsisPage from "./pages/OsisPage";
-import AdminOsis from "./pages/AdminOsis";
-import KelasVirtual from "./pages/KelasVirtual";
-import KelasKompetensi from "./pages/KelasKompetensi";
-import GuruPortal from "./pages/GuruPortal";
-import SiswaPortal from "./pages/SiswaPortal";
-import PilketosPage from "./pages/PilketosPage";
-import PusatDiklat from "./pages/PusatDiklat";
+const AdminPanel = lazy(() => import("./components/AdminPanel"));
+const KepalaSokolah = lazy(() => import("./pages/KepalaSokolah"));
+const ManajemenSekolah = lazy(() => import("./pages/ManajemenSekolah"));
+const VisiMisi = lazy(() => import("./pages/VisiMisi"));
+const TracerStudi = lazy(() => import("./pages/TracerStudi"));
+const AdminTracerStudi = lazy(() => import("./pages/AdminTracerStudi"));
+const Berita = lazy(() => import("./pages/Berita"));
+const HubungiKami = lazy(() => import("./pages/HubungiKami"));
+const ModulIntegrasi = lazy(() => import("./pages/ModulIntegrasi"));
+const SuaraSkansagiri = lazy(() => import("./pages/SuaraSkansagiri"));
+const AdminSuaraSkansagiri = lazy(() => import("./pages/AdminSuaraSkansagiri"));
+const AduanPublik = lazy(() => import("./pages/AduanPublik"));
+const AdminAduanPublik = lazy(() => import("./pages/AdminAduanPublik"));
+const OsisPage = lazy(() => import("./pages/OsisPage"));
+const AdminOsis = lazy(() => import("./pages/AdminOsis"));
+const KelasVirtual = lazy(() => import("./pages/KelasVirtual"));
+const KelasKompetensi = lazy(() => import("./pages/KelasKompetensi"));
+const GuruPortal = lazy(() => import("./pages/GuruPortal"));
+const SiswaPortal = lazy(() => import("./pages/SiswaPortal"));
+const PilketosPage = lazy(() => import("./pages/PilketosPage"));
+const PusatDiklat = lazy(() => import("./pages/PusatDiklat"));
 import { DataStore } from "./dataStore";
 import { navigate, getAppPath } from "./utils/navigation";
 
@@ -80,7 +80,23 @@ function getPath(): AppPath {
   return "/";
 }
 
+function AppLoading() {
+  return (
+    <main role="status" aria-live="polite" className="flex min-h-screen items-center justify-center bg-slate-50 px-6 text-sm font-semibold text-slate-600">
+      Memuat halaman…
+    </main>
+  );
+}
+
 export default function App() {
+  return (
+    <Suspense fallback={<AppLoading />}>
+      <AppContent />
+    </Suspense>
+  );
+}
+
+function AppContent() {
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window !== "undefined") {
       // v2: default changed to light — reset old dark preference once

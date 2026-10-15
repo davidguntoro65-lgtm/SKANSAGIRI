@@ -73,6 +73,53 @@ const PILKETOS_RATE_WINDOW_MS = 60_000;
 const PILKETOS_RATE_PER_SOURCE = 30_000;
 const PILKETOS_RATE_MAX_BUCKETS = 40_000;
 let pilketosRateChecks = 0;
+const PILKETOS_PUBLIC_ELECTION_CACHE_MS = 10_000;
+let pilketosPublicElectionCacheVersion = 0;
+const pilketosPublicElectionCache = new Map<
+  string,
+  { expiresAt: number; election: any } | { expiresAt: number; electionPromise: Promise<any> }
+>();
+
+async function getCachedPublicPilketosElection(includeDraft = false) {
+  const key = includeDraft ? "active-or-draft" : "active";
+  const cached = pilketosPublicElectionCache.get(key);
+  if (cached && "electionPromise" in cached) return cached.electionPromise;
+  if (cached && "election" in cached && cached.expiresAt > Date.now()) return cached.election;
+  const cacheVersion = pilketosPublicElectionCacheVersion;
+
+  const electionPromise = (async () => {
+    const candidateInclude = {
+      orderBy: [{ grade: "asc" as const }, { candidateNo: "asc" as const }],
+    };
+    const openElection = await db.pilketosElection.findFirst({
+      where: { status: "OPEN" },
+      include: { candidates: candidateInclude },
+      orderBy: { updatedAt: "desc" },
+    });
+    if (openElection || !includeDraft) return openElection;
+    return db.pilketosElection.findFirst({
+      where: { status: "DRAFT" },
+      include: { candidates: candidateInclude },
+      orderBy: { updatedAt: "desc" },
+    });
+  })();
+  pilketosPublicElectionCache.set(key, { expiresAt: 0, electionPromise });
+  try {
+    const election = await electionPromise;
+    if (cacheVersion === pilketosPublicElectionCacheVersion) {
+      pilketosPublicElectionCache.set(key, { expiresAt: Date.now() + PILKETOS_PUBLIC_ELECTION_CACHE_MS, election });
+    }
+    return election;
+  } catch (error) {
+    pilketosPublicElectionCache.delete(key);
+    throw error;
+  }
+}
+
+function invalidatePublicPilketosElectionCache() {
+  pilketosPublicElectionCacheVersion += 1;
+  pilketosPublicElectionCache.clear();
+}
 
 function pilketosRateLimit(scope: "identify" | "status" | "vote", perIdentifierLimit: number) {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -746,7 +793,12 @@ function publicPilketosElection(
       candidateNo: candidate.candidateNo,
       name: candidate.name,
       ...(options.includePhotoData === false
-        ? { photoVersion: candidate.photoData ? new Date(candidate.updatedAt || candidate.createdAt || 0).getTime() : null }
+        ? {
+            photoData: null,
+            photoUrl: candidate.photoData
+              ? `/api/v1/pilketos/candidates/${candidate.id}/photo?v=${new Date(candidate.updatedAt || candidate.createdAt || 0).getTime()}`
+              : null,
+          }
         : { photoData: candidate.photoData }),
       voteCount: candidate._count?.votes,
       voteCounts: candidate.voteCounts,
@@ -848,15 +900,7 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
     // committee is still preparing a draft. Prefer the live election, then
     // fall back to the newest draft so names and photos are visible before
     // voting opens.
-    const election = await db.pilketosElection.findFirst({
-      where: { status: "OPEN" },
-      include: { candidates: { orderBy: [{ grade: "asc" }, { candidateNo: "asc" }] } },
-      orderBy: { updatedAt: "desc" },
-    }) || await db.pilketosElection.findFirst({
-      where: { status: "DRAFT" },
-      include: { candidates: { orderBy: [{ grade: "asc" }, { candidateNo: "asc" }] } },
-      orderBy: { updatedAt: "desc" },
-    });
+    const election = await getCachedPublicPilketosElection(true);
     let votedPositions: string[] = [];
     let votedCandidateIds: string[] = [];
     const session = await getPilketosSession(req);
@@ -868,17 +912,31 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
       votedPositions = votes.map((vote) => vote.position);
       votedCandidateIds = votes.map((vote) => vote.candidateId);
     }
+    res.setHeader("Cache-Control", "private, no-store");
     return ok(res, {
-      election: publicPilketosElection(election, votedPositions, votedCandidateIds),
+      election: publicPilketosElection(election, votedPositions, votedCandidateIds, undefined, { includePhotoData: false }),
     });
   });
 
-  app.post("/api/v1/pilketos/identify", async (req, res) => {
-    const election = await db.pilketosElection.findFirst({
-      where: { status: "OPEN" },
-      include: { candidates: { orderBy: [{ grade: "asc" }, { candidateNo: "asc" }] } },
-      orderBy: { updatedAt: "desc" },
-    });
+  app.get("/api/v1/pilketos/candidates/:candidateId/photo", async (req, res) => {
+    const election = await getCachedPublicPilketosElection(true);
+    const candidate = election?.candidates.find((item: any) => item.id === req.params.candidateId);
+    const photo = typeof candidate?.photoData === "string"
+      ? candidate.photoData.match(/^data:(image\/(?:png|jpe?g|webp));base64,([a-z\d+/=\s]+)$/i)
+      : null;
+    if (!candidate || !photo) return fail(res, 404, "PHOTO_NOT_FOUND", "Foto kandidat tidak ditemukan.");
+
+    const updatedAt = new Date(candidate.updatedAt || candidate.createdAt || 0).getTime();
+    const etag = `"pilketos-${candidate.id}-${updatedAt}"`;
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    res.setHeader("ETag", etag);
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    if (req.get("If-None-Match") === etag) return res.status(304).end();
+    return res.type(photo[1].toLowerCase()).send(Buffer.from(photo[2].replace(/\s/g, ""), "base64"));
+  });
+
+  app.post("/api/v1/pilketos/identify", pilketosRateLimit("identify", 30), async (req, res) => {
+    const election = await getCachedPublicPilketosElection();
     if (!election) {
       return fail(res, 409, "ELECTION_NOT_OPEN", "Pemilihan belum dibuka atau sudah ditutup.");
     }
@@ -902,17 +960,20 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
       where: { electionId: election.id, studentId: student.id },
       select: { position: true, candidateId: true },
     });
+    res.setHeader("Cache-Control", "private, no-store");
     return ok(res, {
       student: { fullName: student.fullName },
       election: publicPilketosElection(
         election,
         votes.map((vote) => vote.position),
         votes.map((vote) => vote.candidateId),
+        undefined,
+        { includePhotoData: false },
       ),
     });
   });
 
-  app.post("/api/v1/pilketos/vote", async (req, res) => {
+  app.post("/api/v1/pilketos/vote", pilketosRateLimit("vote", 10), async (req, res) => {
     const student = await resolvePilketosStudent(req.body?.identifier);
     if (!student) {
       return fail(res, 404, "STUDENT_NOT_FOUND", "NIS/NISN tidak ditemukan atau siswa tidak aktif.");
@@ -944,6 +1005,7 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
     if (votingPhase !== "OPEN") return fail(res, 409, "ELECTION_NOT_OPEN", "Pemilihan belum dibuka atau sudah ditutup.");
     const candidates = await db.pilketosCandidate.findMany({
       where: { id: { in: candidateIds }, electionId },
+      select: { id: true, grade: true, candidateNo: true },
     });
     const candidateById = new Map<string, (typeof candidates)[number]>();
     for (const candidate of candidates) candidateById.set(candidate.id, candidate);
@@ -1091,6 +1153,7 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
         ? tx.pilketosElection.update({ where: { id: electionId }, data, include: { candidates: { orderBy: [{ grade: "asc" }, { candidateNo: "asc" }], include: { _count: { select: { votes: true } } } } } })
         : tx.pilketosElection.create({ data, include: { candidates: true } });
     });
+    invalidatePublicPilketosElectionCache();
     return ok(res, { election: publicPilketosElection(election), stats: await getPilketosStats(election.id) });
   });
 
@@ -1114,6 +1177,7 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
     if (photoError) return fail(res, 413, "INVALID_IMAGE", photoError);
     try {
       const candidate = await db.pilketosCandidate.create({ data: { electionId: election.id, grade, candidateNo, name, photoData } });
+      invalidatePublicPilketosElectionCache();
       return res.status(201).json({ success: true, data: candidate });
     } catch (error: any) {
       if (error?.code === "P2002") return fail(res, 409, "DUPLICATE_NUMBER", "Nomor kandidat sudah digunakan.");
@@ -1145,6 +1209,7 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
     if (photoError) return fail(res, 413, "INVALID_IMAGE", photoError);
     try {
       const candidate = await db.pilketosCandidate.update({ where: { id: current.id }, data: { name, grade, photoData, candidateNo } });
+      invalidatePublicPilketosElectionCache();
       return ok(res, candidate);
     } catch (error: any) {
       if (error?.code === "P2002") return fail(res, 409, "DUPLICATE_NUMBER", "Nomor kandidat sudah digunakan.");
@@ -1159,6 +1224,7 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
     if (current.election.status !== "DRAFT") return fail(res, 409, "ELECTION_LOCKED", "Kandidat hanya dapat diubah saat status masih draft.");
     if (current._count.votes) return fail(res, 409, "CANDIDATE_HAS_VOTES", "Kandidat yang sudah menerima suara tidak dapat dihapus.");
     await db.pilketosCandidate.delete({ where: { id: current.id } });
+    invalidatePublicPilketosElectionCache();
     return ok(res, { deleted: true });
   });
 

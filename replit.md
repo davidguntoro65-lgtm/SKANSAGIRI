@@ -37,6 +37,7 @@ Starts the Express server on **port 5000**, which also serves the Vite dev clien
 | `ADMIN_USERNAME` | Admin panel login username (fallback only) | `jobenenterprise` |
 | `ADMIN_PASSWORD` | Admin panel login password (fallback only) | (see memory) |
 | `SESSION_SECRET` | Signs session tokens | required |
+| `DATABASE_POOL_MAX` | Maximum PostgreSQL connections per Node worker | `10` |
 | `NODE_ENV` | `development` or `production` | `development` |
 | `PORT` | Server port | `5000` |
 
@@ -47,6 +48,14 @@ Starts the Express server on **port 5000**, which also serves the Vite dev clien
 Follow the manual release runbook in [`docs/PANDUAN-RILIS-MANUAL-CPANEL.md`](docs/PANDUAN-RILIS-MANUAL-CPANEL.md). The production site is mounted at `/id`, so use `npm run build:cpanel` in Replit; it sets the required asset prefix and runs the normal build. Commit and push through Replit's Git interface, then run `deploy.sh` manually on cPanel. Production migrations must run on cPanel against its production `DATABASE_URL`, never against Replit's development database.
 
 The cPanel app uses **Node.js 22** and `app.js` as its Passenger startup file. Keep `.env` and all credentials out of Git. If Prisma reports `P3005`, follow the runbook's guarded legacy-baseline instructions; never mark an existing database as baselined without verifying its schema.
+
+### Pilketos traffic and capacity
+
+The voter API keeps the one-ballot-per-student database constraint and stores all four choices in one transaction. Public election metadata is briefly cached in the app process; candidate images are served separately with long-lived browser caching, and voter-page refreshes are staggered to reduce bursts. These changes do not add a database migration, and they do not replace the cPanel deployment flow.
+
+`DATABASE_POOL_MAX` controls PostgreSQL connections **per Node worker** and defaults to 10. Do not increase it without checking the database connection quota and the number of Passenger workers; their pool limits add together. The code changes reduce avoidable work but cannot prove that a particular cPanel plan supports 2,000 simultaneous visitors or votes. Confirm CPU, memory, process, database, and bandwidth limits with the hosting provider, then run a staged load test against the same hosting and database setup before a live election.
+
+The current voter identification flow accepts NIS/NISN without a password. The database prevents a second ballot for the same student, but this does not prove that the person entering the identifier is that student. Use a stronger verified identity step if impersonation risk is unacceptable.
 
 ### External PostgreSQL options (free tier):
 - **Neon** — https://neon.tech (recommended, serverless, generous free tier)
