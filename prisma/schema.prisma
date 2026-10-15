@@ -565,7 +565,7 @@ model DiklatModuleSettings {
   description           String   @default("Satu Portal untuk Materi, LKPD, dan Pengumpulan Tugas Diklat.")
   submissionsEnabled    Boolean  @default(true)
   archiveVisible        Boolean  @default(true)
-  maxFileSizeMb         Int      @default(15)
+  maxFileSizeMb         Int      @default(40)
   allowedMimeTypes      String[] @default(["application/pdf", "application/zip", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "image/jpeg", "image/png"])
   allowedExtensions     String[] @default([".pdf", ".zip", ".docx", ".pptx", ".xlsx", ".jpg", ".jpeg", ".png"])
   submissionDriveAccess String   @default("PRIVATE")
@@ -591,6 +591,7 @@ model DiklatTraining {
   materialsFolderId   String?
   lkpdFolderId        String?
   submissionsFolderId String?
+  photos             DiklatTrainingPhoto[]
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
   taskTypes           DiklatTaskType[]
@@ -634,8 +635,21 @@ model DiklatDriveFile {
   createdAt          DateTime           @default(now())
   document           DiklatDocument?    @relation("DiklatDocumentFile")
   submission         DiklatSubmission?  @relation("DiklatSubmissionFile")
+  trainingPhoto      DiklatTrainingPhoto? @relation("DiklatTrainingPhotoFile")
 
   @@index([kind, verificationStatus])
+}
+
+model DiklatTrainingPhoto {
+  id          String          @id @default(uuid())
+  trainingId  String
+  driveFileId String          @unique
+  sortOrder   Int             @default(0)
+  createdAt   DateTime        @default(now())
+  training    DiklatTraining  @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  driveFile   DiklatDriveFile @relation("DiklatTrainingPhotoFile", fields: [driveFileId], references: [id], onDelete: Restrict)
+
+  @@index([trainingId, sortOrder, createdAt])
 }
 
 model DiklatDocument {

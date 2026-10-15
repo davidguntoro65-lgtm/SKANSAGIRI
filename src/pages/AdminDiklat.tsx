@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import {
-  Activity, Archive, ArrowDownToLine, ArrowUpDown, BookOpen, Check, ChevronLeft, ChevronRight,
-  ClipboardList, Cloud, Download, File, FilePlus2, FileSpreadsheet, FolderOpen, GraduationCap,
+  Activity, Archive, ArrowDown, ArrowDownToLine, ArrowUp, ArrowUpDown, BookOpen, Check, ChevronLeft, ChevronRight,
+  ClipboardList, Cloud, Download, File, FilePlus2, FileSpreadsheet, FolderOpen, GraduationCap, Image as ImageIcon,
   HardDrive, History, LoaderCircle, Pencil, Plus, RefreshCw, Search, Settings, ShieldCheck,
   Trash2, Upload, X,
 } from "lucide-react";
-import { apiFetch } from "../utils/navigation";
+import { apiFetch, apiPath } from "../utils/navigation";
 
 type Theme = "light" | "dark";
 type AdminSection = "dashboard" | "trainings" | "submissions" | "audit" | "settings";
@@ -14,8 +14,11 @@ type Training = {
   id: string; title: string; slug: string; summary: string; description: string; category?: string | null;
   period?: string | null; year?: number | string | null; status: Status; acceptsSubmissions: boolean;
   archiveVisible: boolean; sortOrder: number; counts: { materials: number; lkpd: number; taskTypes: number; submissions: number };
+  photos?: TrainingPhoto[]; coverPhotoUrl?: string | null;
   createdAt: string; updatedAt: string;
 };
+type TrainingPhoto = { id: string; sortOrder: number; fileName: string; mimeType: string; sizeBytes: number; url: string };
+type TrainingPhotoEntry = { key: string; photo?: TrainingPhoto; file?: File; previewUrl: string };
 type TaskType = {
   id: string; trainingId: string; name: string; description?: string | null; sortOrder: number;
   active: boolean; deadline?: string | null; maxFileSizeMb?: number | null; allowedMimeTypes?: string[] | null;
@@ -39,10 +42,11 @@ type SettingsData = {
   title: string; description: string; archiveVisible: boolean; submissionsEnabled: boolean;
   maxFileSizeMb: number; allowedMimeTypes: string[]; allowedExtensions: string[];
   submissionDriveAccess: "PRIVATE" | "LINK"; rootFolderId: string; driveConfigured: boolean;
-  driveConnected: boolean; driveMessage?: string | null;
+  driveConnected: boolean; driveOAuthAvailable: boolean; driveMessage?: string | null;
 };
 type DriveStatus = {
   configured: boolean; connected: boolean; rootFolderId?: string | null; message?: string | null;
+  oauthAvailable: boolean; oauthConnected: boolean;
   filesToVerify: number; missingFiles: number; checked?: number; newlyMissing?: number;
   restored?: number; remaining?: number; nextCursor?: string | null;
 };
@@ -59,7 +63,10 @@ type DocumentFileInput = { id: number; files: File[] };
 
 const TOKEN_KEY = "smkn1_adm_token";
 const PAGE_SIZE = 10;
-const MAX_DOCUMENT_FILE_BYTES = 20 * 1024 * 1024;
+const MAX_DOCUMENT_FILE_BYTES = 40 * 1024 * 1024;
+const MAX_TRAINING_MATERIALS = 10;
+const MAX_TRAINING_PHOTOS = 6;
+const MAX_TRAINING_PHOTO_BYTES = 20 * 1024 * 1024;
 const emptyTraining: TrainingDraft = { title: "", summary: "", description: "", category: "", period: "", year: "", status: "DRAFT", acceptsSubmissions: false, archiveVisible: false, sortOrder: "0" };
 const emptyTask: TaskDraft = { name: "", description: "", sortOrder: "0", active: true, deadline: "", maxFileSizeMb: "", allowedMimeTypes: "" };
 const emptyDoc: DocumentDraft = { type: "MATERIAL", title: "", description: "", category: "", sortOrder: "0", status: "PUBLISHED" };
@@ -68,6 +75,57 @@ const sizeText = (bytes?: number | null) => !bytes ? "—" : bytes >= 1024 * 102
 const inputBase = "w-full rounded-xl border px-3.5 py-2.5 text-sm outline-none transition focus:ring-2";
 const jsonHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem(TOKEN_KEY) || ""}`, "Content-Type": "application/json" });
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem(TOKEN_KEY) || ""}` });
+
+async function optimizeTrainingPhoto(file: File) {
+  const bitmap = await createImageBitmap(file);
+  try {
+    const scale = Math.min(1, 1920 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Foto tidak dapat diproses oleh browser.");
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(result => result ? resolve(result) : reject(new Error("Foto tidak dapat dikompres.")), "image/webp", 0.82);
+    });
+    const extension = blob.type === "image/webp" ? ".webp" : blob.type === "image/png" ? ".png" : ".jpg";
+    const baseName = file.name.replace(/\.[^.]+$/, "") || "foto-diklat";
+    return new window.File([blob], `${baseName}${extension}`, { type: blob.type || "image/jpeg", lastModified: file.lastModified });
+  } finally {
+    bitmap.close();
+  }
+}
+
+function TrainingPhotoPreview({ entry, dark }: { entry: TrainingPhotoEntry; dark: boolean }) {
+  const [source, setSource] = useState(entry.file ? entry.previewUrl : "");
+  useEffect(() => {
+    if (entry.file) {
+      setSource(entry.previewUrl);
+      return;
+    }
+    if (!entry.photo) return;
+    const controller = new AbortController();
+    let objectUrl = "";
+    apiFetch(apiPath(entry.photo.url), { headers: authHeaders(), signal: controller.signal })
+      .then(response => {
+        if (!response.ok) throw new Error("Foto tidak tersedia.");
+        return response.blob();
+      })
+      .then(blob => {
+        objectUrl = URL.createObjectURL(blob);
+        setSource(objectUrl);
+      })
+      .catch(() => { if (!controller.signal.aborted) setSource(""); });
+    return () => {
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [entry.file, entry.photo?.id, entry.photo?.url, entry.previewUrl]);
+  return source
+    ? <img src={source} alt={entry.photo?.fileName || entry.file?.name || "Foto kegiatan Diklat"} className="h-full w-full object-cover" />
+    : <div className={`flex h-full w-full items-center justify-center text-xs ${dark ? "bg-white/5 text-slate-500" : "bg-[#edf1ef] text-[#87939a]"}`}>Memuat foto…</div>;
+}
 
 async function adminData<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await apiFetch(url, init);
@@ -134,6 +192,8 @@ export default function AdminDiklat({ theme = "light" }: Props) {
   const [trainingDialog, setTrainingDialog] = useState(false);
   const [editingTraining, setEditingTraining] = useState<Training | null>(null);
   const [trainingDraft, setTrainingDraft] = useState<TrainingDraft>(emptyTraining);
+  const [trainingPhotoEntries, setTrainingPhotoEntries] = useState<TrainingPhotoEntry[]>([]);
+  const [nextTrainingPhotoKey, setNextTrainingPhotoKey] = useState(0);
   const [saving, setSaving] = useState(false);
   const [taskDraft, setTaskDraft] = useState<TaskDraft>(emptyTask);
   const [editingTask, setEditingTask] = useState<TaskType | null>(null);
@@ -156,11 +216,15 @@ export default function AdminDiklat({ theme = "light" }: Props) {
   const [settings, setSettings] = useState<SettingsData | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [driveStatus, setDriveStatus] = useState<DriveStatus | null>(null);
+  const [driveConnecting, setDriveConnecting] = useState(false);
   const [driveTesting, setDriveTesting] = useState(false);
   const [driveReconciling, setDriveReconciling] = useState(false);
   const [driveCursor, setDriveCursor] = useState("");
   const selectedDocumentFiles = documentFileInputs.flatMap(row => row.files.map((file, index) => ({ rowId: row.id, index, file })));
   const oversizedDocumentFiles = selectedDocumentFiles.filter(({ file }) => file.size > MAX_DOCUMENT_FILE_BYTES);
+  const existingMaterialCount = trainingDetail?.documents.filter(item => item.type === "MATERIAL").length ?? selectedTraining?.counts.materials ?? 0;
+  const remainingMaterialSlots = Math.max(0, MAX_TRAINING_MATERIALS - existingMaterialCount);
+  const tooManyMaterialFiles = documentDraft.type === "MATERIAL" && selectedDocumentFiles.length > remainingMaterialSlots;
 
   const success = (text: string) => setNotice({ type: "success", text });
   const failure = (error: unknown, fallback: string) => setNotice({ type: "error", text: error instanceof Error ? error.message : fallback });
@@ -245,24 +309,126 @@ export default function AdminDiklat({ theme = "light" }: Props) {
   };
   useEffect(() => { if (section === "settings") void loadSettings(); }, [loadSettings, section]);
 
-  const startCreateTraining = () => { setEditingTraining(null); setTrainingDraft(emptyTraining); setTrainingDialog(true); };
+  const closeTrainingDialog = () => {
+    if (saving) return;
+    trainingPhotoEntries.forEach(entry => { if (entry.file && entry.previewUrl) URL.revokeObjectURL(entry.previewUrl); });
+    setTrainingPhotoEntries([]);
+    setTrainingDialog(false);
+    setEditingTraining(null);
+  };
+  const startCreateTraining = () => {
+    setEditingTraining(null);
+    setTrainingDraft(emptyTraining);
+    setTrainingPhotoEntries([]);
+    setTrainingDialog(true);
+  };
   const startEditTraining = (item: Training) => {
     setEditingTraining(item);
     setTrainingDraft({ title: item.title || "", summary: item.summary || "", description: item.description || "", category: item.category || "", period: item.period || "", year: item.year ? String(item.year) : "", status: item.status, acceptsSubmissions: item.acceptsSubmissions, archiveVisible: item.archiveVisible, sortOrder: String(item.sortOrder ?? 0) });
+    setTrainingPhotoEntries((item.photos || []).map(photo => ({ key: `saved-${photo.id}`, photo, previewUrl: "" })));
     setTrainingDialog(true);
+  };
+  const addTrainingPhotos = (files: File[]) => {
+    if (files.some(file => file.size > MAX_TRAINING_PHOTO_BYTES)) {
+      failure(new Error("Batas ukuran foto adalah 20 MB per foto."), "Foto terlalu besar.");
+      return;
+    }
+    if (trainingPhotoEntries.length + files.length > MAX_TRAINING_PHOTOS) {
+      failure(new Error(`Maksimal ${MAX_TRAINING_PHOTOS} foto per diklat. Hapus foto yang tidak diperlukan terlebih dahulu.`), "Batas jumlah foto tercapai.");
+      return;
+    }
+    const nextEntries = files.map((file, index) => ({
+      key: `new-${nextTrainingPhotoKey + index}`,
+      file,
+      previewUrl: URL.createObjectURL(file),
+    }));
+    setNextTrainingPhotoKey(current => current + files.length);
+    setTrainingPhotoEntries(current => [...current, ...nextEntries]);
+  };
+  const removeTrainingPhoto = (entry: TrainingPhotoEntry) => {
+    if (entry.file && entry.previewUrl) URL.revokeObjectURL(entry.previewUrl);
+    setTrainingPhotoEntries(current => current.filter(item => item.key !== entry.key));
+  };
+  const moveTrainingPhoto = (index: number, offset: -1 | 1) => {
+    setTrainingPhotoEntries(current => {
+      const target = index + offset;
+      if (target < 0 || target >= current.length) return current;
+      const reordered = [...current];
+      [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+      return reordered;
+    });
   };
   const saveTraining = async (event: FormEvent) => {
     event.preventDefault(); setSaving(true);
     const data = { ...trainingDraft, year: trainingDraft.year ? Number(trainingDraft.year) : null, sortOrder: Number(trainingDraft.sortOrder) || 0 };
+    const originalPhotos = [...(editingTraining?.photos || [])];
+    let entries = [...trainingPhotoEntries];
+    let savedTraining: Training | null = null;
+    let persistedPhotos: TrainingPhoto[] = [];
     try {
       const response = await adminData<{ training: Training }>(editingTraining ? `/api/v1/diklat/admin/trainings/${editingTraining.id}` : "/api/v1/diklat/admin/trainings", {
         method: editingTraining ? "PUT" : "POST", headers: jsonHeaders(), body: JSON.stringify(data),
       });
-      setTrainingDialog(false); setEditingTraining(null);
-      success(editingTraining ? "Perubahan diklat tersimpan." : "Diklat baru berhasil dibuat.");
+      savedTraining = response.training;
+      setEditingTraining(savedTraining);
+      persistedPhotos = [...(savedTraining.photos || [])];
+      const currentIds = new Set(entries.flatMap(entry => entry.photo ? [entry.photo.id] : []));
+      const removedPhotos = originalPhotos.filter(photo => !currentIds.has(photo.id));
+
+      for (let index = 0; index < entries.length; index += 1) {
+        const entry = entries[index];
+        if (!entry.file) continue;
+        try {
+          const optimized = await optimizeTrainingPhoto(entry.file);
+          const body = new FormData();
+          body.append("file", optimized);
+          const uploaded = await adminData<{ photo: TrainingPhoto }>(`/api/v1/diklat/admin/trainings/${savedTraining.id}/photos`, {
+            method: "POST", headers: authHeaders(), body,
+          });
+          if (entry.previewUrl) URL.revokeObjectURL(entry.previewUrl);
+          entries[index] = { key: entry.key, photo: uploaded.photo, previewUrl: "" };
+          persistedPhotos.push(uploaded.photo);
+          setTrainingPhotoEntries([...entries]);
+        } catch (error) {
+          setEditingTraining({ ...savedTraining, photos: persistedPhotos });
+          setTrainingPhotoEntries(entries);
+          failure(new Error(`Data diklat sudah tersimpan, tetapi foto “${entry.file.name}” belum berhasil diunggah. ${error instanceof Error ? error.message : ""}`), "Foto belum berhasil diunggah.");
+          setSaving(false);
+          return;
+        }
+      }
+
+      for (const photo of removedPhotos) {
+        try {
+          await adminData(`/api/v1/diklat/admin/trainings/${savedTraining.id}/photos/${photo.id}`, {
+            method: "DELETE", headers: authHeaders(),
+          });
+          persistedPhotos = persistedPhotos.filter(item => item.id !== photo.id);
+        } catch (error) {
+          setEditingTraining({ ...savedTraining, photos: persistedPhotos });
+          setTrainingPhotoEntries(entries);
+          failure(new Error(`Data diklat sudah tersimpan, tetapi foto lama belum dapat dihapus. ${error instanceof Error ? error.message : ""}`), "Perubahan foto belum lengkap.");
+          setSaving(false);
+          return;
+        }
+      }
+
+      const orderedPhotoIds = entries.flatMap(entry => entry.photo ? [entry.photo.id] : []);
+      setEditingTraining({ ...savedTraining, photos: persistedPhotos });
+      await adminData(`/api/v1/diklat/admin/trainings/${savedTraining.id}/photos/order`, {
+        method: "PATCH", headers: jsonHeaders(), body: JSON.stringify({ photoIds: orderedPhotoIds }),
+      });
+      const finalPhotos = orderedPhotoIds.map(id => persistedPhotos.find(photo => photo.id === id)).filter((photo): photo is TrainingPhoto => Boolean(photo));
+      setTrainingPhotoEntries(finalPhotos.map(photo => ({ key: `saved-${photo.id}`, photo, previewUrl: "" })));
+      setEditingTraining({ ...savedTraining, photos: finalPhotos });
+      setTrainingDialog(false);
+      setEditingTraining(null);
+      success(editingTraining ? "Perubahan diklat dan foto tersimpan." : "Diklat baru berhasil dibuat.");
       await reload();
-      if (response.training?.id) setSelectedTrainingId(response.training.id);
-    } catch (error) { failure(error, "Perubahan diklat belum tersimpan."); }
+      if (savedTraining.id) setSelectedTrainingId(savedTraining.id);
+    } catch (error) {
+      failure(error, savedTraining ? "Data diklat tersimpan, tetapi urutan foto belum berhasil disimpan." : "Perubahan diklat belum tersimpan.");
+    }
     finally { setSaving(false); }
   };
   const changeTrainingStatus = async (item: Training, status: Status) => {
@@ -314,7 +480,11 @@ export default function AdminDiklat({ theme = "light" }: Props) {
     event.preventDefault();
     if (!selectedTraining || !selectedDocumentFiles.length) return;
     if (oversizedDocumentFiles.length) {
-      failure(new Error(`Batas teknis unggahan adalah 20 MB per berkas. Ganti: ${oversizedDocumentFiles.slice(0, 3).map(({ file }) => file.name).join(", ")}.`), "Berkas terlalu besar.");
+      failure(new Error(`Batas unggahan adalah 40 MB per berkas. Ganti: ${oversizedDocumentFiles.slice(0, 3).map(({ file }) => file.name).join(", ")}.`), "Berkas terlalu besar.");
+      return;
+    }
+    if (documentDraft.type === "MATERIAL" && selectedDocumentFiles.length > remainingMaterialSlots) {
+      failure(new Error(`Diklat ini maksimal ${MAX_TRAINING_MATERIALS} materi. Sisa slot: ${remainingMaterialSlots}.`), "Batas jumlah materi tercapai.");
       return;
     }
     const baseTitle = documentDraft.title.trim();
@@ -457,6 +627,44 @@ export default function AdminDiklat({ theme = "light" }: Props) {
     } catch (error) { failure(error, "Pemeriksaan Google Drive belum berhasil."); }
     finally { setDriveTesting(false); }
   };
+  const connectDrive = async () => {
+    const popup = window.open("about:blank", "diklat-google-drive-oauth", "popup,width=560,height=720");
+    if (!popup) {
+      failure(new Error("Izinkan pop-up untuk situs ini, lalu klik Hubungkan Google Drive lagi."), "Pop-up login Google diblokir.");
+      return;
+    }
+    setDriveConnecting(true);
+    try {
+      const data = await adminData<{ authorizationUrl: string }>("/api/v1/diklat/admin/drive/oauth/start", { headers: authHeaders() });
+      popup.location.href = data.authorizationUrl;
+    } catch (error) {
+      popup.close();
+      setDriveConnecting(false);
+      failure(error, "Login Google belum dapat dimulai.");
+    }
+  };
+  const disconnectDrive = async () => {
+    setDriveTesting(true);
+    try {
+      await adminData("/api/v1/diklat/admin/drive/oauth/disconnect", { method: "POST", headers: authHeaders() });
+      await loadDriveStatus();
+      success("Akun Google Drive telah dilepaskan.");
+    } catch (error) { failure(error, "Akun Google Drive belum dapat dilepaskan."); }
+    finally { setDriveTesting(false); }
+  };
+  useEffect(() => {
+    const receiveDriveOAuth = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin || event.data?.type !== "diklat-drive-oauth") return;
+      setDriveConnecting(false);
+      void adminData<DriveStatus>("/api/v1/diklat/admin/drive/status", { headers: authHeaders() })
+        .then(setDriveStatus)
+        .catch(() => {});
+      if (event.data.success) success(String(event.data.message || "Google Drive terhubung."));
+      else failure(new Error(String(event.data.message || "Login Google belum berhasil.")), "Koneksi Google Drive gagal.");
+    };
+    window.addEventListener("message", receiveDriveOAuth);
+    return () => window.removeEventListener("message", receiveDriveOAuth);
+  }, []);
   const reconcileDriveFiles = async () => {
     setDriveReconciling(true);
     try {
@@ -564,8 +772,14 @@ export default function AdminDiklat({ theme = "light" }: Props) {
                         <div className="space-y-2">
                           {documentFileInputs.map((row, index) => <div key={`${row.id}-${documentFileInputVersion}`} className="flex items-start gap-2">
                             <div className="min-w-0 flex-1">
-                              <input aria-label={`Pilih berkas ${index + 1}`} type="file" multiple disabled={saving} onChange={event => {
+                              <input aria-label={`Pilih berkas ${index + 1}`} type="file" multiple disabled={saving || (documentDraft.type === "MATERIAL" && remainingMaterialSlots === 0)} onChange={event => {
                                 const files = Array.from(event.currentTarget.files || []);
+                                const otherSelectedCount = selectedDocumentFiles.filter(selected => selected.rowId !== row.id).length;
+                                if (documentDraft.type === "MATERIAL" && otherSelectedCount + files.length > remainingMaterialSlots) {
+                                  failure(new Error(`Sisa slot materi untuk diklat ini: ${remainingMaterialSlots}. Maksimal ${MAX_TRAINING_MATERIALS} materi per diklat.`), "Batas jumlah materi tercapai.");
+                                  event.currentTarget.value = "";
+                                  return;
+                                }
                                 setDocumentFileInputs(current => current.map(item => item.id === row.id ? { ...item, files } : item));
                               }} className={`${palette.input} file:mr-3 file:rounded-lg file:border-0 file:bg-[#edf2f1] file:px-3 file:py-1.5 file:text-xs file:font-bold`} />
                               {row.files.length > 0 && <ul className="mt-1 space-y-1 pl-1 text-[10px] font-normal">
@@ -575,12 +789,14 @@ export default function AdminDiklat({ theme = "light" }: Props) {
                             {documentFileInputs.length > 1 && <button type="button" disabled={saving} onClick={() => setDocumentFileInputs(current => current.length > 1 ? current.filter(item => item.id !== row.id) : current)} aria-label={`Hapus pilihan berkas ${index + 1}`} className={`rounded-lg border p-2.5 disabled:opacity-50 ${palette.button}`}><X size={15} /></button>}
                           </div>)}
                         </div>
-                        <button type="button" disabled={saving} onClick={addDocumentFileInput} className={`mt-2 inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-50 ${palette.button}`}><Plus size={14} /> Tambah berkas</button>
-                        <p className="mt-1 text-[10px] font-normal">Pilih beberapa file sekaligus atau tambah kolom dengan tombol +. Maksimal 20 MB per berkas; batas portal dapat lebih rendah.</p>
-                        {oversizedDocumentFiles.length > 0 && <p role="alert" className="mt-2 rounded-lg border border-rose-300/70 bg-rose-50 px-3 py-2 text-[11px] font-semibold text-rose-700">Berkas melebihi batas teknis 20 MB dan tidak akan dikirim: {oversizedDocumentFiles.slice(0, 3).map(({ file }) => file.name).join(", ")}{oversizedDocumentFiles.length > 3 ? `, dan ${oversizedDocumentFiles.length - 3} lainnya` : ""}. Ganti dengan berkas yang lebih kecil.</p>}
+                        <button type="button" disabled={saving || (documentDraft.type === "MATERIAL" && selectedDocumentFiles.length >= remainingMaterialSlots)} onClick={addDocumentFileInput} className={`mt-2 inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-50 ${palette.button}`}><Plus size={14} /> Tambah berkas</button>
+                        <p className="mt-1 text-[10px] font-normal">Maksimal 40 MB per berkas; batas portal dapat lebih rendah. Materi maksimal {MAX_TRAINING_MATERIALS} berkas per diklat{documentDraft.type === "MATERIAL" ? ` (sisa ${remainingMaterialSlots})` : ""}.</p>
+                        {remainingMaterialSlots === 0 && documentDraft.type === "MATERIAL" && <p role="status" className="mt-2 rounded-lg border border-amber-300/70 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800">Batas 10 materi sudah tercapai. LKPD tetap dapat diunggah.</p>}
+                        {oversizedDocumentFiles.length > 0 && <p role="alert" className="mt-2 rounded-lg border border-rose-300/70 bg-rose-50 px-3 py-2 text-[11px] font-semibold text-rose-700">Berkas melebihi batas teknis 40 MB dan tidak akan dikirim: {oversizedDocumentFiles.slice(0, 3).map(({ file }) => file.name).join(", ")}{oversizedDocumentFiles.length > 3 ? `, dan ${oversizedDocumentFiles.length - 3} lainnya` : ""}. Ganti dengan berkas yang lebih kecil.</p>}
+                        {tooManyMaterialFiles && <p role="alert" className="mt-2 rounded-lg border border-rose-300/70 bg-rose-50 px-3 py-2 text-[11px] font-semibold text-rose-700">Jumlah file melebihi sisa batas materi diklat ini.</p>}
                       </div>
                     </div>
-                    <button disabled={saving || selectedDocumentFiles.length === 0 || oversizedDocumentFiles.length > 0} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-[#173653] px-3.5 py-2.5 text-xs font-extrabold text-white disabled:opacity-50">{saving ? <LoaderCircle className="animate-spin" size={14} /> : <Upload size={14} />} {saving ? "Mengunggah berkas…" : selectedDocumentFiles.length > 1 ? `Unggah ${selectedDocumentFiles.length} dokumen` : "Unggah dokumen"}</button>
+                    <button disabled={saving || selectedDocumentFiles.length === 0 || oversizedDocumentFiles.length > 0 || tooManyMaterialFiles} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-[#173653] px-3.5 py-2.5 text-xs font-extrabold text-white disabled:opacity-50">{saving ? <LoaderCircle className="animate-spin" size={14} /> : <Upload size={14} />} {saving ? "Mengunggah berkas…" : selectedDocumentFiles.length > 1 ? `Unggah ${selectedDocumentFiles.length} dokumen` : "Unggah dokumen"}</button>
                   </form>
                   {trainingDetail?.documents?.length ? <div className="space-y-2">{trainingDetail.documents.map(item => <div key={item.id} className={`flex items-center gap-3 rounded-xl border px-3.5 py-3 ${dark ? "border-white/10" : "border-[#e2e8e8]"}`}><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${dark ? "bg-white/[.05] text-[#d1b66f]" : "bg-[#edf2f1] text-[#557589]"}`}><File size={16} /></span><div className="min-w-0 flex-1"><p className={`truncate text-sm font-bold ${palette.text}`}>{item.title}</p><p className={`mt-0.5 text-[10px] ${palette.muted}`}>{item.type === "LKPD" ? "LKPD" : "Materi"} · {item.driveFileName}</p></div><StatusBadge dark={dark} status={item.status} /><button aria-label={`Edit ${item.title}`} onClick={() => { setEditingDocument(item); setDocumentDraft({ type: item.type, title: item.title, description: item.description || "", category: item.category || "", sortOrder: String(item.sortOrder), status: item.status }); }} className={`rounded-lg p-2 ${palette.muted} hover:text-[#bd9852]`}><Pencil size={15} /></button><button aria-label={`Arsipkan ${item.title}`} onClick={() => void archiveDocument(item)} className="rounded-lg p-2 text-rose-500 hover:bg-rose-500/10"><Archive size={15} /></button></div>)}</div> : <p className={`rounded-xl border border-dashed p-4 text-xs ${dark ? "border-white/10 text-slate-400" : "border-[#dce4e5] text-[#7b8990]"}`}>Daftar dokumen belum tersedia melalui endpoint detail untuk kegiatan ini.</p>}
                 </div>
@@ -628,7 +844,7 @@ export default function AdminDiklat({ theme = "light" }: Props) {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className={`text-xs font-bold sm:col-span-2 ${palette.muted}`}>Judul portal<input required value={settings.title} onChange={e => setSettings({ ...settings, title: e.target.value })} className={`${palette.input} mt-1.5`} /></label>
                   <label className={`text-xs font-bold sm:col-span-2 ${palette.muted}`}>Deskripsi portal<textarea rows={4} value={settings.description} onChange={e => setSettings({ ...settings, description: e.target.value })} className={`${palette.input} mt-1.5 resize-y`} /></label>
-                  <label className={`text-xs font-bold ${palette.muted}`}>Batas ukuran unggahan (MB)<input required type="number" min="1" value={settings.maxFileSizeMb} onChange={e => setSettings({ ...settings, maxFileSizeMb: Number(e.target.value) })} className={`${palette.input} mt-1.5`} /></label>
+                  <label className={`text-xs font-bold ${palette.muted}`}>Batas ukuran unggahan (MB)<input required type="number" min="1" max="40" value={settings.maxFileSizeMb} onChange={e => setSettings({ ...settings, maxFileSizeMb: Number(e.target.value) })} className={`${palette.input} mt-1.5`} /><span className="mt-1 block text-[10px] font-normal">Batas teknis maksimum: 40 MB per file.</span></label>
                   <label className={`text-xs font-bold ${palette.muted}`}>Akses file hasil tugas<select value={settings.submissionDriveAccess} onChange={e => setSettings({ ...settings, submissionDriveAccess: e.target.value as SettingsData["submissionDriveAccess"] })} className={`${palette.input} mt-1.5`}><option value="PRIVATE">Privat</option><option value="LINK">Tautan individual</option></select></label>
                   <label className={`text-xs font-bold sm:col-span-2 ${palette.muted}`}>Jenis MIME yang diizinkan <span className="font-normal">(pisahkan dengan koma)</span><input value={settings.allowedMimeTypes.join(", ")} onChange={e => setSettings({ ...settings, allowedMimeTypes: e.target.value.split(",").map(item => item.trim()).filter(Boolean) })} className={`${palette.input} mt-1.5`} /></label>
                   <label className={`text-xs font-bold sm:col-span-2 ${palette.muted}`}>Ekstensi yang diizinkan <span className="font-normal">(pisahkan dengan koma)</span><input value={settings.allowedExtensions.join(", ")} onChange={e => setSettings({ ...settings, allowedExtensions: e.target.value.split(",").map(item => item.trim()).filter(Boolean) })} className={`${palette.input} mt-1.5`} /></label>
@@ -645,7 +861,11 @@ export default function AdminDiklat({ theme = "light" }: Props) {
               <PanelCard dark={dark} className="p-5">
                 <div className="flex items-center gap-3"><span className={`flex h-10 w-10 items-center justify-center rounded-xl ${dark ? "bg-white/[.05] text-[#d1b66f]" : "bg-[#edf2f1] text-[#557589]"}`}><Cloud size={18} /></span><div><h3 className={`font-extrabold ${palette.text}`}>Google Drive</h3><p className={`text-xs ${palette.muted}`}>Status dari layanan server</p></div></div>
                 {driveStatus ? <div className="mt-5 space-y-3"><div className={`flex items-center justify-between rounded-xl p-3 ${dark ? "bg-white/[.04]" : "bg-[#f4f6f3]"}`}><span className={`text-xs ${palette.muted}`}>Konfigurasi</span><StatusBadge dark={dark} status={driveStatus.configured ? "SIAP" : "BELUM SIAP"} /></div><div className={`flex items-center justify-between rounded-xl p-3 ${dark ? "bg-white/[.04]" : "bg-[#f4f6f3]"}`}><span className={`text-xs ${palette.muted}`}>Koneksi</span><StatusBadge dark={dark} status={driveStatus.connected ? "TERHUBUNG" : "BELUM TERHUBUNG"} /></div><p className={`text-xs leading-5 ${palette.muted}`}>{driveStatus.message || "Belum ada pesan status dari server."}</p><div className={`grid grid-cols-2 gap-2 text-xs ${palette.muted}`}><p>Berkas perlu verifikasi <strong className={palette.text}>{driveStatus.filesToVerify}</strong></p><p>Berkas tidak ditemukan <strong className={palette.text}>{driveStatus.missingFiles}</strong></p></div></div> : <p className={`mt-4 text-sm ${palette.muted}`}>Status Drive belum dapat diverifikasi.</p>}
-                <button onClick={() => void testDrive()} disabled={driveTesting} className={`mt-5 flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold disabled:opacity-50 ${palette.button}`}>{driveTesting ? <LoaderCircle size={15} className="animate-spin" /> : <RefreshCw size={15} />} Uji koneksi Drive</button>
+                  {driveStatus?.oauthConnected
+                    ? <button onClick={() => void disconnectDrive()} disabled={driveTesting} className={`mt-5 flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold disabled:opacity-50 ${palette.button}`}>{driveTesting ? <LoaderCircle size={15} className="animate-spin" /> : <X size={15} />} Putuskan akun Google</button>
+                    : <button onClick={() => void connectDrive()} disabled={driveConnecting} className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#173653] px-4 py-3 text-sm font-extrabold text-white disabled:opacity-50">{driveConnecting ? <LoaderCircle size={15} className="animate-spin" /> : <Cloud size={15} />} Hubungkan Google Drive</button>}
+                  {!driveStatus?.oauthAvailable && <p className={`mt-2 text-[10px] leading-4 ${palette.muted}`}>Login popup memerlukan OAuth Google yang dikonfigurasi pada environment server. Kredensial tidak disimpan di kode aplikasi.</p>}
+                  <button onClick={() => void testDrive()} disabled={driveTesting} className={`mt-2 flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold disabled:opacity-50 ${palette.button}`}>{driveTesting ? <LoaderCircle size={15} className="animate-spin" /> : <RefreshCw size={15} />} Uji koneksi Drive</button>
                  <button onClick={() => void reconcileDriveFiles()} disabled={driveReconciling || !driveStatus?.connected} className={`mt-2 flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50 ${palette.button}`}>{driveReconciling ? <LoaderCircle size={15} className="animate-spin" /> : <ShieldCheck size={15} />}{driveCursor ? "Lanjutkan verifikasi berkas" : "Verifikasi berkas di Drive"}</button>
               </PanelCard>
               <PanelCard dark={dark} className="p-5">
@@ -659,13 +879,40 @@ export default function AdminDiklat({ theme = "light" }: Props) {
       </>}
     </div>
 
-    {trainingDialog && <div className="fixed inset-0 z-[100] flex items-end justify-center bg-[#0d2030]/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-5" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && !saving) setTrainingDialog(false); }}>
+    {trainingDialog && <div className="fixed inset-0 z-[100] flex items-end justify-center bg-[#0d2030]/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-5" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && !saving) closeTrainingDialog(); }}>
       <form onSubmit={saveTraining} className={`max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-t-3xl border p-5 shadow-2xl sm:rounded-3xl sm:p-7 ${dark ? "border-white/10 bg-[#13293a]" : "border-[#dce4e5] bg-[#fffefa]"}`} aria-labelledby="training-dialog-title">
-        <div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-extrabold uppercase tracking-[.18em] text-[#8b713e]">Data kegiatan</p><h2 id="training-dialog-title" className={`mt-1 text-xl font-extrabold ${palette.text}`}>{editingTraining ? "Edit diklat" : "Buat diklat"}</h2></div><button type="button" onClick={() => setTrainingDialog(false)} aria-label="Tutup formulir" className={`rounded-lg p-2 ${palette.muted}`}><X size={18} /></button></div>
+        <div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-extrabold uppercase tracking-[.18em] text-[#8b713e]">Data kegiatan</p><h2 id="training-dialog-title" className={`mt-1 text-xl font-extrabold ${palette.text}`}>{editingTraining ? "Edit diklat" : "Buat diklat"}</h2></div><button type="button" disabled={saving} onClick={closeTrainingDialog} aria-label="Tutup formulir" className={`rounded-lg p-2 disabled:opacity-50 ${palette.muted}`}><X size={18} /></button></div>
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <label className={`text-xs font-bold sm:col-span-2 ${palette.muted}`}>Nama diklat<input required maxLength={180} value={trainingDraft.title} onChange={e => setTrainingDraft({ ...trainingDraft, title: e.target.value })} className={`${palette.input} mt-1.5`} /></label>
           <label className={`text-xs font-bold sm:col-span-2 ${palette.muted}`}>Ringkasan<textarea rows={2} value={trainingDraft.summary} onChange={e => setTrainingDraft({ ...trainingDraft, summary: e.target.value })} className={`${palette.input} mt-1.5 resize-y`} /></label>
           <label className={`text-xs font-bold sm:col-span-2 ${palette.muted}`}>Deskripsi<textarea rows={4} value={trainingDraft.description} onChange={e => setTrainingDraft({ ...trainingDraft, description: e.target.value })} className={`${palette.input} mt-1.5 resize-y`} /></label>
+          <div className={`rounded-xl border p-4 sm:col-span-2 ${dark ? "border-white/10 bg-white/[.02]" : "border-[#e2e8e8] bg-[#fafbf8]"}`}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div><p className={`flex items-center gap-2 text-xs font-extrabold ${palette.text}`}><ImageIcon size={15} className="text-[#bd9852]" /> Foto kegiatan <span className={`font-semibold ${palette.muted}`}>({trainingPhotoEntries.length}/{MAX_TRAINING_PHOTOS})</span></p>
+                <p className={`mt-1 text-[10px] leading-4 ${palette.muted}`}>Foto pertama menjadi banner depan. Maksimal 6 foto, 20 MB per foto. Foto dioptimalkan sebelum disimpan agar halaman publik lebih ringan.</p></div>
+              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-[#dce4e5] bg-white px-3 py-2 text-xs font-bold text-[#456378] hover:bg-[#f2f5f3]">
+                <Plus size={14} /> Pilih foto
+                <input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={saving || trainingPhotoEntries.length >= MAX_TRAINING_PHOTOS} onChange={event => {
+                  addTrainingPhotos(Array.from(event.currentTarget.files || []));
+                  event.currentTarget.value = "";
+                }} className="sr-only" />
+              </label>
+            </div>
+            {trainingPhotoEntries.length > 0 && <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {trainingPhotoEntries.map((entry, index) => <div key={entry.key} className={`overflow-hidden rounded-xl border ${dark ? "border-white/10 bg-black/10" : "border-[#dce4e5] bg-white"}`}>
+                <div className="relative aspect-[4/3]">
+                  <TrainingPhotoPreview entry={entry} dark={dark} />
+                  {index === 0 && <span className="absolute left-2 top-2 rounded-full bg-[#173653]/90 px-2 py-1 text-[9px] font-extrabold text-white">Banner depan</span>}
+                </div>
+                <div className="flex items-center gap-1 p-2">
+                  <span className={`min-w-0 flex-1 truncate text-[10px] ${palette.muted}`} title={entry.photo?.fileName || entry.file?.name}>{entry.photo?.fileName || entry.file?.name || "Foto"}</span>
+                  <button type="button" disabled={saving || index === 0} onClick={() => moveTrainingPhoto(index, -1)} aria-label="Jadikan foto lebih awal" className={`rounded-md p-1.5 disabled:opacity-30 ${palette.muted}`}><ArrowUp size={14} /></button>
+                  <button type="button" disabled={saving || index === trainingPhotoEntries.length - 1} onClick={() => moveTrainingPhoto(index, 1)} aria-label="Pindahkan foto ke urutan berikutnya" className={`rounded-md p-1.5 disabled:opacity-30 ${palette.muted}`}><ArrowDown size={14} /></button>
+                  <button type="button" disabled={saving} onClick={() => removeTrainingPhoto(entry)} aria-label="Hapus foto dari diklat" className="rounded-md p-1.5 text-rose-500 disabled:opacity-30"><X size={14} /></button>
+                </div>
+              </div>)}
+            </div>}
+          </div>
           <label className={`text-xs font-bold ${palette.muted}`}>Kategori<input value={trainingDraft.category} onChange={e => setTrainingDraft({ ...trainingDraft, category: e.target.value })} className={`${palette.input} mt-1.5`} /></label>
           <label className={`text-xs font-bold ${palette.muted}`}>Periode<input value={trainingDraft.period} onChange={e => setTrainingDraft({ ...trainingDraft, period: e.target.value })} className={`${palette.input} mt-1.5`} placeholder="Misalnya: Mei–Juni" /></label>
           <label className={`text-xs font-bold ${palette.muted}`}>Tahun<input type="number" min="2000" max="2100" value={trainingDraft.year} onChange={e => setTrainingDraft({ ...trainingDraft, year: e.target.value })} className={`${palette.input} mt-1.5`} /></label>
@@ -676,7 +923,7 @@ export default function AdminDiklat({ theme = "light" }: Props) {
             <label className={`flex items-center gap-3 text-sm font-semibold ${palette.text}`}><input type="checkbox" checked={trainingDraft.archiveVisible} onChange={e => setTrainingDraft({ ...trainingDraft, archiveVisible: e.target.checked })} className="accent-[#315d78]" /> Izinkan tampil di arsip publik</label>
           </div>
         </div>
-        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setTrainingDialog(false)} className={`rounded-xl border px-4 py-3 text-sm font-bold ${palette.button}`}>Batal</button><button disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#173653] px-5 py-3 text-sm font-extrabold text-white disabled:opacity-50">{saving && <LoaderCircle size={15} className="animate-spin" />}{editingTraining ? "Simpan perubahan" : "Buat diklat"}</button></div>
+        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" disabled={saving} onClick={closeTrainingDialog} className={`rounded-xl border px-4 py-3 text-sm font-bold disabled:opacity-50 ${palette.button}`}>Batal</button><button disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#173653] px-5 py-3 text-sm font-extrabold text-white disabled:opacity-50">{saving && <LoaderCircle size={15} className="animate-spin" />}{editingTraining ? "Simpan perubahan" : "Buat diklat"}</button></div>
       </form>
     </div>}
     {editingDocument && <div className="fixed inset-0 z-[110] flex items-end justify-center bg-[#0d2030]/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-5">

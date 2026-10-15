@@ -13,6 +13,8 @@ type Training = {
   id: string; title: string; slug: string; summary: string; description: string; category?: string | null;
   period?: string | null; year?: number | string | null; status: Status; acceptsSubmissions: boolean;
   archiveVisible: boolean; sortOrder: number; counts: { materials: number; lkpd: number; taskTypes: number; submissions: number };
+  photos?: Array<{ id: string; sortOrder: number; fileName: string; mimeType: string; sizeBytes: number; url: string }>;
+  coverPhotoUrl?: string | null;
   createdAt: string; updatedAt: string;
 };
 type DocumentItem = {
@@ -133,6 +135,7 @@ function TrainingCard({ item, archive = false }: { item: Training; archive?: boo
   return <article className="group flex min-h-[245px] flex-col rounded-[20px] border border-[#dfe5e7] bg-[#fffefa] p-5 transition duration-200 hover:-translate-y-1 hover:border-[#b8c7d0] hover:shadow-[0_16px_34px_-24px_rgba(26,53,74,.35)] sm:p-6">
     <div className="flex items-start justify-between gap-3"><Pill tint={archive ? "slate" : item.category ? "blue" : "gold"}>{archive ? "Arsip" : item.category || "Program diklat"}</Pill>
       {item.period && <span className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-[#7b8790]"><CalendarDays size={13} />{item.period}</span>}</div>
+    {item.coverPhotoUrl && <div className="mt-4 aspect-[16/8] overflow-hidden rounded-xl bg-[#edf2f2]"><img src={apiPath(item.coverPhotoUrl)} alt={`Banner ${item.title}`} loading="lazy" decoding="async" className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]" /></div>}
     <h3 className="mt-5 text-lg font-extrabold leading-snug tracking-[-.02em] text-[#183650]">{item.title}</h3>
     <p className="mt-2 line-clamp-3 text-sm leading-6 text-[#667582]">{item.summary || item.description || "Informasi dan bahan pembelajaran kegiatan diklat."}</p>
     <div className="mt-auto flex items-center justify-between border-t border-[#edf0f0] pt-4">
@@ -350,6 +353,10 @@ export default function PusatDiklat() {
         {!detailLoading && detailError && <div className="mx-auto max-w-4xl"><Notice title="Detail belum tersedia" message={detailError} retry={() => setDetailRetryKey(value => value + 1)} /></div>}
         {!detailLoading && training && <>
           <div className="diklat-blue-surface relative overflow-hidden rounded-[28px] border border-[#b8d5f1]/80">
+            {training.coverPhotoUrl && <>
+              <img src={apiPath(training.coverPhotoUrl)} alt="" aria-hidden="true" loading="eager" decoding="async" fetchPriority="high" className="absolute inset-0 h-full w-full object-cover opacity-35" />
+              <div className="absolute inset-0 bg-gradient-to-r from-[#e8f2f8]/95 via-[#e5f0f8]/85 to-[#b8d5f1]/55" />
+            </>}
             <div className="relative px-6 py-9 sm:px-10 sm:py-12 lg:px-14">
               <div className="diklat-hero-orbit diklat-hero-orbit--large pointer-events-none absolute right-[-40px] top-[-100px] h-[360px] w-[360px] rounded-full border" />
               <div className="diklat-hero-orbit diklat-hero-orbit--small pointer-events-none absolute right-[30px] top-[-28px] h-[260px] w-[260px] rounded-full border" />
@@ -364,6 +371,13 @@ export default function PusatDiklat() {
               </div>
             </div>
           </div>
+          {(training.photos?.length || 0) > 1 && <section className="mt-7">
+            <p className="text-[10px] font-extrabold uppercase tracking-[.18em] text-[#8b713e]">Dokumentasi kegiatan</p>
+            <h2 className="mt-2 text-xl font-extrabold text-[#183650]">Foto diklat</h2>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {training.photos!.slice(1).map(photo => <img key={photo.id} src={apiPath(photo.url)} alt={photo.fileName || `Foto ${training.title}`} loading="lazy" decoding="async" className="aspect-[4/3] w-full rounded-2xl border border-[#dfe5e7] bg-white object-cover" />)}
+            </div>
+          </section>}
           {formMode && <section id="form-kirim" className="mt-7 rounded-[24px] border border-[#dfe6e7] bg-[#fffefa] p-5 sm:p-8">
             {receipt ? <div className="mx-auto max-w-2xl py-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#e5f1eb] text-[#31684a]"><Check size={24} /></div>

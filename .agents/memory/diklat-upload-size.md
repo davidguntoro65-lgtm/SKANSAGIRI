@@ -5,8 +5,8 @@ description: User decision about the maximum size for each uploaded Diklat docum
 
 ## Rule
 
-Keep the maximum size for each Pusat Diklat upload at 20 MB. Do not raise it unless the user explicitly asks.
+Allow up to 40 MB per Diklat material file, with no more than 10 materials per Diklat. Allow up to 6 Diklat photos, each no larger than 20 MB. Do not raise these caps without an explicit request.
 
-**Why:** The user chose to keep the existing 20 MB limit when asked whether it should be increased; no additional rationale was given.
+**Why:** On 2026-10-15 the user explicitly requested a 40 MB material upload limit, 10 materials, and 6 photos capped at 20 MB each.
 
-**How to apply:** Preserve the cap in the admin document form and server validation. If a higher limit is requested later, verify memory use and cPanel request-size limits before changing it.
+**How to apply:** Keep the limits consistent in admin controls and server validation. Preserve lower per-module limits when configured, and keep photo resizing enabled for public-page performance.

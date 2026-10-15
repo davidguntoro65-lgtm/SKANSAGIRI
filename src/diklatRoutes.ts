@@ -23,7 +23,12 @@ type ModuleSettings = {
 };
 
 const API = "/api/v1/diklat";
-const HARD_MAX_FILE_BYTES = 20 * 1024 * 1024;
+const HARD_MAX_FILE_BYTES = 40 * 1024 * 1024;
+const MAX_TRAINING_PHOTO_BYTES = 20 * 1024 * 1024;
+const MAX_TRAINING_PHOTOS = 6;
+const MAX_TRAINING_MATERIALS = 10;
+const DRIVE_OAUTH_SETTING_KEY = "diklat-google-drive-oauth";
+const DRIVE_OAUTH_STATE_PREFIX = "diklat-google-drive-oauth-state:";
 const PAGE_SIZE_MAX = 50;
 const PUBLIC_TRAINING_STATES = new Set(["PUBLISHED", "ARCHIVED"]);
 const TRAINING_STATES = new Set(["DRAFT", "PUBLISHED", "ARCHIVED"]);
@@ -45,6 +50,10 @@ const DEFAULT_ALLOWED_EXTENSIONS = Object.keys(MIME_BY_EXTENSION);
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: HARD_MAX_FILE_BYTES, files: 1, fields: 18, fieldSize: 16 * 1024 },
+});
+const photoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_TRAINING_PHOTO_BYTES, files: 1, fields: 4, fieldSize: 8 * 1024 },
 });
 
 const submissionRateBuckets = new Map<string, { count: number; resetAt: number }>();
@@ -128,6 +137,24 @@ function validateFileSignature(file: Express.Multer.File) {
   return { extension, mimeType: expectedMime };
 }
 
+function validateTrainingPhotoSignature(file: Express.Multer.File) {
+  const extension = path.extname(cleanFileName(file.originalname)).toLowerCase();
+  const bytes = file.buffer;
+  const png = bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  const jpg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  const webp = bytes.length >= 12 && bytes.subarray(0, 4).toString("ascii") === "RIFF" && bytes.subarray(8, 12).toString("ascii") === "WEBP";
+  const expectedMime = extension === ".jpg" || extension === ".jpeg" ? "image/jpeg"
+    : extension === ".png" ? "image/png"
+      : extension === ".webp" ? "image/webp" : "";
+  const matches = expectedMime && (expectedMime === "image/jpeg" ? jpg : expectedMime === "image/png" ? png : webp);
+  if (!matches) return { error: "Foto harus berupa JPG, PNG, atau WebP yang valid." };
+  const browserMime = clean(file.mimetype, 150).toLowerCase();
+  if (browserMime && browserMime !== "application/octet-stream" && browserMime !== expectedMime) {
+    return { error: "Jenis foto yang dikirim tidak sesuai dengan nama file." };
+  }
+  return { mimeType: expectedMime };
+}
+
 function serviceAccountCredentials(): Record<string, unknown> | null {
   const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
   if (!raw) return null;
@@ -140,6 +167,57 @@ function serviceAccountCredentials(): Record<string, unknown> | null {
   return null;
 }
 
+function googleOAuthConfigured() {
+  return Boolean(
+    process.env.GOOGLE_OAUTH_CLIENT_ID?.trim() &&
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET?.trim() &&
+    process.env.GOOGLE_OAUTH_REDIRECT_URI?.trim() &&
+    process.env.SESSION_SECRET?.trim(),
+  );
+}
+
+function makeGoogleOAuthClient() {
+  if (!googleOAuthConfigured()) throw new Error("GOOGLE_DRIVE_OAUTH_NOT_CONFIGURED");
+  return new google.auth.OAuth2(
+    process.env.GOOGLE_OAUTH_CLIENT_ID!.trim(),
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET!.trim(),
+    process.env.GOOGLE_OAUTH_REDIRECT_URI!.trim(),
+  );
+}
+
+function encryptDriveRefreshToken(refreshToken: string) {
+  const iv = crypto.randomBytes(12);
+  const key = crypto.createHash("sha256").update(process.env.SESSION_SECRET!).digest();
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+  const ciphertext = Buffer.concat([cipher.update(refreshToken, "utf8"), cipher.final()]);
+  return {
+    version: 1,
+    iv: iv.toString("base64"),
+    tag: cipher.getAuthTag().toString("base64"),
+    ciphertext: ciphertext.toString("base64"),
+  };
+}
+
+async function getStoredDriveRefreshToken(): Promise<string | null> {
+  const setting = await db.setting.findUnique({ where: { key: DRIVE_OAUTH_SETTING_KEY } });
+  if (!setting) return null;
+  const value = setting.value as any;
+  if (value?.version !== 1 || !value?.iv || !value?.tag || !value?.ciphertext || !process.env.SESSION_SECRET) {
+    throw new Error("GOOGLE_DRIVE_OAUTH_TOKEN_INVALID");
+  }
+  try {
+    const key = crypto.createHash("sha256").update(process.env.SESSION_SECRET).digest();
+    const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(value.iv, "base64"));
+    decipher.setAuthTag(Buffer.from(value.tag, "base64"));
+    return Buffer.concat([
+      decipher.update(Buffer.from(value.ciphertext, "base64")),
+      decipher.final(),
+    ]).toString("utf8");
+  } catch {
+    throw new Error("GOOGLE_DRIVE_OAUTH_TOKEN_INVALID");
+  }
+}
+
 function isReplitRuntime() {
   return Boolean(
     process.env.REPL_ID || process.env.REPL_SLUG || process.env.REPLIT_DEV_DOMAIN ||
@@ -150,7 +228,7 @@ function isReplitRuntime() {
 }
 
 function driveConfigured() {
-  return Boolean(serviceAccountCredentials()) || isReplitRuntime();
+  return Boolean(serviceAccountCredentials()) || googleOAuthConfigured() || isReplitRuntime();
 }
 
 function driveQueryPath(pathname: string, parameters: Record<string, unknown>) {
@@ -232,6 +310,14 @@ function getConnectorDriveClient() {
         },
       );
     },
+    update: (parameters: any) =>
+      connectorDriveRequest(
+        driveQueryPath(`/drive/v3/files/${encodeURIComponent(String(parameters.fileId || ""))}`, {
+          fields: parameters.fields,
+          supportsAllDrives: parameters.supportsAllDrives,
+        }),
+        { method: "PATCH", body: parameters.requestBody || {} },
+      ),
     get: (parameters: Record<string, unknown>) => {
       const fileId = encodeURIComponent(String(parameters.fileId || ""));
       const pathname = driveQueryPath(`/drive/v3/files/${fileId}`, {
@@ -262,7 +348,13 @@ function getConnectorDriveClient() {
   return { files, permissions };
 }
 
-function getDriveClient(): any {
+async function getDriveClient(): Promise<any> {
+  const refreshToken = await getStoredDriveRefreshToken();
+  if (refreshToken) {
+    const auth = makeGoogleOAuthClient();
+    auth.setCredentials({ refresh_token: refreshToken });
+    return google.drive({ version: "v3", auth });
+  }
   const credentials = serviceAccountCredentials();
   if (!credentials) {
     if (isReplitRuntime()) return getConnectorDriveClient();
@@ -277,6 +369,8 @@ function getDriveClient(): any {
 
 function driveErrorMessage(error: unknown) {
   const code = Number((error as any)?.code || (error as any)?.response?.status || 0);
+  if ((error as any)?.message === "GOOGLE_DRIVE_OAUTH_NOT_CONFIGURED") return "Login Google belum disiapkan. Admin perlu mengisi konfigurasi OAuth Google pada environment server.";
+  if ((error as any)?.message === "GOOGLE_DRIVE_OAUTH_TOKEN_INVALID") return "Sesi Google Drive tersimpan tidak dapat dibuka. Hubungkan kembali akun Google.";
   if (code === 401) return "Otorisasi Google Drive ditolak. Periksa koneksi Drive Replit atau akun layanan.";
   if (code === 403) return "Akses Google Drive ditolak. Periksa izin folder, cakupan koneksi, dan kebijakan Drive.";
   if ((error as any)?.message === "GOOGLE_DRIVE_NOT_CONFIGURED") return "Koneksi Google Drive belum tersedia di environment server.";
@@ -311,6 +405,7 @@ function adminSettings(settings: ModuleSettings) {
     rootFolderId: settings.rootFolderId,
     driveConfigured: driveConfigured(),
     driveConnected: false,
+    driveOAuthAvailable: googleOAuthConfigured(),
     driveMessage: driveConfigured()
       ? "Koneksi Drive belum diuji."
       : "Koneksi Google Drive belum tersedia di environment server.",
@@ -360,7 +455,28 @@ async function getTrainingCounts(trainingIds: string[], publishedOnly = false) {
 }
 
 async function trainingSummaries(trainings: any[], publishedOnly = false) {
-  const counts = await getTrainingCounts(trainings.map((item) => item.id), publishedOnly);
+  const ids = trainings.map((item) => item.id);
+  const [counts, photos] = await Promise.all([
+    getTrainingCounts(ids, publishedOnly),
+    ids.length ? db.diklatTrainingPhoto.findMany({
+      where: { trainingId: { in: ids }, driveFile: { is: { verificationStatus: "STORED" } } },
+      include: { driveFile: true },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    }) : Promise.resolve([]),
+  ]);
+  const photosByTraining = new Map<string, any[]>();
+  for (const photo of photos) {
+    const list = photosByTraining.get(photo.trainingId) || [];
+    list.push({
+      id: photo.id,
+      sortOrder: photo.sortOrder,
+      fileName: photo.driveFile.name,
+      mimeType: photo.driveFile.mimeType,
+      sizeBytes: Number(photo.driveFile.sizeBytes),
+      url: `${API}/${publishedOnly ? "public" : "admin"}/photos/${encodeURIComponent(photo.id)}/content`,
+    });
+    photosByTraining.set(photo.trainingId, list);
+  }
   return trainings.map((training) => ({
     id: training.id,
     title: training.title,
@@ -375,13 +491,15 @@ async function trainingSummaries(trainings: any[], publishedOnly = false) {
     archiveVisible: training.archiveVisible,
     sortOrder: training.sortOrder,
     counts: counts.get(training.id) || { materials: 0, lkpd: 0, taskTypes: 0, submissions: 0 },
+    photos: photosByTraining.get(training.id) || [],
+    coverPhotoUrl: photosByTraining.get(training.id)?.[0]?.url || null,
     createdAt: training.createdAt,
     updatedAt: training.updatedAt,
   }));
 }
 
 async function getOrCreateFolder(name: string, parentId: string) {
-  const drive = getDriveClient();
+  const drive = await getDriveClient();
   const escapedName = name.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
   const found = await drive.files.list({
     q: `name = '${escapedName}' and mimeType = 'application/vnd.google-apps.folder' and '${parentId}' in parents and trashed = false`,
@@ -408,13 +526,22 @@ async function ensureModuleRoot(settings: ModuleSettings) {
   return root;
 }
 
-async function ensureTrainingFolder(training: any, kind: "MATERIAL" | "LKPD" | "SUBMISSION", settings: ModuleSettings, taskType?: any) {
+async function ensureTrainingFolder(training: any, kind: "MATERIAL" | "LKPD" | "SUBMISSION" | "PHOTO", settings: ModuleSettings, taskType?: any) {
   const rootId = await ensureModuleRoot(settings);
   let trainingId = training.driveFolderId;
   if (!trainingId) {
-    trainingId = await getOrCreateFolder(training.slug, rootId);
+    trainingId = await getOrCreateFolder(training.title, rootId);
     await db.diklatTraining.update({ where: { id: training.id }, data: { driveFolderId: trainingId } });
+  } else {
+    const drive = await getDriveClient();
+    await drive.files.update({
+      fileId: trainingId,
+      requestBody: { name: training.title },
+      fields: "id,name",
+      supportsAllDrives: true,
+    });
   }
+  if (kind === "PHOTO") return trainingId;
   if (kind === "SUBMISSION" && taskType) {
     let submissionId = training.submissionsFolderId;
     if (!submissionId) {
@@ -436,7 +563,7 @@ async function ensureTrainingFolder(training: any, kind: "MATERIAL" | "LKPD" | "
 }
 
 async function uploadDriveFile(file: Express.Multer.File, name: string, parentId: string, publicAccess = false) {
-  const drive = getDriveClient();
+  const drive = await getDriveClient();
   const created = await drive.files.create({
     requestBody: { name, mimeType: file.mimetype || "application/octet-stream", parents: [parentId] },
     media: { mimeType: file.mimetype || "application/octet-stream", body: Readable.from(file.buffer) },
@@ -476,13 +603,14 @@ async function uploadDriveFile(file: Express.Multer.File, name: string, parentId
 }
 
 async function cleanupDriveFile(driveFileId: string) {
-  await getDriveClient().files.delete({ fileId: driveFileId, supportsAllDrives: true });
+  const drive = await getDriveClient();
+  await drive.files.delete({ fileId: driveFileId, supportsAllDrives: true });
 }
 
 async function streamDriveFile(res: Response, file: any) {
   if (!file || file.verificationStatus !== "STORED") return fail(res, 404, "FILE_UNAVAILABLE", "File tidak tersedia.");
   try {
-    const drive = getDriveClient();
+    const drive = await getDriveClient();
     const response = await drive.files.get(
       { fileId: file.driveFileId, alt: "media", supportsAllDrives: true } as any,
       { responseType: "stream" } as any,
@@ -502,6 +630,34 @@ async function streamDriveFile(res: Response, file: any) {
   } catch (error) {
     console.error("Pusat Diklat Drive stream failed:", (error as any)?.code || "unknown");
     return fail(res, 502, "DRIVE_DOWNLOAD_FAILED", driveErrorMessage(error));
+  }
+}
+
+async function streamTrainingPhoto(res: Response, photo: any) {
+  if (!photo || photo.driveFile?.verificationStatus !== "STORED" ||
+    !["image/jpeg", "image/png", "image/webp"].includes(photo.driveFile.mimeType)) {
+    return fail(res, 404, "PHOTO_UNAVAILABLE", "Foto tidak tersedia.");
+  }
+  try {
+    const drive = await getDriveClient();
+    const response = await drive.files.get(
+      { fileId: photo.driveFile.driveFileId, alt: "media", supportsAllDrives: true } as any,
+      { responseType: "stream" } as any,
+    );
+    res.setHeader("Content-Type", photo.driveFile.mimeType);
+    res.setHeader("Content-Length", String(photo.driveFile.sizeBytes));
+    res.setHeader("Cache-Control", "public, max-age=86400, stale-while-revalidate=604800");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    const stream = response.data as NodeJS.ReadableStream;
+    stream.on("error", (error) => {
+      console.error("Pusat Diklat photo stream failed:", (error as any)?.code || "unknown");
+      if (!res.headersSent) res.status(502).end("Foto tidak dapat dimuat.");
+      else res.destroy(error as Error);
+    });
+    stream.pipe(res);
+  } catch (error) {
+    console.error("Pusat Diklat photo read failed:", (error as any)?.code || "unknown");
+    return fail(res, 502, "PHOTO_LOAD_FAILED", driveErrorMessage(error));
   }
 }
 
@@ -654,14 +810,15 @@ function route(handler: (req: Request, res: Response, next: NextFunction) => Pro
   return (req: Request, res: Response, next: NextFunction) => Promise.resolve(handler(req, res, next)).catch(next);
 }
 
-function uploadSingle(fieldName: string) {
-  const parseFile = upload.single(fieldName);
+function uploadSingle(fieldName: string, photo = false) {
+  const parser = photo ? photoUpload : upload;
+  const parseFile = parser.single(fieldName);
   return (req: Request, res: Response, next: NextFunction) => {
     parseFile(req, res, (error?: unknown) => {
       if (!error) return next();
       if (error instanceof multer.MulterError) {
         if (error.code === "LIMIT_FILE_SIZE") {
-          const maxFileSizeMb = HARD_MAX_FILE_BYTES / (1024 * 1024);
+          const maxFileSizeMb = (photo ? MAX_TRAINING_PHOTO_BYTES : HARD_MAX_FILE_BYTES) / (1024 * 1024);
           return fail(res, 413, "FILE_TOO_LARGE", `Ukuran file melebihi batas teknis maksimal ${maxFileSizeMb} MB per berkas.`);
         }
         return fail(res, 400, "INVALID_UPLOAD", "Permintaan unggah tidak valid. Pastikan satu berkas dikirim untuk setiap permintaan.");
@@ -755,6 +912,19 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
         taskTypes: training.taskTypes.map(taskTypeShape),
       },
     });
+  }));
+
+  app.get(`${API}/public/photos/:photoId/content`, route(async (req, res) => {
+    const settings = await ensureSettings();
+    const photo = await db.diklatTrainingPhoto.findUnique({
+      where: { id: clean(req.params.photoId, 100) },
+      include: { driveFile: true, training: { select: { status: true, archiveVisible: true } } },
+    });
+    if (!photo || !PUBLIC_TRAINING_STATES.has(photo.training.status) ||
+      (photo.training.status === "ARCHIVED" && (!settings.archiveVisible || !photo.training.archiveVisible))) {
+      return fail(res, 404, "PHOTO_NOT_FOUND", "Foto tidak tersedia untuk publik.");
+    }
+    return streamTrainingPhoto(res, photo);
   }));
 
   app.get(`${API}/public/documents`, route(async (req, res) => {
@@ -954,6 +1124,105 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
     return ok(res, { trainings: await trainingSummaries(trainings) });
   }));
 
+  app.get(`${API}/admin/photos/:photoId/content`, admin, route(async (req, res) => {
+    const photo = await db.diklatTrainingPhoto.findUnique({
+      where: { id: clean(req.params.photoId, 100) },
+      include: { driveFile: true },
+    });
+    if (!photo) return fail(res, 404, "PHOTO_NOT_FOUND", "Foto tidak ditemukan.");
+    return streamTrainingPhoto(res, photo);
+  }));
+
+  app.post(`${API}/admin/trainings/:id/photos`, admin, uploadSingle("file", true), route(async (req, res) => {
+    const training = await db.diklatTraining.findUnique({ where: { id: clean(req.params.id, 100) } });
+    if (!training) return fail(res, 404, "TRAINING_NOT_FOUND", "Diklat tidak ditemukan.");
+    if (!req.file) return fail(res, 400, "VALIDATION_ERROR", "Pilih satu foto terlebih dahulu.");
+    const size = await db.diklatTrainingPhoto.count({ where: { trainingId: training.id } });
+    if (size >= MAX_TRAINING_PHOTOS) return fail(res, 409, "PHOTO_LIMIT_REACHED", `Maksimal ${MAX_TRAINING_PHOTOS} foto per diklat.`);
+    const detected = validateTrainingPhotoSignature(req.file);
+    if (detected.error) return fail(res, 415, "INVALID_PHOTO", detected.error);
+    const settings = await ensureSettings();
+    let stored: Awaited<ReturnType<typeof uploadDriveFile>> | null = null;
+    try {
+      const parentId = await ensureTrainingFolder(training, "PHOTO", settings);
+      const file = { ...req.file, mimetype: detected.mimeType! };
+      stored = await uploadDriveFile(file, cleanFileName(req.file.originalname), parentId);
+      const photo = await db.$transaction(async (tx) => {
+        const driveFile = await tx.diklatDriveFile.create({
+          data: { ...stored!, kind: "PHOTO", verificationStatus: "STORED" },
+        });
+        return tx.diklatTrainingPhoto.create({
+          data: { trainingId: training.id, driveFileId: driveFile.id, sortOrder: size },
+          include: { driveFile: true },
+        });
+      });
+      await audit("ADMIN_SESSION", "DIKLAT_TRAINING_PHOTO_CREATED", "DiklatTrainingPhoto", photo.id, { trainingId: training.id });
+      return ok(res, {
+        photo: {
+          id: photo.id,
+          sortOrder: photo.sortOrder,
+          fileName: photo.driveFile.name,
+          mimeType: photo.driveFile.mimeType,
+          sizeBytes: Number(photo.driveFile.sizeBytes),
+          url: `${API}/admin/photos/${encodeURIComponent(photo.id)}/content`,
+        },
+      });
+    } catch (error) {
+      if (stored) await cleanupDriveFile(stored.driveFileId).catch((cleanupError) => console.error("Pusat Diklat orphaned photo:", (cleanupError as any)?.code || "unknown"));
+      console.error("Pusat Diklat photo upload failed:", (error as any)?.code || "unknown");
+      return fail(res, 502, "PHOTO_STORAGE_FAILED", driveErrorMessage(error));
+    }
+  }));
+
+  app.delete(`${API}/admin/trainings/:id/photos/:photoId`, admin, route(async (req, res) => {
+    const trainingId = clean(req.params.id, 100);
+    const photoId = clean(req.params.photoId, 100);
+    const photo = await db.diklatTrainingPhoto.findFirst({
+      where: { id: photoId, trainingId },
+      include: { driveFile: true },
+    });
+    if (!photo) return fail(res, 404, "PHOTO_NOT_FOUND", "Foto tidak ditemukan pada diklat ini.");
+    if (photo.driveFile.verificationStatus === "STORED") {
+      try { await cleanupDriveFile(photo.driveFile.driveFileId); }
+      catch (error) { return fail(res, 502, "PHOTO_DELETE_FAILED", driveErrorMessage(error)); }
+    }
+    await db.$transaction(async (tx) => {
+      await tx.diklatTrainingPhoto.delete({ where: { id: photo.id } });
+      await tx.diklatDriveFile.delete({ where: { id: photo.driveFileId } });
+      const remaining = await tx.diklatTrainingPhoto.findMany({
+        where: { trainingId },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        select: { id: true },
+      });
+      for (let index = 0; index < remaining.length; index += 1) {
+        await tx.diklatTrainingPhoto.update({ where: { id: remaining[index].id }, data: { sortOrder: index } });
+      }
+    });
+    await audit("ADMIN_SESSION", "DIKLAT_TRAINING_PHOTO_DELETED", "DiklatTrainingPhoto", photo.id, { trainingId });
+    return ok(res, { deleted: true });
+  }));
+
+  app.patch(`${API}/admin/trainings/:id/photos/order`, admin, route(async (req, res) => {
+    const trainingId = clean(req.params.id, 100);
+    const requested = Array.isArray(req.body?.photoIds)
+      ? req.body.photoIds.map((id: unknown) => clean(id, 100)).filter(Boolean)
+      : [];
+    if (requested.length > MAX_TRAINING_PHOTOS || new Set(requested).size !== requested.length) {
+      return fail(res, 400, "INVALID_PHOTO_ORDER", `Urutan foto harus memuat paling banyak ${MAX_TRAINING_PHOTOS} foto unik.`);
+    }
+    const existing = await db.diklatTrainingPhoto.findMany({
+      where: { trainingId },
+      select: { id: true },
+    });
+    if (existing.length !== requested.length || existing.some((photo) => !requested.includes(photo.id))) {
+      return fail(res, 409, "PHOTO_ORDER_CHANGED", "Daftar foto berubah. Muat ulang sebelum menyimpan urutan.");
+    }
+    await db.$transaction(requested.map((id: string, sortOrder: number) =>
+      db.diklatTrainingPhoto.update({ where: { id }, data: { sortOrder } }),
+    ));
+    return ok(res, { saved: true });
+  }));
+
   app.post(`${API}/admin/trainings`, admin, route(async (req, res) => {
     const title = clean(req.body?.title, 160);
     if (!title) return fail(res, 400, "VALIDATION_ERROR", "Nama diklat wajib diisi.");
@@ -1014,13 +1283,14 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
 
   app.delete(`${API}/admin/trainings/:id`, admin, route(async (req, res) => {
     const id = clean(req.params.id, 100);
-    const [training, documents, submissions] = await Promise.all([
+    const [training, documents, submissions, photos] = await Promise.all([
       db.diklatTraining.findUnique({ where: { id } }),
       db.diklatDocument.count({ where: { trainingId: id } }),
       db.diklatSubmission.count({ where: { trainingId: id } }),
+      db.diklatTrainingPhoto.count({ where: { trainingId: id } }),
     ]);
     if (!training) return fail(res, 404, "TRAINING_NOT_FOUND", "Diklat tidak ditemukan.");
-    if (training.status !== "DRAFT" || documents || submissions) return fail(res, 409, "TRAINING_HAS_HISTORY", "Diklat yang pernah dipublikasikan atau memiliki dokumen/pengumpulan tidak dapat dihapus. Gunakan arsip.");
+    if (training.status !== "DRAFT" || documents || submissions || photos) return fail(res, 409, "TRAINING_HAS_HISTORY", "Diklat yang pernah dipublikasikan atau memiliki dokumen, foto, atau pengumpulan tidak dapat dihapus. Gunakan arsip atau hapus foto terlebih dahulu.");
     await db.diklatTraining.delete({ where: { id } });
     await audit("ADMIN_SESSION", "DIKLAT_TRAINING_DELETED", "DiklatTraining", id);
     return ok(res, { deleted: true });
@@ -1109,6 +1379,12 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
     const title = clean(req.body?.title, 160);
     if (!training) return fail(res, 404, "TRAINING_NOT_FOUND", "Diklat tidak ditemukan.");
     if (!DOCUMENT_TYPES.has(type) || !title || !req.file) return fail(res, 400, "VALIDATION_ERROR", "Jenis dokumen, judul, dan file wajib diisi.");
+    if (type === "MATERIAL") {
+      const materialCount = await db.diklatDocument.count({ where: { trainingId: training.id, type: "MATERIAL" } });
+      if (materialCount >= MAX_TRAINING_MATERIALS) {
+        return fail(res, 409, "MATERIAL_LIMIT_REACHED", `Maksimal ${MAX_TRAINING_MATERIALS} materi per diklat.`);
+      }
+    }
     const settings = await ensureSettings();
     if (req.file.size > settings.maxFileSizeMb * 1024 * 1024) return fail(res, 413, "FILE_TOO_LARGE", `Ukuran file melebihi batas ${settings.maxFileSizeMb} MB.`);
     const detected = validateFileSignature(req.file);
@@ -1254,7 +1530,7 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
 
   app.put(`${API}/admin/settings`, admin, route(async (req, res) => {
     const title = clean(req.body?.title, 160);
-    const maxFileSizeMb = parseIntBounded(req.body?.maxFileSizeMb, 15, 1, 20);
+    const maxFileSizeMb = parseIntBounded(req.body?.maxFileSizeMb, 40, 1, 40);
     if (!title) return fail(res, 400, "VALIDATION_ERROR", "Nama portal wajib diisi.");
     const allowedMimeTypes: string[] = Array.isArray(req.body?.allowedMimeTypes)
       ? [...new Set<string>((req.body.allowedMimeTypes as unknown[]).map((item) => clean(item, 150)).filter((item): item is string => DEFAULT_ALLOWED_MIME_TYPES.includes(item)))]
@@ -1295,6 +1571,81 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
     return ok(res, { settings: adminSettings(settings) });
   }));
 
+  app.get(`${API}/admin/drive/oauth/start`, admin, route(async (_req, res) => {
+    if (!googleOAuthConfigured()) {
+      return fail(res, 503, "DRIVE_OAUTH_NOT_CONFIGURED", "Login Google belum disiapkan. Isi GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, GOOGLE_OAUTH_REDIRECT_URI, dan SESSION_SECRET pada environment server.");
+    }
+    const state = crypto.randomBytes(32).toString("hex");
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    await db.setting.create({
+      data: { key: `${DRIVE_OAUTH_STATE_PREFIX}${state}`, value: { expiresAt } },
+    });
+    const auth = makeGoogleOAuthClient();
+    const authorizationUrl = auth.generateAuthUrl({
+      access_type: "offline",
+      prompt: "consent",
+      include_granted_scopes: true,
+      scope: ["https://www.googleapis.com/auth/drive.file"],
+      state,
+    });
+    return ok(res, { authorizationUrl });
+  }));
+
+  app.get(`${API}/admin/drive/oauth/callback`, route(async (req, res) => {
+    const sendResult = (success: boolean, message: string) => {
+      const payload = JSON.stringify({ type: "diklat-drive-oauth", success, message }).replace(/</g, "\\u003c");
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("Content-Security-Policy", "default-src 'none'; script-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'");
+      return res.status(success ? 200 : 400).type("html").send(
+        `<!doctype html><html lang="id"><meta charset="utf-8"><title>Koneksi Google Drive</title>` +
+        `<body><p>${success ? "Google Drive terhubung." : "Koneksi Google Drive belum berhasil."}</p>` +
+        `<script>const result=${payload};if(window.opener)window.opener.postMessage(result,window.location.origin);window.close();</script></body></html>`,
+      );
+    };
+    const state = clean(req.query.state, 128);
+    if (req.query.error) {
+      if (state) await db.setting.delete({ where: { key: `${DRIVE_OAUTH_STATE_PREFIX}${state}` } }).catch(() => {});
+      return sendResult(false, req.query.error === "access_denied" ? "Login Google dibatalkan." : "Google menolak permintaan login.");
+    }
+    const code = clean(req.query.code, 4_000);
+    if (!/^[a-f0-9]{64}$/.test(state) || !code) return sendResult(false, "Permintaan OAuth tidak valid atau kedaluwarsa. Silakan ulangi.");
+    const stateKey = `${DRIVE_OAUTH_STATE_PREFIX}${state}`;
+    const stateRecord = await db.setting.findUnique({ where: { key: stateKey } });
+    if (!stateRecord) return sendResult(false, "Sesi login sudah digunakan atau kedaluwarsa. Silakan ulangi.");
+    await db.setting.delete({ where: { key: stateKey } });
+    const expiresAt = Number((stateRecord.value as any)?.expiresAt || 0);
+    if (expiresAt < Date.now()) return sendResult(false, "Sesi login sudah kedaluwarsa. Silakan ulangi.");
+    try {
+      const auth = makeGoogleOAuthClient();
+      const { tokens } = await auth.getToken(code);
+      const refreshToken = tokens.refresh_token || await getStoredDriveRefreshToken();
+      if (!refreshToken) return sendResult(false, "Google tidak mengirim izin Drive jangka panjang. Ulangi login dan setujui akses Drive.");
+      await db.setting.upsert({
+        where: { key: DRIVE_OAUTH_SETTING_KEY },
+        create: { key: DRIVE_OAUTH_SETTING_KEY, value: encryptDriveRefreshToken(refreshToken) },
+        update: { value: encryptDriveRefreshToken(refreshToken) },
+      });
+      const drive = await getDriveClient();
+      await drive.files.list({ pageSize: 1, fields: "files(id)", supportsAllDrives: true, includeItemsFromAllDrives: true });
+      const settings = await ensureSettings();
+      await ensureModuleRoot(settings);
+      await audit("ADMIN_SESSION", "DIKLAT_DRIVE_OAUTH_CONNECTED", "DiklatDriveFile", undefined);
+      return sendResult(true, "Google Drive berhasil dihubungkan. Folder kegiatan akan dibuat otomatis saat foto atau materi Diklat diunggah.");
+    } catch (error) {
+      console.error("Pusat Diklat Google OAuth callback failed:", (error as any)?.code || "unknown");
+      return sendResult(false, driveErrorMessage(error));
+    }
+  }));
+
+  app.post(`${API}/admin/drive/oauth/disconnect`, admin, route(async (_req, res) => {
+    const refreshToken = await getStoredDriveRefreshToken();
+    if (!refreshToken) return ok(res, { disconnected: true });
+    await db.setting.delete({ where: { key: DRIVE_OAUTH_SETTING_KEY } });
+    try { await makeGoogleOAuthClient().revokeToken(refreshToken); } catch { /* Revocation may fail after the token was already removed. */ }
+    await audit("ADMIN_SESSION", "DIKLAT_DRIVE_OAUTH_DISCONNECTED", "DiklatDriveFile", undefined);
+    return ok(res, { disconnected: true });
+  }));
+
   app.get(`${API}/admin/drive/status`, admin, route(async (_req, res) => {
     const settings = await ensureSettings();
     const [filesToVerify, missingFiles] = await Promise.all([
@@ -1303,15 +1654,21 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
     ]);
     const configured = driveConfigured();
     let connected = false;
+    let oauthConnected = false;
     let message = configured ? "Koneksi Drive belum diuji." : "Koneksi Google Drive belum tersedia di environment server.";
-    if (configured) {
+    try { oauthConnected = Boolean(await getStoredDriveRefreshToken()); }
+    catch (error) { message = driveErrorMessage(error); }
+    if (googleOAuthConfigured() && !oauthConnected && !serviceAccountCredentials() && !isReplitRuntime()) {
+      message = "Klik Hubungkan Google Drive untuk masuk dan memberi akses.";
+    } else if (configured && !message.includes("tidak dapat dibuka")) {
       try {
-        await getDriveClient().files.list({ pageSize: 1, fields: "files(id)", supportsAllDrives: true, includeItemsFromAllDrives: true });
+        const drive = await getDriveClient();
+        await drive.files.list({ pageSize: 1, fields: "files(id)", supportsAllDrives: true, includeItemsFromAllDrives: true });
         connected = true;
         message = "Google Drive terhubung.";
       } catch (error) { message = driveErrorMessage(error); }
     }
-    return ok(res, { configured, connected, rootFolderId: settings.rootFolderId, message, filesToVerify, missingFiles });
+    return ok(res, { configured, connected, oauthAvailable: googleOAuthConfigured(), oauthConnected, rootFolderId: settings.rootFolderId, message, filesToVerify, missingFiles });
   }));
 
   app.post(`${API}/admin/drive/status/test`, admin, route(async (_req, res) => {
@@ -1322,9 +1679,16 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
     ]);
     if (!driveConfigured()) return fail(res, 503, "DRIVE_NOT_CONFIGURED", "Koneksi Google Drive belum tersedia di environment server.");
     try {
-      await getDriveClient().files.list({ pageSize: 1, fields: "files(id)", supportsAllDrives: true, includeItemsFromAllDrives: true });
+      const drive = await getDriveClient();
+      await drive.files.list({ pageSize: 1, fields: "files(id)", supportsAllDrives: true, includeItemsFromAllDrives: true });
       await audit("ADMIN_SESSION", "DIKLAT_DRIVE_CONNECTION_TESTED", "DiklatDriveFile", undefined, { connected: true });
-      return ok(res, { configured: true, connected: true, rootFolderId: settings.rootFolderId, message: "Google Drive terhubung.", filesToVerify, missingFiles });
+      return ok(res, {
+        configured: true, connected: true,
+        oauthAvailable: googleOAuthConfigured(),
+        oauthConnected: Boolean(await getStoredDriveRefreshToken()),
+        rootFolderId: settings.rootFolderId,
+        message: "Google Drive terhubung.", filesToVerify, missingFiles,
+      });
     } catch (error) {
       const message = driveErrorMessage(error);
       await audit("ADMIN_SESSION", "DIKLAT_DRIVE_CONNECTION_TESTED", "DiklatDriveFile", undefined, { connected: false });
@@ -1351,7 +1715,7 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
     let restored = 0;
     let checked = 0;
     let skipped = 0;
-    const drive = getDriveClient();
+    const drive = await getDriveClient();
     for (let index = 0; index < files.length; index += 5) {
       await Promise.all(files.slice(index, index + 5).map(async (file) => {
         try {
@@ -1397,6 +1761,8 @@ export function registerDiklatRoutes(app: Express, requireAuth: AuthMiddleware) 
     return ok(res, {
       configured: true,
       connected: true,
+      oauthAvailable: googleOAuthConfigured(),
+      oauthConnected: Boolean(await getStoredDriveRefreshToken()),
       message: skipped ? `Pemeriksaan selesai dengan ${skipped} berkas yang tidak dapat diverifikasi.` : "Pemeriksaan konsistensi Drive selesai.",
       checked,
       newlyMissing,
