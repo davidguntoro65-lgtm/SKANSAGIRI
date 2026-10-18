@@ -8,7 +8,7 @@ import {
   Upload, SlidersHorizontal, Sparkles, Crop, Check, Eye, EyeOff, Handshake, Target, Telescope,
   Inbox, Mail, MailOpen, Search, Phone, MessageSquare, MailCheck, Filter, ChevronDown,
   ShieldCheck, Settings, Activity, Server, Clock, Cpu, Database, Wifi, WifiOff,
-  FileSpreadsheet, BarChart3, Briefcase, Store, Download, TrendingUp, Banknote, Vote
+  FileSpreadsheet, BarChart3, Briefcase, Store, Download, TrendingUp, Banknote, Vote, FileText
 } from "lucide-react";
 import { Competency, Milestone, GalleryItem, Alumnus, NewsArticle, IndustriPartner } from "../data";
 import { DataStore } from "../dataStore";
@@ -16,6 +16,7 @@ import { useBranding, Branding } from "../hooks/useBranding";
 import AdminAkademik from "../pages/AdminAkademik";
 import AdminPilketos from "../pages/AdminPilketos";
 import AdminDiklat from "../pages/AdminDiklat";
+import AdminPusatForm from "../pages/AdminPusatForm";
 import { apiFetch } from "../utils/navigation";
 import { getTodayNewsDate } from "../utils/newsFormatting";
 
@@ -39,7 +40,7 @@ export default function AdminPanel({
   const [loginLoading, setLoginLoading] = useState(false);
 
   // Active Admin Sidebar Tab
-  const [activeTab, setActiveTab] = useState<"competencies" | "milestones" | "gallery" | "alumni" | "news" | "partners" | "branding" | "about" | "kepala-sekolah" | "manajemen-sekolah" | "visi-misi" | "social-media" | "inbox-pesan" | "server-monitor" | "tracer-studi" | "core-platform" | "pilketos" | "diklat">("competencies");
+  const [activeTab, setActiveTab] = useState<"competencies" | "milestones" | "gallery" | "alumni" | "news" | "partners" | "branding" | "about" | "kepala-sekolah" | "manajemen-sekolah" | "visi-misi" | "social-media" | "inbox-pesan" | "server-monitor" | "tracer-studi" | "core-platform" | "pilketos" | "diklat" | "pusat-form">("competencies");
   const { branding, saveBranding, getLogo } = useBranding();
   const [brandingDraft, setBrandingDraft] = useState<Branding | null>(null);
   const [brandingLoading, setBrandingLoading] = useState(false);
@@ -1490,6 +1491,7 @@ export default function AdminPanel({
                     { id: "core-platform", label: "Core Platform Akademik", icon: GraduationCap, count: null },
                     { id: "pilketos", label: "Pengelolaan Pilketos", icon: Vote, count: null },
                     { id: "diklat", label: "Pengelolaan Diklat", icon: BookOpen, count: null },
+                    { id: "pusat-form", label: "PUSAT FORM", icon: FileText, count: null },
                   ].map((tab) => {
                     const TabIcon = tab.icon;
                     const isActive = activeTab === tab.id;
@@ -1559,6 +1561,8 @@ export default function AdminPanel({
                 <AdminPilketos theme={theme} />
               ) : activeTab === "diklat" ? (
                 <AdminDiklat theme={theme} />
+              ) : activeTab === "pusat-form" ? (
+                <AdminPusatForm theme={theme} />
               ) : (
                 <>
               

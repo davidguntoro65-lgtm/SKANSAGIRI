@@ -19,3 +19,4 @@
 - [Pusat Diklat upload cap](diklat-upload-size.md) — Keep each Diklat upload at or below 20 MB unless the user explicitly requests a higher limit.
 - [cPanel protected rewrite configuration](cpanel-protected-htaccess.md) — Production restores its own `.htaccess`; security rules must be reapplied after restore, and recovery backups belong outside `public_html`.
 - [Web Push updates](web-push-updates.md) — Keep subscriptions in existing settings storage and send push only for newly public school content.
+- [Pusat Form data boundary](pusat-form-data-boundary.md) — Look up existing academic student records by NIS; keep form submissions separate and never duplicate CoreStudent master data.

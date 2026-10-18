@@ -1,6 +1,7 @@
-import { useEffect, type FormEvent, type ReactNode } from "react";
-import { ArrowLeft, Check, ClipboardList, FileDown, HeartHandshake, Info, LockKeyhole, Printer, ShieldCheck } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { ArrowLeft, Check, ClipboardList, FileDown, HeartHandshake, Info, LockKeyhole, Printer, Search, ShieldCheck, X } from "lucide-react";
 import { navigate } from "../utils/navigation";
+import { apiFetch } from "../utils/navigation";
 
 const officialSources = [
   {
@@ -72,12 +73,16 @@ function TextField({
   required = false,
   hint,
   type = "text",
+  initialValue = "",
+  readOnly = false,
 }: {
   label: string;
   name: string;
   required?: boolean;
   hint?: string;
   type?: string;
+  initialValue?: string;
+  readOnly?: boolean;
 }) {
   return (
     <label className="block">
@@ -90,6 +95,8 @@ function TextField({
         name={name}
         type={type}
         required={required}
+        defaultValue={initialValue}
+        readOnly={readOnly}
         data-testid={`input-${name}`}
       />
     </label>
@@ -155,15 +162,131 @@ function ChoiceRow({ name, question }: { name: string; question: string }) {
 }
 
 export default function FormIsianABK() {
+  type StudentPrefill = {
+    id: string;
+    nis: string;
+    fullName: string;
+    gender: string | null;
+    birthPlace: string | null;
+    birthDate: string;
+    className: string;
+  };
+  type SavedSubmission = { id: string; reference: string; createdAt: string };
+  const formRef = useRef<HTMLFormElement>(null);
+  const [catalogState, setCatalogState] = useState<"loading" | "ready" | "error" | "disabled">("loading");
+  const [nisDialogOpen, setNisDialogOpen] = useState(true);
+  const [nisInput, setNisInput] = useState("");
+  const [student, setStudent] = useState<StudentPrefill | null>(null);
+  const [manualEntry, setManualEntry] = useState(false);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupError, setLookupError] = useState("");
+  const [manualAvailable, setManualAvailable] = useState(false);
+  const [submission, setSubmission] = useState<SavedSubmission | null>(null);
+  const [submissionError, setSubmissionError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
   useEffect(() => {
     const previousTitle = document.title;
     document.title = "Form Isian ABK | Pusat Form SMKN 1 Wonogiri";
     return () => { document.title = previousTitle; };
   }, []);
 
-  const handlePrint = (event: FormEvent<HTMLFormElement>) => {
+  useEffect(() => {
+    let active = true;
+    apiFetch("/api/pusat-form/forms")
+      .then(async (response) => {
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.success || !Array.isArray(result.data)) {
+          throw new Error(result.error?.message || "Daftar formulir belum dapat dimuat.");
+        }
+        if (!active) return;
+        const abkForm = result.data.find((item: { key?: string }) => item.key === "form-isian-abk");
+        setCatalogState(abkForm?.enabled ? "ready" : "disabled");
+      })
+      .catch(() => { if (active) setCatalogState("error"); });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!submission || !formRef.current) return;
+    formRef.current
+      .querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input, select, textarea")
+      .forEach((control) => { control.disabled = true; });
+  }, [submission]);
+
+  const verifyNis = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    window.print();
+    const nis = nisInput.trim();
+    if (!nis) {
+      setLookupError("Masukkan NIS terlebih dahulu.");
+      return;
+    }
+    setLookupLoading(true);
+    setLookupError("");
+    setManualAvailable(false);
+    try {
+      const response = await apiFetch("/api/pusat-form/students/lookup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nis }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (response.status === 404) {
+        setLookupError(result.error?.message || "NIS tidak ditemukan. Anda dapat melanjutkan dengan pengisian manual.");
+        setManualAvailable(true);
+        return;
+      }
+      if (!response.ok || !result.success || !result.data) {
+        throw new Error(result.error?.message || "NIS belum dapat diperiksa. Coba kembali.");
+      }
+      setStudent(result.data as StudentPrefill);
+      setManualEntry(false);
+      setNisInput(result.data.nis);
+      setNisDialogOpen(false);
+    } catch (error) {
+      setLookupError(error instanceof Error ? error.message : "NIS belum dapat diperiksa. Coba kembali.");
+    } finally {
+      setLookupLoading(false);
+    }
+  };
+
+  const continueManually = () => {
+    setStudent(null);
+    setManualEntry(true);
+    setNisDialogOpen(false);
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!formRef.current) return;
+    setSubmitting(true);
+    setSubmissionError("");
+    try {
+      const entries = new Map<string, string[]>();
+      for (const [key, value] of new FormData(formRef.current).entries()) {
+        const values = entries.get(key) || [];
+        values.push(String(value));
+        entries.set(key, values);
+      }
+      const data: Record<string, string | string[]> = {};
+      for (const [key, values] of entries) {
+        data[key] = key === "supportType" || key === "learningSupport" ? values : values[0] || "";
+      }
+      const response = await apiFetch("/api/pusat-form/submissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ formKey: "form-isian-abk", nis: data.studentNis, data }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.success || !result.data?.reference) {
+        throw new Error(result.error?.message || "Pengajuan belum tersimpan. Periksa koneksi lalu coba kembali.");
+      }
+      setSubmission(result.data as SavedSubmission);
+    } catch (error) {
+      setSubmissionError(error instanceof Error ? error.message : "Pengajuan belum tersimpan. Periksa koneksi lalu coba kembali.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -179,10 +302,43 @@ export default function FormIsianABK() {
             <ArrowLeft size={17} aria-hidden="true" /> Kembali ke beranda
           </button>
           <span className="inline-flex max-w-full items-center gap-2 rounded-full border border-[#dce7ed] bg-white px-3 py-1.5 text-xs font-bold leading-5 text-[#4b677a]">
-            <ShieldCheck size={14} className="shrink-0" aria-hidden="true" /> Isian tidak dikirim/disimpan otomatis; cetak sebelum menutup.
+            <ShieldCheck size={14} className="shrink-0" aria-hidden="true" /> Data dikirim ke sekolah hanya setelah formulir disubmit.
           </span>
         </div>
 
+        {catalogState === "loading" && <div className="rounded-2xl border border-[#dce5ea] bg-white p-8 text-center text-sm text-slate-600">Memeriksa ketersediaan formulir…</div>}
+        {catalogState === "error" && <div role="alert" className="rounded-2xl border border-rose-200 bg-white p-6 text-sm text-rose-700">Pusat Form belum dapat dihubungi. Muat ulang halaman untuk mencoba kembali.</div>}
+        {catalogState === "disabled" && <div className="rounded-2xl border border-[#dce5ea] bg-white p-8 text-center"><h1 className="text-xl font-extrabold text-[#173650]">Form Isian ABK belum menerima pengisian</h1><p className="mt-2 text-sm text-slate-600">Silakan hubungi sekolah melalui saluran resmi untuk mendapatkan informasi lebih lanjut.</p></div>}
+        {catalogState === "ready" && nisDialogOpen && (
+          <div className="abk-no-print fixed inset-0 z-[500] flex items-center justify-center bg-slate-950/65 px-4 py-8 backdrop-blur-sm" role="presentation">
+            <section role="dialog" aria-modal="true" aria-labelledby="abk-nis-title" className="w-full max-w-md rounded-3xl border border-[#dce5ea] bg-white p-6 shadow-2xl sm:p-8">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[#eaf2f8] text-[#315d7b]"><Search size={20} /></span>
+                  <h1 id="abk-nis-title" className="mt-4 text-xl font-extrabold text-[#173650]">Periksa NIS peserta didik</h1>
+                </div>
+                <button type="button" aria-label="Tutup dialog" onClick={() => navigate("/")} className="rounded-xl p-2 text-slate-500 hover:bg-slate-100"><X size={18} /></button>
+              </div>
+              <p className="mt-2 text-sm leading-6 text-slate-600">Masukkan NIS. Jika cocok dengan data sekolah, identitas peserta didik akan ditampilkan pada formulir. Jika belum terdaftar, Anda dapat mengisi identitas secara manual.</p>
+              <form className="mt-5 space-y-4" onSubmit={verifyNis}>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-bold text-slate-700">NIS</span>
+                  <input autoFocus inputMode="text" autoComplete="off" value={nisInput} onChange={(event) => setNisInput(event.target.value)} className="w-full rounded-xl border border-slate-300 px-3.5 py-3 text-sm text-slate-900 outline-none focus:border-[#39739a] focus:ring-4 focus:ring-[#39739a]/10" maxLength={32} required />
+                </label>
+                {lookupError && <p role="alert" className={`rounded-xl border px-3.5 py-3 text-sm leading-5 ${manualAvailable ? "border-amber-200 bg-amber-50 text-amber-800" : "border-rose-200 bg-rose-50 text-rose-700"}`}>{lookupError}</p>}
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <button type="submit" disabled={lookupLoading} className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#1f5c82] px-4 text-sm font-extrabold text-white disabled:opacity-60">
+                    <Search size={16} /> {lookupLoading ? "Memeriksa…" : "Periksa NIS"}
+                  </button>
+                  {manualAvailable && <button type="button" onClick={continueManually} className="min-h-11 rounded-xl border border-slate-300 px-4 text-sm font-bold text-slate-700 hover:bg-slate-50">Lanjutkan manual</button>}
+                </div>
+              </form>
+              <p className="mt-4 text-xs leading-5 text-slate-500">NIS digunakan untuk mengisi identitas dari data sekolah. Data kesehatan atau kebutuhan belajar tidak ditampilkan saat pemeriksaan NIS.</p>
+            </section>
+          </div>
+        )}
+
+        {catalogState === "ready" && !nisDialogOpen && (
         <article className="abk-form-card overflow-hidden rounded-[26px] border border-[#dce5ea] bg-white shadow-[0_24px_70px_-42px_rgba(23,54,80,.4)]">
           <header className="relative overflow-hidden border-b border-[#e5edf1] bg-gradient-to-br from-[#f7fbfd] via-white to-[#edf5f8] px-5 py-7 sm:px-9 sm:py-9">
             <div className="absolute -right-10 -top-16 h-48 w-48 rounded-full bg-[#d9eaf2]/50 blur-2xl" aria-hidden="true" />
@@ -200,12 +356,13 @@ export default function FormIsianABK() {
               <div className="abk-no-print mt-5 flex flex-wrap gap-2 text-xs font-semibold text-[#456378]">
                 <span className="rounded-full bg-white px-3 py-1.5">Sekitar 10–15 menit</span>
                 <span className="rounded-full bg-white px-3 py-1.5">Pertanyaan yang tidak diketahui boleh dikosongkan</span>
-                <span className="rounded-full bg-white px-3 py-1.5">Cetak atau simpan sebagai PDF</span>
+                <span className="rounded-full bg-white px-3 py-1.5">Kirim ke sekolah, lalu cetak sebagai PDF</span>
               </div>
             </div>
           </header>
 
-          <form className="space-y-5 p-4 sm:space-y-6 sm:p-8" onSubmit={handlePrint} aria-label="Form Isian ABK untuk peserta didik dan orang tua/wali">
+          <form ref={formRef} className="space-y-5 p-4 sm:space-y-6 sm:p-8" onSubmit={handleSubmit} aria-label="Form Isian ABK untuk peserta didik dan orang tua/wali">
+            {submission && <div className="abk-submission-reference rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900"><strong>Pengajuan tersimpan di database sekolah.</strong><br />Nomor konfirmasi: <strong>{submission.reference}</strong> · {new Date(submission.createdAt).toLocaleString("id-ID")}</div>}
             <div className="abk-note rounded-2xl border border-[#d8e8f1] bg-[#f1f8fb] p-4 sm:p-5">
               <div className="flex gap-3">
                 <Info className="mt-0.5 h-5 w-5 shrink-0 text-[#326887]" aria-hidden="true" />
@@ -220,13 +377,14 @@ export default function FormIsianABK() {
 
             <Section number="01" title="Identitas peserta didik" icon={<ClipboardList size={19} />}>
               <div className="grid gap-4 sm:grid-cols-2">
-                <TextField label="Nama lengkap peserta didik" name="studentName" required />
-                <TextField label="Kelas/rombel (jika sudah diketahui)" name="studentClass" />
-                <TextField label="Tempat lahir" name="birthPlace" />
-                <TextField label="Tanggal lahir" name="birthDate" type="date" />
+                <TextField label="NIS" name="studentNis" required initialValue={student?.nis || nisInput} readOnly={Boolean(student)} hint={student ? "NIS terverifikasi pada data sekolah." : "NIS belum ditemukan; isikan NIS yang benar atau hubungi sekolah."} />
+                <TextField label="Nama lengkap peserta didik" name="studentName" required initialValue={student?.fullName || ""} />
+                <TextField label="Kelas/rombel (jika sudah diketahui)" name="studentClass" initialValue={student?.className || ""} />
+                <TextField label="Tempat lahir" name="birthPlace" initialValue={student?.birthPlace || ""} />
+                <TextField label="Tanggal lahir" name="birthDate" type="date" initialValue={student?.birthDate || ""} />
                 <label className="block">
                   <span className="mb-1.5 block text-sm font-bold text-slate-700">Jenis kelamin (opsional)</span>
-                  <select className="abk-input w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm text-slate-900 outline-none focus:border-[#39739a] focus:ring-4 focus:ring-[#39739a]/10" name="gender" defaultValue="" data-testid="select-gender">
+                  <select className="abk-input w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm text-slate-900 outline-none focus:border-[#39739a] focus:ring-4 focus:ring-[#39739a]/10" name="gender" defaultValue={student?.gender === "L" ? "laki-laki" : student?.gender === "P" ? "perempuan" : ""} data-testid="select-gender">
                     <option value="">Pilih jika berkenan</option>
                     <option value="laki-laki">Laki-laki</option>
                     <option value="perempuan">Perempuan</option>
@@ -405,17 +563,17 @@ export default function FormIsianABK() {
                 <div>
                   <h2 id="abk-consent-title" className="text-lg font-extrabold text-[#173650]">Persetujuan dan cara menggunakan formulir</h2>
                   <p className="mt-2 text-sm leading-6 text-slate-600">
-                    Isian dapat memuat data pribadi anak dan informasi kesehatan. Formulir di situs ini tidak mengirim, mengunggah, atau menyimpan jawaban secara otomatis. Setelah selesai, cetak atau simpan sebagai PDF dari perangkat Anda, lalu sampaikan langsung melalui saluran resmi sekolah. Mohon jaga file agar tidak dibagikan ke ruang publik.
+                    Isian dapat memuat data pribadi anak dan informasi kesehatan. Setelah Anda memilih “Kirim formulir”, jawaban akan disimpan di database sekolah agar dapat ditindaklanjuti oleh admin berwenang. Jika belum siap mengirim, jangan tekan tombol tersebut. Cetak atau simpan PDF sebagai salinan konfirmasi dan jaga file agar tidak dibagikan ke ruang publik.
                   </p>
                   <p className="mt-2 text-sm leading-6 text-slate-600">
-                    Dengan persetujuan di bawah, orang tua/wali menyatakan bahwa informasi diberikan untuk membantu sekolah membicarakan kebutuhan dukungan belajar peserta didik. Rincian layanan dan penanganan data setelah diserahkan mengikuti prosedur resmi sekolah.
+                    Dengan persetujuan di bawah, orang tua/wali menyetujui penyimpanan jawaban pada database sekolah untuk membahas kebutuhan dukungan belajar peserta didik. Rincian layanan dan penanganan data mengikuti prosedur resmi sekolah.
                   </p>
                 </div>
               </div>
               <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border border-[#d4e0e7] bg-white p-4 text-sm leading-6 text-slate-800">
                 <input className="mt-1 h-4 w-4 shrink-0 accent-[#28658f]" type="checkbox" name="guardianConsent" value="agreed" required data-testid="input-guardian-consent" />
                 <span>
-                  Saya adalah orang tua/wali peserta didik dan memahami penjelasan di atas. Saya menyetujui agar informasi dalam formulir ini disampaikan kepada sekolah untuk membahas dukungan pendidikan anak.
+                  Saya adalah orang tua/wali peserta didik dan memahami penjelasan di atas. Saya menyetujui agar informasi dalam formulir ini dikirim dan disimpan pada database sekolah untuk membahas dukungan pendidikan anak.
                   <span className="ml-1 font-bold text-rose-600" aria-label="wajib dicentang">*</span>
                 </span>
               </label>
@@ -451,27 +609,42 @@ export default function FormIsianABK() {
             <div className="abk-no-print flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs leading-5 text-slate-500">Isian wajib: nama peserta didik, nama dan hubungan orang tua/wali, serta persetujuan.</p>
               <div className="flex flex-col gap-2 sm:flex-row">
-                <button
+                {!submission && <button
                   type="reset"
                   className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#39739a]"
                   data-testid="button-reset-form"
                 >
                   Kosongkan formulir
-                </button>
-                <button
-                  type="submit"
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#1f5c82] px-5 text-sm font-extrabold text-white shadow-sm transition hover:bg-[#174866] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#39739a]"
-                  data-testid="button-print-form"
-                >
-                  <Printer size={16} aria-hidden="true" /> Cetak / simpan PDF <FileDown size={15} aria-hidden="true" />
-                </button>
+                </button>}
+                {submission ? (
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#1f5c82] px-5 text-sm font-extrabold text-white shadow-sm transition hover:bg-[#174866] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#39739a]"
+                    data-testid="button-print-form"
+                  >
+                    <Printer size={16} aria-hidden="true" /> Cetak / simpan PDF <FileDown size={15} aria-hidden="true" />
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#1f5c82] px-5 text-sm font-extrabold text-white shadow-sm transition hover:bg-[#174866] disabled:cursor-wait disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#39739a]"
+                    data-testid="button-submit-form"
+                  >
+                    <ShieldCheck size={16} aria-hidden="true" /> {submitting ? "Menyimpan…" : "Kirim formulir"}
+                  </button>
+                )}
               </div>
+              {submissionError && <p role="alert" className="abk-no-print mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{submissionError}</p>}
+              {submission && <p className="abk-no-print mt-3 text-xs text-slate-500">Isian dikunci agar salinan PDF tetap sesuai dengan pengajuan yang telah tersimpan.</p>}
             </div>
           </form>
         </article>
+        )}
 
         <footer className="abk-no-print mx-auto mt-5 max-w-3xl text-center text-xs leading-5 text-slate-500">
-          Simpan formulir yang sudah terisi dengan hati-hati. Untuk bantuan pengisian, hubungi sekolah melalui saluran resmi.
+          {manualEntry ? "Identitas diisi secara manual karena NIS tidak ditemukan. Untuk bantuan, hubungi sekolah melalui saluran resmi." : "Data identitas yang ditemukan dari database sekolah ditampilkan pada formulir; periksa kembali sebelum dikirim."}
         </footer>
       </div>
     </main>

@@ -101,6 +101,25 @@ async function removeAllSessions() {
 
 // Login rate limiter: max 5 attempts per IP, then 60s lockout
 const loginAttempts = new Map<string, { count: number; lockUntil: number; lastSeen: number }>();
+const publicFormRateLimits = new Map<string, { count: number; resetAt: number }>();
+function allowPublicFormRequest(ip: string, limit: number, windowMs: number) {
+  const now = Date.now();
+  const current = publicFormRateLimits.get(ip);
+  if (!current || current.resetAt <= now) {
+    publicFormRateLimits.set(ip, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  if (current.count >= limit) return false;
+  current.count += 1;
+  return true;
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of publicFormRateLimits) {
+    if (entry.resetAt <= now) publicFormRateLimits.delete(ip);
+  }
+}, 15 * 60 * 1000).unref();
+
 function checkRateLimit(ip: string): { allowed: boolean; secondsLeft?: number } {
   const now = Date.now();
   const entry = loginAttempts.get(ip) || { count: 0, lockUntil: 0, lastSeen: now };
@@ -430,6 +449,8 @@ app.use((req, res, next) => {
     "/api/v1/pilketos/status",
     "/api/v1/pilketos/vote",
     "/api/v1/diklat/public/submissions",
+    "/api/pusat-form/students/lookup",
+    "/api/pusat-form/submissions",
   ];
   if (publicExact.includes(req.path)) return next();
   const publicPatterns = [
@@ -688,6 +709,253 @@ registerCorePlatformRoutes(app, requireAuth as any, async () => {
   return credentials?.password || null;
 });
 registerDiklatRoutes(app, requireAuth as any);
+
+// ─── Pusat Form: NIS lookup, public form submissions and admin management ─────
+const pusatFormSettingKey = "pusat-form-settings";
+const defaultPusatFormSettings = { formIsianAbkEnabled: true };
+const pusatFormDetails = {
+  key: "form-isian-abk",
+  title: "Form Isian ABK",
+  description: "Profil dan kebutuhan dukungan peserta didik",
+};
+
+async function findActiveStudentByNis(nis: string) {
+  const student = await db.coreStudent.findUnique({
+    where: { nis },
+    select: {
+      id: true,
+      nis: true,
+      fullName: true,
+      gender: true,
+      birthPlace: true,
+      birthDate: true,
+      status: true,
+      enrollments: {
+        where: { status: "ACTIVE" },
+        orderBy: { updatedAt: "desc" },
+        take: 5,
+        select: {
+          academicClass: { select: { name: true } },
+          academicYear: { select: { isActive: true } },
+        },
+      },
+    },
+  });
+  if (!student || student.status !== "ACTIVE") return null;
+  const enrollment = student.enrollments.find((item) => item.academicYear.isActive) || student.enrollments[0];
+  return {
+    id: student.id,
+    nis: student.nis || nis,
+    fullName: student.fullName,
+    gender: student.gender,
+    birthPlace: student.birthPlace,
+    birthDate: student.birthDate?.toISOString().slice(0, 10) || "",
+    className: enrollment?.academicClass.name || "",
+  };
+}
+
+app.get("/api/pusat-form/forms", async (_req, res) => {
+  try {
+    const settings = await getSetting(pusatFormSettingKey, defaultPusatFormSettings);
+    return res.json({
+      success: true,
+      data: [{ ...pusatFormDetails, enabled: settings.formIsianAbkEnabled !== false }],
+    });
+  } catch (error: any) {
+    serverLog("ERROR", `Pusat Form public catalog failed: ${error?.message || String(error)}`);
+    return res.status(503).json({ success: false, error: { message: "Daftar formulir belum dapat dimuat." } });
+  }
+});
+
+app.post("/api/pusat-form/students/lookup", async (req, res) => {
+  const ip = (req.headers["x-forwarded-for"] as string || req.socket.remoteAddress || "unknown").split(",")[0].trim();
+  if (!allowPublicFormRequest(`lookup:${ip}`, 10, 15 * 60 * 1000)) {
+    return res.status(429).json({ success: false, error: { message: "Terlalu banyak pemeriksaan NIS. Coba lagi beberapa saat." } });
+  }
+  const nis = typeof req.body?.nis === "string" ? req.body.nis.trim() : "";
+  if (!/^[A-Za-z0-9-]{1,32}$/.test(nis)) {
+    return res.status(400).json({ success: false, error: { message: "Masukkan NIS yang valid." } });
+  }
+  try {
+    const settings = await getSetting(pusatFormSettingKey, defaultPusatFormSettings);
+    if (settings.formIsianAbkEnabled === false) {
+      return res.status(403).json({ success: false, error: { message: "Form Isian ABK sedang tidak menerima pengisian." } });
+    }
+    const student = await findActiveStudentByNis(nis);
+    if (!student) return res.status(404).json({ success: false, error: { message: "NIS tidak ditemukan. Anda dapat melanjutkan dengan pengisian identitas secara manual." } });
+    return res.json({ success: true, data: student });
+  } catch (error: any) {
+    serverLog("ERROR", `Pusat Form student lookup failed: ${error?.message || String(error)}`);
+    return res.status(503).json({ success: false, error: { message: "Data siswa belum dapat diperiksa. Coba kembali nanti." } });
+  }
+});
+
+app.post("/api/pusat-form/submissions", async (req, res) => {
+  const ip = (req.headers["x-forwarded-for"] as string || req.socket.remoteAddress || "unknown").split(",")[0].trim();
+  if (!allowPublicFormRequest(`submission:${ip}`, 12, 60 * 60 * 1000)) {
+    return res.status(429).json({ success: false, error: { message: "Pengiriman dari jaringan ini mencapai batas sementara. Coba lagi nanti." } });
+  }
+  const { formKey, data } = req.body || {};
+  if (formKey !== pusatFormDetails.key || !data || typeof data !== "object" || Array.isArray(data)) {
+    return res.status(400).json({ success: false, error: { message: "Data formulir tidak valid." } });
+  }
+  if (Buffer.byteLength(JSON.stringify(data), "utf8") > 80_000 || Object.keys(data).length > 100) {
+    return res.status(413).json({ success: false, error: { message: "Jawaban terlalu besar untuk dikirim." } });
+  }
+  const cleanData: Record<string, string | string[]> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (!/^[A-Za-z0-9 _./-]{1,120}$/.test(key)) {
+      return res.status(400).json({ success: false, error: { message: "Formulir berisi nama kolom yang tidak valid." } });
+    }
+    if (typeof value === "string" && value.length <= 5000) {
+      cleanData[key] = value;
+    } else if (Array.isArray(value) && value.length <= 30 && value.every((item) => typeof item === "string" && item.length <= 500)) {
+      cleanData[key] = value as string[];
+    } else {
+      return res.status(400).json({ success: false, error: { message: "Ada jawaban yang tidak valid atau terlalu panjang." } });
+    }
+  }
+  const nis = typeof req.body?.nis === "string" ? req.body.nis.trim() : "";
+  if (!/^[A-Za-z0-9-]{1,32}$/.test(nis)) {
+    return res.status(400).json({ success: false, error: { message: "NIS wajib diisi dengan format yang valid." } });
+  }
+  const guardianName = typeof cleanData.guardianName === "string" ? cleanData.guardianName.trim() : "";
+  const guardianRelationship = typeof cleanData.guardianRelationship === "string" ? cleanData.guardianRelationship.trim() : "";
+  if (!guardianName || !guardianRelationship || cleanData.guardianConsent !== "agreed") {
+    return res.status(400).json({ success: false, error: { message: "Nama orang tua/wali, hubungan, dan persetujuan wajib diisi." } });
+  }
+  try {
+    const settings = await getSetting(pusatFormSettingKey, defaultPusatFormSettings);
+    if (settings.formIsianAbkEnabled === false) {
+      return res.status(403).json({ success: false, error: { message: "Form Isian ABK sedang tidak menerima pengisian." } });
+    }
+    const student = await findActiveStudentByNis(nis);
+    const studentName = student?.fullName || (typeof cleanData.studentName === "string" ? cleanData.studentName.trim() : "");
+    if (!studentName) {
+      return res.status(400).json({ success: false, error: { message: "Nama peserta didik wajib diisi." } });
+    }
+    cleanData.studentNis = nis;
+    cleanData.studentName = studentName;
+    if (student?.className) cleanData.studentClass = student.className;
+    const saved = await db.pusatFormSubmission.create({
+      data: {
+        formKey: pusatFormDetails.key,
+        studentId: student?.id || null,
+        studentNis: nis,
+        studentName,
+        studentClass: student?.className || (typeof cleanData.studentClass === "string" ? cleanData.studentClass : ""),
+        guardianName,
+        guardianRelationship,
+        data: cleanData as any,
+      },
+      select: { id: true, createdAt: true },
+    });
+    return res.status(201).json({
+      success: true,
+      data: {
+        id: saved.id,
+        reference: `ABK-${saved.createdAt.getFullYear()}-${saved.id.slice(0, 8).toUpperCase()}`,
+        createdAt: saved.createdAt,
+      },
+    });
+  } catch (error: any) {
+    serverLog("ERROR", `Pusat Form submission failed: ${error?.message || String(error)}`);
+    return res.status(503).json({ success: false, error: { message: "Pengajuan belum tersimpan. Periksa koneksi lalu coba kembali." } });
+  }
+});
+
+app.get("/api/pusat-form/admin/overview", requireAuth as any, async (_req, res) => {
+  try {
+    const page = Math.max(1, Number.parseInt(String(_req.query.page || "1"), 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number.parseInt(String(_req.query.pageSize || "25"), 10) || 25));
+    const search = typeof _req.query.search === "string" ? _req.query.search.trim().slice(0, 100) : "";
+    const where = search ? {
+      OR: [
+        { studentNis: { contains: search } },
+        { studentName: { contains: search, mode: "insensitive" as const } },
+        { guardianName: { contains: search, mode: "insensitive" as const } },
+      ],
+    } : {};
+    const [settings, submissions, total, newCount] = await Promise.all([
+      getSetting(pusatFormSettingKey, defaultPusatFormSettings),
+      db.pusatFormSubmission.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: {
+          id: true, formKey: true, studentNis: true, studentName: true, studentClass: true,
+          guardianName: true, guardianRelationship: true, status: true, createdAt: true, updatedAt: true,
+        },
+      }),
+      db.pusatFormSubmission.count({ where }),
+      db.pusatFormSubmission.count({ where: { status: "BARU" } }),
+    ]);
+    return res.json({
+      success: true,
+      data: { settings, submissions, total, newCount, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)), forms: [pusatFormDetails] },
+    });
+  } catch (error: any) {
+    serverLog("ERROR", `Pusat Form admin overview failed: ${error?.message || String(error)}`);
+    return res.status(503).json({ success: false, error: { message: "Data Pusat Form belum dapat dimuat." } });
+  }
+});
+
+app.put("/api/pusat-form/admin/settings", requireAuth as any, async (req, res) => {
+  if (typeof req.body?.formIsianAbkEnabled !== "boolean") {
+    return res.status(400).json({ success: false, error: { message: "Status penerimaan formulir tidak valid." } });
+  }
+  try {
+    const settings = { formIsianAbkEnabled: req.body.formIsianAbkEnabled };
+    await setSetting(pusatFormSettingKey, settings);
+    return res.json({ success: true, data: settings });
+  } catch (error: any) {
+    serverLog("ERROR", `Pusat Form settings update failed: ${error?.message || String(error)}`);
+    return res.status(503).json({ success: false, error: { message: "Pengaturan Pusat Form belum tersimpan." } });
+  }
+});
+
+app.get("/api/pusat-form/admin/submissions/:id", requireAuth as any, async (req, res) => {
+  try {
+    const submission = await db.pusatFormSubmission.findUnique({ where: { id: req.params.id } });
+    if (!submission) return res.status(404).json({ success: false, error: { message: "Pengajuan tidak ditemukan." } });
+    return res.json({ success: true, data: submission });
+  } catch (error: any) {
+    serverLog("ERROR", `Pusat Form submission detail failed: ${error?.message || String(error)}`);
+    return res.status(503).json({ success: false, error: { message: "Detail pengajuan belum dapat dimuat." } });
+  }
+});
+
+app.patch("/api/pusat-form/admin/submissions/:id", requireAuth as any, async (req, res) => {
+  const allowedStatuses = ["BARU", "DITINJAU", "SELESAI", "DITOLAK"];
+  const status = typeof req.body?.status === "string" ? req.body.status : "";
+  const adminNote = typeof req.body?.adminNote === "string" ? req.body.adminNote.trim() : "";
+  if (!allowedStatuses.includes(status) || adminNote.length > 5000) {
+    return res.status(400).json({ success: false, error: { message: "Status atau catatan admin tidak valid." } });
+  }
+  try {
+    const submission = await db.pusatFormSubmission.update({
+      where: { id: req.params.id },
+      data: { status, adminNote: adminNote || null, reviewedAt: status === "BARU" ? null : new Date() },
+    });
+    return res.json({ success: true, data: submission });
+  } catch (error: any) {
+    if (error?.code === "P2025") return res.status(404).json({ success: false, error: { message: "Pengajuan tidak ditemukan." } });
+    serverLog("ERROR", `Pusat Form submission update failed: ${error?.message || String(error)}`);
+    return res.status(503).json({ success: false, error: { message: "Perubahan status belum tersimpan." } });
+  }
+});
+
+app.delete("/api/pusat-form/admin/submissions/:id", requireAuth as any, async (req, res) => {
+  try {
+    await db.pusatFormSubmission.delete({ where: { id: req.params.id } });
+    return res.json({ success: true, data: { deleted: true } });
+  } catch (error: any) {
+    if (error?.code === "P2025") return res.status(404).json({ success: false, error: { message: "Pengajuan tidak ditemukan." } });
+    serverLog("ERROR", `Pusat Form submission delete failed: ${error?.message || String(error)}`);
+    return res.status(503).json({ success: false, error: { message: "Pengajuan belum dapat dihapus." } });
+  }
+});
 
 // ─── Logs Endpoint ────────────────────────────────────────────────────────────
 app.get("/api/logs", requireAuth as any, (_req, res) => {

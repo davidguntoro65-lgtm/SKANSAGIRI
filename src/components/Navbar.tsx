@@ -107,9 +107,18 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
   const isTracerActive = currentPath === "/tracer-studi";
   const isBeritaActive = currentPath === "/berita";
   const isHubungiActive = currentPath === "/hubungi-kami";
-  const isModulIntegrasiActive = currentPath === "/modul-integrasi" || currentPath === "/pusat-diklat";
+  const isModulIntegrasiActive = currentPath === "/modul-integrasi" || currentPath === "/pusat-diklat" || currentPath.startsWith("/pusat-form");
   const isDiklatActive = currentPath === "/pusat-diklat";
   const formIsianAbkHref = `${BASE_PATH}/pusat-form/form-isian-abk`;
+  const pusatFormItems = [
+    {
+      id: "form-isian-abk",
+      href: formIsianAbkHref,
+      title: "Formulir Isian ABK",
+      description: "Profil dukungan peserta didik",
+    },
+  ];
+  const isPusatFormActive = currentPath.startsWith("/pusat-form");
   const isKelasVirtualActive = currentPath.startsWith("/kelas-virtual");
 
   const navScrolledBg = isDark
@@ -300,25 +309,41 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
                                 <span className={`mt-0.5 block text-[9px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>Materi, LKPD &amp; tugas diklat</span>
                               </div>
                             </a>
-                            <div className={`mx-3 mt-2 border-l pl-3 ${isDark ? "border-white/10" : "border-slate-200"}`}>
-                              <p className={`px-2 pb-1 pt-2 text-[9px] font-bold uppercase tracking-[.18em] ${isDark ? "text-slate-400" : "text-slate-500"}`}>Pusat Form</p>
-                              <a
-                                href={formIsianAbkHref}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className={`${dropdownItem(isDark)} py-2`}
-                                id="link-form-isian-abk-dropdown"
-                                data-testid="link-form-isian-abk-dropdown"
+                            <div className="mt-1">
+                              <div
+                                className={`${dropdownItem(isDark)} ${isPusatFormActive ? (isDark ? "bg-sky-500/10" : "bg-sky-50") : ""}`}
+                                aria-label="Pusat Form"
                               >
-                                <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${isDark ? "bg-sky-500/10" : "bg-sky-50"}`}>
-                                  <FileText className="h-3.5 w-3.5 text-sky-500" />
+                                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${isPusatFormActive ? "bg-sky-500/20" : isDark ? "bg-sky-500/10" : "bg-sky-50"}`}>
+                                  <FileText className="h-4 w-4 text-sky-500" />
                                 </div>
-                                <div className="min-w-0 flex-1">
-                                  <span className={`block text-xs font-semibold ${isDark ? "text-slate-100" : "text-slate-800"}`}>Form Isian ABK</span>
-                                  <span className={`mt-0.5 block text-[9px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>Profil dukungan peserta didik</span>
+                                <div>
+                                  <span className={`block text-xs font-semibold uppercase tracking-widest ${isPusatFormActive ? "text-sky-500" : isDark ? "text-white" : "text-slate-900"}`}>Pusat Form</span>
+                                  <span className={`mt-0.5 block text-[9px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>Formulir layanan peserta didik</span>
                                 </div>
-                                <ExternalLink className={`h-3 w-3 shrink-0 ${isDark ? "text-slate-400" : "text-slate-500"}`} aria-hidden="true" />
-                              </a>
+                              </div>
+                              <div className={`mx-3 mt-1 border-l pl-3 ${isDark ? "border-white/10" : "border-slate-200"}`}>
+                                {pusatFormItems.map((item) => (
+                                  <a
+                                    key={item.id}
+                                    href={item.href}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={`${dropdownItem(isDark)} py-2`}
+                                    id={`link-${item.id}-dropdown`}
+                                    data-testid={`link-${item.id}-dropdown`}
+                                  >
+                                    <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${isDark ? "bg-sky-500/10" : "bg-sky-50"}`}>
+                                      <FileText className="h-3.5 w-3.5 text-sky-500" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <span className={`block text-xs font-semibold ${isDark ? "text-slate-100" : "text-slate-800"}`}>{item.title}</span>
+                                      <span className={`mt-0.5 block text-[9px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>{item.description}</span>
+                                    </div>
+                                    <ExternalLink className={`h-3 w-3 shrink-0 ${isDark ? "text-slate-400" : "text-slate-500"}`} aria-hidden="true" />
+                                  </a>
+                                ))}
+                              </div>
                             </div>
                           </div>
                           <div className="h-[2px] bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
@@ -604,28 +629,39 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
                             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-500/10">
                               <GraduationCap className="h-3.5 w-3.5 text-amber-400" />
                             </span>
-                            <span className={`text-sm font-serif tracking-widest ${isDiklatActive ? "text-amber-300" : "text-slate-300"}`}>Pusat Diklat</span>
+                            <span className={`text-sm font-serif uppercase tracking-widest ${isDiklatActive ? "text-amber-300" : "text-slate-300"}`}>Pusat Diklat</span>
                           </a>
+                          <div
+                            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ${isPusatFormActive ? "bg-sky-500/10" : ""}`}
+                            aria-label="Pusat Form"
+                          >
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sky-500/10">
+                              <FileText className="h-3.5 w-3.5 text-sky-400" />
+                            </span>
+                            <span className={`text-sm font-serif uppercase tracking-widest ${isPusatFormActive ? "text-sky-300" : "text-slate-300"}`}>Pusat Form</span>
+                          </div>
                           <div className="ml-6 border-l border-white/10 pl-3">
-                            <p className="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[.18em] text-slate-400">Pusat Form</p>
-                            <a
-                              href={formIsianAbkHref}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={() => { setIsOpen(false); setMobileModulIntegrasiOpen(false); }}
-                              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-white/5"
-                              id="link-form-isian-abk-mobile"
-                              data-testid="link-form-isian-abk-mobile"
-                            >
-                              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sky-500/10">
-                                <FileText className="h-3.5 w-3.5 text-sky-400" />
-                              </span>
-                              <span className="min-w-0 flex-1">
-                                <span className="block text-sm font-serif tracking-wide text-slate-200">Form Isian ABK</span>
-                                <span className="mt-0.5 block text-[10px] text-slate-400">Profil dukungan peserta didik</span>
-                              </span>
-                              <ExternalLink className="h-3 w-3 shrink-0 text-slate-400" aria-hidden="true" />
-                            </a>
+                            {pusatFormItems.map((item) => (
+                              <a
+                                key={item.id}
+                                href={item.href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={() => { setIsOpen(false); setMobileModulIntegrasiOpen(false); }}
+                                className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-white/5"
+                                id={`link-${item.id}-mobile`}
+                                data-testid={`link-${item.id}-mobile`}
+                              >
+                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sky-500/10">
+                                  <FileText className="h-3.5 w-3.5 text-sky-400" />
+                                </span>
+                                <span className="min-w-0 flex-1">
+                                  <span className="block text-sm font-serif tracking-wide text-slate-200">{item.title}</span>
+                                  <span className="mt-0.5 block text-[10px] text-slate-400">{item.description}</span>
+                                </span>
+                                <ExternalLink className="h-3 w-3 shrink-0 text-slate-400" aria-hidden="true" />
+                              </a>
+                            ))}
                           </div>
                         </div>
                       </motion.div>
