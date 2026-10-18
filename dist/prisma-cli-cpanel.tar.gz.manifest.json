@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "prismaVersion": "7.10.0",
+  "buildTargets": [
+    "debian-openssl-3.0.x",
+    "rhel-openssl-1.0.x",
+    "rhel-openssl-3.0.x"
+  ],
+  "deploymentTargets": [
+    "rhel-openssl-1.0.x",
+    "rhel-openssl-3.0.x"
+  ],
+  "fingerprint": "98465baa35eab287ccf36eb0c766a22a0ce387f7546532b553e994f83be0e2e1",
+  "parts": [
+    {
+      "name": "prisma-cli-cpanel.tar.gz.part00",
+      "size": 41943040,
+      "sha256": "627c261b71ec09c89c690f50fcf8c78ad353535444caa9d5dc2ded8f0fb9ef67"
+    },
+    {
+      "name": "prisma-cli-cpanel.tar.gz.part01",
+      "size": 33941478,
+      "sha256": "2cb89f17c388fec861d74621ba7c47269656d73e2aa3bb4595b55ca167c298ea"
+    }
+  ]
+}
