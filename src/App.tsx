@@ -42,10 +42,11 @@ const GuruPortal = lazy(() => import("./pages/GuruPortal"));
 const SiswaPortal = lazy(() => import("./pages/SiswaPortal"));
 const PilketosPage = lazy(() => import("./pages/PilketosPage"));
 const PusatDiklat = lazy(() => import("./pages/PusatDiklat"));
+const FormIsianABK = lazy(() => import("./pages/FormIsianABK"));
 import { DataStore } from "./dataStore";
 import { navigate, getAppPath } from "./utils/navigation";
 
-type AppPath = "/" | "/adm-panel" | "/adm/panel" | "/guru" | "/siswa" | "/pilketos" | "/pusat-diklat" | "/tentang/kepala-sekolah" | "/tentang/manajemen-sekolah" | "/tentang/visi-misi" | "/tracer-studi" | "/admin/tracer-studi" | "/berita" | "/hubungi-kami" | "/modul-integrasi" | "/kelas-virtual" | "/kelas-virtual/kelas-x" | "/kelas-virtual/kelas-xi" | "/kelas-virtual/kelas-xii" | "/suara-skansagiri" | "/admin/suara-skansagiri" | "/aduan-publik" | "/admin/aduan-publik" | "/osis" | "/osis/adm-panel";
+type AppPath = "/" | "/adm-panel" | "/adm/panel" | "/guru" | "/siswa" | "/pilketos" | "/pusat-diklat" | "/pusat-form/form-isian-abk" | "/tentang/kepala-sekolah" | "/tentang/manajemen-sekolah" | "/tentang/visi-misi" | "/tracer-studi" | "/admin/tracer-studi" | "/berita" | "/hubungi-kami" | "/modul-integrasi" | "/kelas-virtual" | "/kelas-virtual/kelas-x" | "/kelas-virtual/kelas-xi" | "/kelas-virtual/kelas-xii" | "/suara-skansagiri" | "/admin/suara-skansagiri" | "/aduan-publik" | "/admin/aduan-publik" | "/osis" | "/osis/adm-panel";
 
 function getPath(): AppPath {
   const p = getAppPath();
@@ -55,6 +56,7 @@ function getPath(): AppPath {
   if (p === "/siswa") return "/siswa";
   if (p === "/pilketos") return "/pilketos";
   if (p === "/pusat-diklat" || p.startsWith("/pusat-diklat/")) return "/pusat-diklat";
+  if (p === "/pusat-form/form-isian-abk") return "/pusat-form/form-isian-abk";
   // Legacy academic-admin URLs are handled by the single admin shell.
   if (p === "/admin/akademik") return "/adm-panel";
   if (p === "/tentang/kepala-sekolah") return "/tentang/kepala-sekolah";
@@ -207,6 +209,10 @@ function AppContent() {
 
   if (currentPath === "/pusat-diklat") {
     return <PusatDiklat />;
+  }
+
+  if (currentPath === "/pusat-form/form-isian-abk") {
+    return <FormIsianABK />;
   }
 
   const containerClass = `relative min-h-screen ${theme === "dark" ? "bg-slate-950 text-slate-100" : "bg-white text-slate-900"} font-sans antialiased overflow-x-hidden selection:bg-amber-500 selection:text-slate-950 transition-colors duration-500`;

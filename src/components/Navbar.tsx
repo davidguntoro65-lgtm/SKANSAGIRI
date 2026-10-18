@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, useScroll, useSpring, AnimatePresence } from "motion/react";
-import { Menu, X, Landmark, GraduationCap, ArrowUpRight, Sun, Moon, ChevronDown, Award, Newspaper, Camera, User, Users, Target, Vote } from "lucide-react";
+import { Menu, X, Landmark, GraduationCap, ArrowUpRight, Sun, Moon, ChevronDown, Award, Newspaper, Camera, User, Users, Target, Vote, FileText, ExternalLink } from "lucide-react";
 import { useBranding } from "../hooks/useBranding";
 
 interface NavbarProps {
@@ -8,7 +8,7 @@ interface NavbarProps {
   toggleTheme: () => void;
 }
 
-import { navigate, getAppPath } from "../utils/navigation";
+import { BASE_PATH, navigate, getAppPath } from "../utils/navigation";
 
 function navigateToAnchor(href: string) {
   if (!href.startsWith("#")) {
@@ -109,6 +109,7 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
   const isHubungiActive = currentPath === "/hubungi-kami";
   const isModulIntegrasiActive = currentPath === "/modul-integrasi" || currentPath === "/pusat-diklat";
   const isDiklatActive = currentPath === "/pusat-diklat";
+  const formIsianAbkHref = `${BASE_PATH}/pusat-form/form-isian-abk`;
   const isKelasVirtualActive = currentPath.startsWith("/kelas-virtual");
 
   const navScrolledBg = isDark
@@ -299,6 +300,26 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
                                 <span className={`mt-0.5 block text-[9px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>Materi, LKPD &amp; tugas diklat</span>
                               </div>
                             </a>
+                            <div className={`mx-3 mt-2 border-l pl-3 ${isDark ? "border-white/10" : "border-slate-200"}`}>
+                              <p className={`px-2 pb-1 pt-2 text-[9px] font-bold uppercase tracking-[.18em] ${isDark ? "text-slate-400" : "text-slate-500"}`}>Pusat Form</p>
+                              <a
+                                href={formIsianAbkHref}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={`${dropdownItem(isDark)} py-2`}
+                                id="link-form-isian-abk-dropdown"
+                                data-testid="link-form-isian-abk-dropdown"
+                              >
+                                <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${isDark ? "bg-sky-500/10" : "bg-sky-50"}`}>
+                                  <FileText className="h-3.5 w-3.5 text-sky-500" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <span className={`block text-xs font-semibold ${isDark ? "text-slate-100" : "text-slate-800"}`}>Form Isian ABK</span>
+                                  <span className={`mt-0.5 block text-[9px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>Profil dukungan peserta didik</span>
+                                </div>
+                                <ExternalLink className={`h-3 w-3 shrink-0 ${isDark ? "text-slate-400" : "text-slate-500"}`} aria-hidden="true" />
+                              </a>
+                            </div>
                           </div>
                           <div className="h-[2px] bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
                         </motion.div>
@@ -585,6 +606,27 @@ export default function Navbar({ theme, toggleTheme }: NavbarProps) {
                             </span>
                             <span className={`text-sm font-serif tracking-widest ${isDiklatActive ? "text-amber-300" : "text-slate-300"}`}>Pusat Diklat</span>
                           </a>
+                          <div className="ml-6 border-l border-white/10 pl-3">
+                            <p className="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[.18em] text-slate-400">Pusat Form</p>
+                            <a
+                              href={formIsianAbkHref}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={() => { setIsOpen(false); setMobileModulIntegrasiOpen(false); }}
+                              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-white/5"
+                              id="link-form-isian-abk-mobile"
+                              data-testid="link-form-isian-abk-mobile"
+                            >
+                              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sky-500/10">
+                                <FileText className="h-3.5 w-3.5 text-sky-400" />
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block text-sm font-serif tracking-wide text-slate-200">Form Isian ABK</span>
+                                <span className="mt-0.5 block text-[10px] text-slate-400">Profil dukungan peserta didik</span>
+                              </span>
+                              <ExternalLink className="h-3 w-3 shrink-0 text-slate-400" aria-hidden="true" />
+                            </a>
+                          </div>
                         </div>
                       </motion.div>
                     )}

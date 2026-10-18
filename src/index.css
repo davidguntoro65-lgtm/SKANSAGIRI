@@ -448,6 +448,97 @@ html .diklat-hero h1.diklat-hero-title {
   .evoting-label-blink { color: #fb923c; text-shadow: none; }
 }
 
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 0 !important;
+    background: #fff !important;
+    color: #111827 !important;
+    overflow: visible !important;
+    font-size: 10pt !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .abk-no-print {
+    display: none !important;
+  }
+
+  .abk-print-page {
+    min-height: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  .abk-print-page > div {
+    max-width: none !important;
+  }
+
+  .abk-form-card {
+    overflow: visible !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .abk-form-card header {
+    padding: 0 0 8mm !important;
+    background: #fff !important;
+  }
+
+  .abk-form-card form {
+    gap: 5mm !important;
+    padding: 7mm 0 0 !important;
+  }
+
+  .abk-section,
+  .abk-consent,
+  .abk-note {
+    break-inside: avoid;
+    border-color: #cbd5e1 !important;
+    box-shadow: none !important;
+  }
+
+  .abk-section {
+    padding: 5mm !important;
+    background: #fff !important;
+  }
+
+  .abk-choice-row {
+    break-inside: avoid;
+  }
+
+  .abk-input {
+    min-height: 8mm;
+    border-color: #9ca3af !important;
+    border-radius: 2px !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    color: #111827 !important;
+    font-size: 9pt !important;
+  }
+
+  .abk-input::placeholder {
+    color: transparent !important;
+  }
+
+  textarea.abk-input {
+    min-height: 12mm;
+    resize: none !important;
+  }
+
+  a {
+    color: #111827 !important;
+    text-decoration: none !important;
+  }
+}
+
 /* Admin OSIS clean theme
  * The OSIS admin surface is intentionally light and neutral. Keep this scoped
  * so the public OSIS page and the main admin shell retain their own themes.
