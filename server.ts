@@ -718,6 +718,13 @@ const pusatFormDetails = {
   title: "Form Isian ABK",
   description: "Profil dan kebutuhan dukungan peserta didik",
 };
+const pusatFormGuardianOccupations = new Set([
+  "ASN/PNS", "TNI", "Polri", "Pegawai BUMN/BUMD", "Karyawan swasta",
+  "Wirausaha/pedagang", "Petani/pekebun", "Nelayan", "Buruh/pekerja harian",
+  "Guru/dosen", "Tenaga kesehatan", "Pengemudi/ojek/transportasi",
+  "Pekerja rumah tangga", "Pekerja lepas (freelance)", "Ibu rumah tangga",
+  "Tidak bekerja", "Pensiunan", "Lainnya",
+]);
 
 async function findActiveStudentByNis(nis: string) {
   const student = await db.coreStudent.findUnique({
@@ -821,9 +828,24 @@ app.post("/api/pusat-form/submissions", async (req, res) => {
   }
   const guardianName = typeof cleanData.guardianName === "string" ? cleanData.guardianName.trim() : "";
   const guardianRelationship = typeof cleanData.guardianRelationship === "string" ? cleanData.guardianRelationship.trim() : "";
+  const gender = typeof cleanData.gender === "string" ? cleanData.gender.trim() : "";
+  const guardianAddress = typeof cleanData.guardianAddress === "string" ? cleanData.guardianAddress.trim() : "";
+  const guardianOccupation = typeof cleanData.guardianOccupation === "string" ? cleanData.guardianOccupation.trim() : "";
+  if (!["laki-laki", "perempuan"].includes(gender) || !guardianAddress) {
+    return res.status(400).json({ success: false, error: { message: "Jenis kelamin wajib dipilih (laki-laki atau perempuan) dan alamat lengkap wajib diisi." } });
+  }
+  if (guardianAddress.length > 1000) {
+    return res.status(400).json({ success: false, error: { message: "Alamat lengkap maksimal 1.000 karakter." } });
+  }
+  if (guardianOccupation && !pusatFormGuardianOccupations.has(guardianOccupation)) {
+    return res.status(400).json({ success: false, error: { message: "Pilih pekerjaan orang tua/wali dari daftar yang tersedia." } });
+  }
   if (!guardianName || !guardianRelationship || cleanData.guardianConsent !== "agreed") {
     return res.status(400).json({ success: false, error: { message: "Nama orang tua/wali, hubungan, dan persetujuan wajib diisi." } });
   }
+  cleanData.gender = gender;
+  cleanData.guardianAddress = guardianAddress;
+  cleanData.guardianOccupation = guardianOccupation;
   try {
     const settings = await getSetting(pusatFormSettingKey, defaultPusatFormSettings);
     if (settings.formIsianAbkEnabled === false) {

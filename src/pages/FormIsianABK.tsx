@@ -39,6 +39,27 @@ const learningAreas = [
   ["Perilaku dan sensorik", "Pemicu yang perlu diketahui serta hal yang menenangkan."],
 ];
 
+const guardianOccupationOptions = [
+  "ASN/PNS",
+  "TNI",
+  "Polri",
+  "Pegawai BUMN/BUMD",
+  "Karyawan swasta",
+  "Wirausaha/pedagang",
+  "Petani/pekebun",
+  "Nelayan",
+  "Buruh/pekerja harian",
+  "Guru/dosen",
+  "Tenaga kesehatan",
+  "Pengemudi/ojek/transportasi",
+  "Pekerja rumah tangga",
+  "Pekerja lepas (freelance)",
+  "Ibu rumah tangga",
+  "Tidak bekerja",
+  "Pensiunan",
+  "Lainnya",
+];
+
 function Section({
   number,
   title,
@@ -53,7 +74,7 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="abk-section rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+    <section className="abk-section rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-7">
       <div className="mb-5 flex items-start gap-3 border-b border-slate-100 pb-4 sm:mb-6">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#eaf2f8] text-[#315d7b]">{icon}</span>
         <div>
@@ -91,7 +112,7 @@ function TextField({
       </span>
       {hint && <span className="mb-2 block text-xs leading-5 text-slate-500">{hint}</span>}
       <input
-        className="abk-input w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#39739a] focus:ring-4 focus:ring-[#39739a]/10"
+        className="abk-input min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#39739a] focus:ring-4 focus:ring-[#39739a]/10 sm:text-sm"
         name={name}
         type={type}
         required={required}
@@ -106,24 +127,30 @@ function TextField({
 function TextAreaField({
   label,
   name,
+  required = false,
   hint,
   placeholder,
   rows = 3,
 }: {
   label: string;
   name: string;
+  required?: boolean;
   hint?: string;
   placeholder?: string;
   rows?: number;
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-sm font-bold text-slate-700">{label}</span>
+      <span className="mb-1.5 block text-sm font-bold text-slate-700">
+        {label}{required && <span className="ml-1 text-rose-600" aria-label="wajib diisi">*</span>}
+      </span>
       {hint && <span className="mb-2 block text-xs leading-5 text-slate-500">{hint}</span>}
       <textarea
-        className="abk-input w-full resize-y rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm leading-6 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#39739a] focus:ring-4 focus:ring-[#39739a]/10"
+        className="abk-input w-full resize-y rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-base leading-6 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#39739a] focus:ring-4 focus:ring-[#39739a]/10 sm:text-sm"
         name={name}
         rows={rows}
+        required={required}
+        maxLength={required ? 1000 : undefined}
         placeholder={placeholder}
         data-testid={`textarea-${name}`}
       />
@@ -351,11 +378,11 @@ export default function FormIsianABK() {
                 Profil &amp; Kebutuhan Dukungan Peserta Didik
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 sm:text-base">
-                Peserta didik dan orang tua/wali dapat mengisi bersama. Ceritakan hal yang membantu anak belajar dengan nyaman; bagian yang belum diketahui boleh dilewati dan tidak perlu menebak diagnosis.
+                Peserta didik dan orang tua/wali dapat mengisi bersama. Kolom bertanda * wajib diisi; untuk bagian lain, isi yang diketahui saja dan tidak perlu menebak diagnosis.
               </p>
               <div className="abk-no-print mt-5 flex flex-wrap gap-2 text-xs font-semibold text-[#456378]">
                 <span className="rounded-full bg-white px-3 py-1.5">Sekitar 10–15 menit</span>
-                <span className="rounded-full bg-white px-3 py-1.5">Pertanyaan yang tidak diketahui boleh dikosongkan</span>
+                <span className="rounded-full bg-white px-3 py-1.5">Tanda * menunjukkan kolom wajib</span>
                 <span className="rounded-full bg-white px-3 py-1.5">Kirim ke sekolah, lalu cetak sebagai PDF</span>
               </div>
             </div>
@@ -383,12 +410,11 @@ export default function FormIsianABK() {
                 <TextField label="Tempat lahir" name="birthPlace" initialValue={student?.birthPlace || ""} />
                 <TextField label="Tanggal lahir" name="birthDate" type="date" initialValue={student?.birthDate || ""} />
                 <label className="block">
-                  <span className="mb-1.5 block text-sm font-bold text-slate-700">Jenis kelamin (opsional)</span>
-                  <select className="abk-input w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm text-slate-900 outline-none focus:border-[#39739a] focus:ring-4 focus:ring-[#39739a]/10" name="gender" defaultValue={student?.gender === "L" ? "laki-laki" : student?.gender === "P" ? "perempuan" : ""} data-testid="select-gender">
-                    <option value="">Pilih jika berkenan</option>
+                  <span className="mb-1.5 block text-sm font-bold text-slate-700">Jenis kelamin<span className="ml-1 text-rose-600" aria-label="wajib diisi">*</span></span>
+                  <select required className="abk-input min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-base text-slate-900 outline-none focus:border-[#39739a] focus:ring-4 focus:ring-[#39739a]/10 sm:text-sm" name="gender" defaultValue={student?.gender?.toUpperCase() === "L" || student?.gender?.toLowerCase() === "laki-laki" ? "laki-laki" : student?.gender?.toUpperCase() === "P" || student?.gender?.toLowerCase() === "perempuan" ? "perempuan" : ""} data-testid="select-gender">
+                    <option value="" disabled>Pilih jenis kelamin</option>
                     <option value="laki-laki">Laki-laki</option>
                     <option value="perempuan">Perempuan</option>
-                    <option value="tidak-mengisi">Tidak ingin mengisi</option>
                   </select>
                 </label>
               </div>
@@ -399,15 +425,30 @@ export default function FormIsianABK() {
                 <TextField label="Nama orang tua/wali" name="guardianName" required />
                 <label className="block">
                   <span className="mb-1.5 block text-sm font-bold text-slate-700">Hubungan dengan peserta didik<span className="ml-1 text-rose-600" aria-label="wajib diisi">*</span></span>
-                  <select className="abk-input w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm text-slate-900 outline-none focus:border-[#39739a] focus:ring-4 focus:ring-[#39739a]/10" name="guardianRelationship" required defaultValue="" data-testid="select-guardian-relationship">
+                  <select className="abk-input min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-base text-slate-900 outline-none focus:border-[#39739a] focus:ring-4 focus:ring-[#39739a]/10 sm:text-sm" name="guardianRelationship" required defaultValue="" data-testid="select-guardian-relationship">
                     <option value="" disabled>Pilih hubungan</option>
                     <option>Ayah</option><option>Ibu</option><option>Wali</option><option>Lainnya</option>
                   </select>
                 </label>
                 <TextField label="Nomor telepon yang dapat dihubungi (opsional)" name="guardianPhone" type="tel" hint="Gunakan nomor yang nyaman dihubungi sekolah." />
-                <TextField label="Kecamatan/kabupaten tempat tinggal (opsional)" name="guardianAddress" />
                 <div className="sm:col-span-2">
-                  <TextField label="Pekerjaan orang tua/wali (opsional)" name="guardianOccupation" />
+                  <TextAreaField
+                    label="Alamat lengkap tempat tinggal"
+                    name="guardianAddress"
+                    required
+                    rows={3}
+                    hint="Cantumkan jalan, RT/RW, desa/kelurahan, kecamatan, kabupaten/kota, dan provinsi."
+                    placeholder="Contoh: Jl. Melati No. 10, RT 02/RW 04, Desa ..., Kecamatan ..., Kabupaten ..., Jawa Tengah"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block">
+                    <span className="mb-1.5 block text-sm font-bold text-slate-700">Pekerjaan orang tua/wali (opsional)</span>
+                    <select className="abk-input min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-base text-slate-900 outline-none focus:border-[#39739a] focus:ring-4 focus:ring-[#39739a]/10 sm:text-sm" name="guardianOccupation" defaultValue="" data-testid="select-guardian-occupation">
+                      <option value="">Pilih pekerjaan (opsional)</option>
+                      {guardianOccupationOptions.map((occupation) => <option key={occupation} value={occupation}>{occupation}</option>)}
+                    </select>
+                  </label>
                 </div>
               </div>
             </Section>
@@ -445,7 +486,7 @@ export default function FormIsianABK() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="block">
                     <span className="mb-1.5 block text-sm font-bold text-slate-700">Apakah anak pernah mendapat pemeriksaan/asesmen profesional?</span>
-                    <select className="abk-input w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm text-slate-900 outline-none focus:border-[#39739a] focus:ring-4 focus:ring-[#39739a]/10" name="assessmentStatus" defaultValue="" data-testid="select-assessment-status">
+                    <select className="abk-input min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-base text-slate-900 outline-none focus:border-[#39739a] focus:ring-4 focus:ring-[#39739a]/10 sm:text-sm" name="assessmentStatus" defaultValue="" data-testid="select-assessment-status">
                       <option value="">Pilih jika diketahui</option>
                       <option value="sudah">Sudah</option>
                       <option value="belum">Belum</option>
