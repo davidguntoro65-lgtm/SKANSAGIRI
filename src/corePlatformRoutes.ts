@@ -22,6 +22,11 @@ type PreviewRow = {
   errors: string[];
 };
 
+const STUDENT_DATA_HEADERS = [
+  "nisn", "nis", "namaLengkap", "email", "noTelp", "jenisKelamin",
+  "tempatLahir", "tanggalLahir", "kodeKelas", "kodeTahunAjaran", "password", "status",
+];
+
 const TEMPLATE_DEFINITIONS: Record<ImportType, { label: string; headers: string[] }> = {
   "tahun-ajaran": { label: "Tahun Ajaran", headers: ["code", "name", "isActive"] },
   jurusan: { label: "Jurusan / Program Keahlian", headers: ["code", "name"] },
@@ -30,7 +35,7 @@ const TEMPLATE_DEFINITIONS: Record<ImportType, { label: string; headers: string[
   guru: { label: "Guru", headers: ["nip", "namaLengkap", "email", "noHp", "status"] },
   siswa: {
     label: "Siswa",
-    headers: ["nisn", "nis", "namaLengkap", "email", "noTelp", "jenisKelamin", "tempatLahir", "tanggalLahir", "kodeKelas", "kodeTahunAjaran", "password", "status"],
+    headers: STUDENT_DATA_HEADERS,
   },
   "assignment-guru": { label: "Assignment Guru", headers: ["nip", "kodeMapel", "kodeKelas", "kodeTahunAjaran", "status"] },
   "enrollment-siswa": { label: "Enrollment Siswa", headers: ["nisn", "kodeKelas", "kodeTahunAjaran", "status"] },
@@ -196,6 +201,8 @@ function studentAccountEmail(nis: string) {
 function studentLoginEmail(values: Record<string, unknown>, user?: { email?: string | null } | null) {
   const suppliedEmail = clean(values.email).toLowerCase();
   const existingEmail = user && typeof user === "object" ? clean(user.email).toLowerCase() : "";
+  // CoreUser requires a unique email even when a student has no contact email.
+  // Keep that internal identity separate from CoreStudent.email so NIS login works.
   return suppliedEmail || existingEmail || studentAccountEmail(clean(values.nis));
 }
 
@@ -257,7 +264,7 @@ function parseWorkbook(fileBase64: string, type: ImportType) {
 }
 
 async function referenceMaps() {
-  const [years, departments, subjects, classes, teachers, students] = await Promise.all([
+  const [years, departments, subjects, classes, teachers, studentRecords] = await Promise.all([
     db.academicYear.findMany({ select: { id: true, code: true } }),
     db.department.findMany({ select: { id: true, code: true } }),
     db.subject.findMany({ select: { id: true, code: true } }),
@@ -268,10 +275,19 @@ async function referenceMaps() {
         id: true,
         nisn: true,
         nis: true,
-        user: { select: { id: true, email: true } },
+        userId: true,
       },
     }),
   ]);
+  const linkedUserIds = [...new Set(studentRecords.map((student) => student.userId).filter((id): id is string => Boolean(id)))];
+  const linkedUsers = linkedUserIds.length
+    ? await db.coreUser.findMany({ where: { id: { in: linkedUserIds } }, select: { id: true, email: true } })
+    : [];
+  const usersById = new Map(linkedUsers.map((user) => [user.id, user]));
+  const students = studentRecords.map((student) => ({
+    ...student,
+    user: student.userId ? usersById.get(student.userId) ?? null : null,
+  }));
   return {
     years: new Map(years.map((item) => [item.code, item])),
     departments: new Map(departments.map((item) => [item.code, item])),
@@ -530,7 +546,7 @@ async function commitRows(type: ImportType, rows: PreviewRow[], actor: string, j
       const nisns = [...new Set(preparedRows.map(({ values }) => clean(values.nisn)))];
       const yearCodes = [...new Set(preparedRows.map(({ values }) => clean(values.kodeTahunAjaran)))];
       const classCodes = [...new Set(preparedRows.map(({ values }) => clean(values.kodeKelas)))];
-      const [students, years, classes, role] = await Promise.all([
+      const [studentRecords, years, classes, role] = await Promise.all([
         tx.coreStudent.findMany({
           where: { nisn: { in: nisns } },
           select: {
@@ -542,13 +558,22 @@ async function commitRows(type: ImportType, rows: PreviewRow[], actor: string, j
             birthPlace: true,
             birthDate: true,
             status: true,
-            user: { select: { id: true, email: true, status: true } },
+            userId: true,
           },
         }),
         tx.academicYear.findMany({ where: { code: { in: yearCodes } }, select: { id: true, code: true } }),
         tx.academicClass.findMany({ where: { code: { in: classCodes } }, select: { id: true, code: true } }),
         tx.coreRole.upsert({ where: { name: "SISWA" }, update: {}, create: { name: "SISWA" } }),
       ]);
+      const linkedUserIds = [...new Set(studentRecords.map((student) => student.userId).filter((id): id is string => Boolean(id)))];
+      const linkedUsers = linkedUserIds.length
+        ? await tx.coreUser.findMany({ where: { id: { in: linkedUserIds } }, select: { id: true, email: true, status: true } })
+        : [];
+      const usersById = new Map(linkedUsers.map((user) => [user.id, user]));
+      const students = studentRecords.map((student) => ({
+        ...student,
+        user: student.userId ? usersById.get(student.userId) ?? null : null,
+      }));
       studentsByNisn = new Map(students.map((student) => [student.nisn, student]));
       yearsByCode = new Map(years.map((year) => [year.code, year]));
       classesByCode = new Map(classes.map((classroom) => [classroom.code, classroom]));
@@ -611,18 +636,19 @@ async function commitRows(type: ImportType, rows: PreviewRow[], actor: string, j
           ? await tx.coreUser.update({
             where: { id: existingUser.id },
             data: {
-              ...(suppliedEmail ? { email: suppliedEmail } : {}),
+              ...(suppliedEmail || !clean(existingUser.email) ? { email: suppliedEmail || accountEmail } : {}),
               fullName: clean(values.namaLengkap),
               ...(userStatus ? { status: userStatus } : {}),
               ...(passwordHash ? { passwordHash, passwordChangeRecommended: true } : {}),
             },
           })
           : await tx.coreUser.create({ data: { email: accountEmail, fullName: clean(values.namaLengkap), status: userStatus!, passwordHash: passwordHash!, passwordChangeRecommended: true } });
-        if (existingUser?.email !== coreUser.email) {
-          const formerOwner = existingUser?.email ? usersByEmail.get(existingUser.email) : undefined;
-          if (formerOwner?.id === existingUser?.id) usersByEmail.delete(existingUser!.email);
+        const formerEmail = clean(existingUser?.email).toLowerCase();
+        if (formerEmail && formerEmail !== coreUser.email) {
+          const formerOwner = usersByEmail.get(formerEmail);
+          if (formerOwner?.id === existingUser?.id) usersByEmail.delete(formerEmail);
         }
-        usersByEmail.set(accountEmail, { id: coreUser.id, email: accountEmail });
+        usersByEmail.set(coreUser.email, { id: coreUser.id, email: coreUser.email });
         const student = await tx.coreStudent.upsert({
           where: { nisn },
           update: { nis, fullName: clean(values.namaLengkap), email, phone, gender, birthPlace, birthDate, status, userId: coreUser.id },
@@ -1426,6 +1452,49 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
       db.coreImportJob.findFirst({ orderBy: { createdAt: "desc" } }),
     ]);
     return ok(res, { academicYear, totals: { teachers, students, subjects, classes }, pendingRequests, lastImport });
+  });
+
+  app.get("/api/v1/akademik/siswa/export", requireAuth, async (_req, res) => {
+    try {
+      const students = await db.coreStudent.findMany({
+        include: {
+          enrollments: {
+            where: { status: "ACTIVE" },
+            include: { academicClass: true, academicYear: true },
+            orderBy: { updatedAt: "desc" },
+            take: 1,
+          },
+        },
+        orderBy: { nisn: "asc" },
+      });
+      const rows = students.map((student) => {
+        const enrollment = student.enrollments[0];
+        return [
+          student.nisn,
+          student.nis ?? "",
+          student.fullName,
+          student.email ?? "",
+          student.phone ?? "",
+          student.gender ?? "",
+          student.birthPlace ?? "",
+          student.birthDate?.toISOString().slice(0, 10) ?? "",
+          enrollment?.academicClass.code ?? "",
+          enrollment?.academicYear.code ?? "",
+          "",
+          student.status,
+        ];
+      });
+      const sheet = XLSX.utils.aoa_to_sheet([STUDENT_DATA_HEADERS, ...rows]);
+      sheet["!cols"] = STUDENT_DATA_HEADERS.map((header) => ({ wch: Math.max(16, header.length + 2) }));
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, sheet, "Data Siswa");
+      const file = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+      res.setHeader("Content-Disposition", 'attachment; filename="data-siswa.xlsx"');
+      res.type("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      return res.send(file);
+    } catch {
+      return fail(res, 500, "STUDENT_EXPORT_FAILED", "Data siswa gagal diekspor.");
+    }
   });
 
   app.get("/api/v1/akademik/master", requireAuth, async (req, res) => {

@@ -21,7 +21,7 @@ const IMPORTS: { type: ImportType; label: string; description: string }[] = [
   { type: "mapel", label: "Mata pelajaran", description: "Master mapel dan jurusan opsional" },
   { type: "kelas", label: "Kelas", description: "Kelas, tingkat, tahun, dan jurusan" },
   { type: "guru", label: "Guru", description: "Profil guru dan akun undangan" },
-  { type: "siswa", label: "Siswa", description: "Email opsional. Siswa tanpa email dapat login dengan NIS dan melengkapi email dari portal. Password wajib untuk akun baru; kosongkan untuk mempertahankan password akun lama." },
+  { type: "siswa", label: "Siswa", description: "Email opsional; akun tetap memakai NIS/NISN untuk login. Password wajib untuk akun baru; kosongkan untuk mempertahankan password akun lama." },
   { type: "assignment-guru", label: "Assignment guru", description: "Akses resmi guru ke kelas" },
   { type: "enrollment-siswa", label: "Enrollment siswa", description: "Penempatan siswa per periode" },
 ];
@@ -120,6 +120,7 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
   const [file, setFile] = useState<{ name: string; base64: string } | null>(null);
   const [preview, setPreview] = useState<{ jobId: string; rows: PreviewRow[]; totalRows: number; validRows: number; errorRows: number } | null>(null);
   const [importBusy, setImportBusy] = useState(false);
+  const [exportingStudents, setExportingStudents] = useState(false);
   const [jobs, setJobs] = useState<any[]>([]);
   const [audit, setAudit] = useState<any[]>([]);
   const [auditTotal, setAuditTotal] = useState(0);
@@ -237,6 +238,32 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
       setFile(null); setPreview(null); await Promise.all([load(), loadActivity()]);
     } catch (error) { setNotice({ type: "error", text: error instanceof Error ? error.message : "Commit gagal." }); }
     finally { setImportBusy(false); }
+  };
+  const exportStudents = async () => {
+    setExportingStudents(true);
+    try {
+      const response = await fetch("/api/v1/akademik/siswa/export", { headers: authHeaders() });
+      if (response.status === 401) {
+        localStorage.removeItem("smkn1_adm_token");
+        setLoggedIn(false);
+        throw new Error("Session berakhir. Silakan login kembali.");
+      }
+      if (!response.ok) throw new Error("Ekspor data siswa gagal.");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "data-siswa.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setNotice({ type: "success", text: "Data siswa berhasil diekspor." });
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "Ekspor data siswa gagal." });
+    } finally {
+      setExportingStudents(false);
+    }
   };
   const openCreate = () => {
     setEditingId(null);
@@ -608,6 +635,7 @@ export default function AdminAkademik({ theme = "light", embedded = false, onBac
                     <Search className="w-4 h-4 absolute left-3 top-3 opacity-40" />
                     <input aria-label="Cari master data" value={search} onChange={(event) => { setSearch(event.target.value); setMasterPage(1); }} placeholder={searchBy === "status" ? "Contoh: ACTIVE" : `Cari ${SEARCH_FIELDS[masterKey].find((field) => field.value === searchBy)?.label.toLowerCase() || "data"}...`} className="w-full sm:w-56 rounded-xl border pl-9 pr-3 py-2.5 bg-transparent text-sm outline-none focus:ring-2 focus:ring-amber-400" />
                   </label>
+                  {masterKey === "students" && <button type="button" disabled={exportingStudents} onClick={exportStudents} className="rounded-xl border border-amber-500/40 px-4 py-2.5 text-sm font-black text-amber-600 flex items-center justify-center gap-2 disabled:opacity-50"><Download className="w-4 h-4" />{exportingStudents ? "Mengekspor..." : "Ekspor siswa"}</button>}
                   {MASTER_META.find((item) => item.key === masterKey)?.manual && <button onClick={openCreate} className="rounded-xl bg-slate-950 text-white dark:bg-amber-400 dark:text-slate-950 px-4 py-2.5 text-sm font-black flex items-center justify-center gap-2"><Plus className="w-4 h-4" /> Tambah data</button>}
                 </div>
               </div>
