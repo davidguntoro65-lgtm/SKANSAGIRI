@@ -583,6 +583,51 @@ app.get("/api/v1/me", async (req, res) => {
   return res.json({ success: true, data: publicCoreUser(session.coreUser) });
 });
 
+app.patch("/api/v1/me/email", async (req, res) => {
+  const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
+  const session = token
+    ? await db.session.findUnique({
+      where: { token },
+      include: { coreUser: { include: { roles: { include: { role: true } }, student: true } } },
+    })
+    : null;
+  const user = session?.coreUser;
+  if (!user || session.expiresAt < new Date() || user.status !== "ACTIVE") {
+    return res.status(401).json({ success: false, error: { code: "UNAUTHENTICATED", message: "Session tidak valid." } });
+  }
+  if (!user.student || !user.roles.some(({ role }) => role.name === "SISWA")) {
+    return res.status(403).json({ success: false, error: { code: "STUDENT_PROFILE_REQUIRED", message: "Perubahan email hanya tersedia untuk akun siswa." } });
+  }
+
+  const email = String(req.body?.email ?? "").trim().toLowerCase();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ success: false, error: { code: "INVALID_EMAIL", message: "Masukkan alamat email yang valid." } });
+  }
+
+  try {
+    await db.$transaction(async (tx) => {
+      await tx.coreUser.update({ where: { id: user.id }, data: { email } });
+      await tx.coreStudent.update({ where: { id: user.student!.id }, data: { email } });
+      await tx.coreAuditLog.create({
+        data: {
+          action: "STUDENT_EMAIL_UPDATED",
+          entity: "CoreStudent",
+          entityId: user.student!.id,
+          actor: user.id,
+          userId: user.id,
+          metadata: { updatedBySelf: true },
+        },
+      });
+    });
+    return res.json({ success: true, data: { email } });
+  } catch (error) {
+    if ((error as { code?: string })?.code === "P2002") {
+      return res.status(409).json({ success: false, error: { code: "EMAIL_ALREADY_USED", message: "Email ini sudah digunakan akun lain." } });
+    }
+    throw error;
+  }
+});
+
 app.post("/api/v1/auth/activate", async (req, res) => {
   const token = String(req.body.token || "");
   const password = String(req.body.password || "");

@@ -21,7 +21,7 @@ const IMPORTS: { type: ImportType; label: string; description: string }[] = [
   { type: "mapel", label: "Mata pelajaran", description: "Master mapel dan jurusan opsional" },
   { type: "kelas", label: "Kelas", description: "Kelas, tingkat, tahun, dan jurusan" },
   { type: "guru", label: "Guru", description: "Profil guru dan akun undangan" },
-  { type: "siswa", label: "Siswa", description: "Profil siswa dan enrollment awal. Password wajib untuk akun baru; kosongkan untuk mempertahankan password akun lama." },
+  { type: "siswa", label: "Siswa", description: "Email opsional. Siswa tanpa email dapat login dengan NIS dan melengkapi email dari portal. Password wajib untuk akun baru; kosongkan untuk mempertahankan password akun lama." },
   { type: "assignment-guru", label: "Assignment guru", description: "Akses resmi guru ke kelas" },
   { type: "enrollment-siswa", label: "Enrollment siswa", description: "Penempatan siswa per periode" },
 ];

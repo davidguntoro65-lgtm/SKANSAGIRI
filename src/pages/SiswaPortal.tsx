@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { ArrowRight, CheckCircle2, GraduationCap, KeyRound, LogIn, LogOut, ShieldCheck, UserRound } from "lucide-react";
+import { ArrowRight, CheckCircle2, GraduationCap, KeyRound, LogIn, LogOut, Mail, Save, ShieldCheck, UserRound } from "lucide-react";
 import { navigate } from "../utils/navigation";
 
 type Student = {
@@ -20,6 +20,7 @@ type CoreUser = {
 };
 
 const TOKEN_KEY = "smkn1_core_token";
+const INTERNAL_STUDENT_EMAIL_SUFFIX = "@akun.smkn1wonogiri.local";
 
 function token() {
   return localStorage.getItem(TOKEN_KEY) || "";
@@ -27,6 +28,13 @@ function token() {
 
 function inputClass() {
   return "mt-2 w-full rounded-xl border border-white/10 bg-white/[.06] px-4 py-3.5 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20";
+}
+
+function contactEmailFor(user: CoreUser) {
+  const studentEmail = user.student?.email?.trim();
+  if (studentEmail) return studentEmail;
+  const accountEmail = user.email?.trim() || "";
+  return accountEmail.toLowerCase().endsWith(INTERNAL_STUDENT_EMAIL_SUFFIX) ? "" : accountEmail;
 }
 
 export default function SiswaPortal() {
@@ -41,6 +49,8 @@ export default function SiswaPortal() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordBusy, setPasswordBusy] = useState(false);
+  const [studentEmail, setStudentEmail] = useState("");
+  const [emailBusy, setEmailBusy] = useState(false);
 
   const session = async () => {
     const response = await fetch("/api/v1/auth/session", { headers: { Authorization: `Bearer ${token()}` } });
@@ -58,6 +68,7 @@ export default function SiswaPortal() {
       return;
     }
     setUser(nextUser);
+    setStudentEmail(contactEmailFor(nextUser));
   };
 
   useEffect(() => {
@@ -79,6 +90,7 @@ export default function SiswaPortal() {
       if (!payload.data?.user?.roles?.includes("SISWA")) throw new Error("Akun ini bukan akun siswa.");
       localStorage.setItem(TOKEN_KEY, payload.data.token);
       setUser(payload.data.user);
+      setStudentEmail(contactEmailFor(payload.data.user));
       setLoggedIn(true);
       setShowPasswordOffer(Boolean(payload.data.passwordChangeOffer));
     } catch (error) {
@@ -119,10 +131,40 @@ export default function SiswaPortal() {
     }
   };
 
+  const saveStudentEmail = async (event: FormEvent) => {
+    event.preventDefault();
+    const email = studentEmail.trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setNotice({ type: "error", text: "Masukkan alamat email yang valid." });
+      return;
+    }
+    setEmailBusy(true);
+    try {
+      const response = await fetch("/api/v1/me/email", {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token()}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error?.message || "Email gagal disimpan.");
+      const savedEmail = String(payload.data?.email || email);
+      setStudentEmail(savedEmail);
+      setUser((current) => current
+        ? { ...current, email: savedEmail, student: current.student ? { ...current.student, email: savedEmail } : null }
+        : current);
+      setNotice({ type: "success", text: "Email berhasil disimpan pada akun Anda." });
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "Email gagal disimpan." });
+    } finally {
+      setEmailBusy(false);
+    }
+  };
+
   const logout = async () => {
     await fetch("/api/v1/auth/logout", { method: "POST", headers: { Authorization: `Bearer ${token()}` } }).catch(() => {});
     localStorage.removeItem(TOKEN_KEY);
     setUser(null);
+    setStudentEmail("");
     setLoggedIn(false);
     setShowPasswordOffer(false);
   };
@@ -178,6 +220,23 @@ export default function SiswaPortal() {
             <button onClick={() => setShowPasswordOffer(true)} className="mt-5 flex items-center gap-2 text-sm font-black text-amber-400 hover:text-amber-300">Ubah password <ArrowRight className="h-4 w-4" /></button>
           </div>
         </section>
+        <form onSubmit={saveStudentEmail} className="mt-5 rounded-[28px] border border-white/10 bg-white/[.035] p-6 sm:p-8">
+          <div className="flex items-start gap-3">
+            <Mail className="mt-1 h-5 w-5 shrink-0 text-amber-400" />
+            <div>
+              <h3 className="font-black">Email akun</h3>
+              <p className="mt-1 text-sm leading-relaxed text-white/50">Tambahkan email pribadi agar informasi akun dapat dikirim ke alamat Anda. Email boleh dilengkapi setelah login.</p>
+            </div>
+          </div>
+          <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end">
+            <label className="block flex-1 text-xs font-bold text-white/75">Alamat email
+              <input required type="email" autoComplete="email" value={studentEmail} onChange={(event) => setStudentEmail(event.target.value)} className={inputClass()} placeholder="nama@email.com" />
+            </label>
+            <button disabled={emailBusy} className="flex min-h-[50px] items-center justify-center gap-2 rounded-xl bg-amber-400 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-amber-300 disabled:opacity-50">
+              <Save className="h-4 w-4" />{emailBusy ? "Menyimpan..." : "Simpan email"}
+            </button>
+          </div>
+        </form>
         {showPasswordOffer && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-5 backdrop-blur-sm">
           <form onSubmit={changePassword} className="w-full max-w-md rounded-[28px] border border-white/10 bg-[#0d1829] p-6 shadow-2xl sm:p-8">
             <div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-400"><KeyRound className="h-5 w-5 text-slate-950" /></div><div><h3 className="font-black">Ganti password?</h3><p className="text-xs text-white/50">Disarankan saat login pertama</p></div></div>

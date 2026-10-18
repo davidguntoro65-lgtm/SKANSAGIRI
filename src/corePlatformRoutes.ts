@@ -193,6 +193,12 @@ function studentAccountEmail(nis: string) {
   return `siswa.${normalizedNis}.${uniqueSuffix}@akun.smkn1wonogiri.local`;
 }
 
+function studentLoginEmail(values: Record<string, unknown>, user?: { email?: string | null } | null) {
+  const suppliedEmail = clean(values.email).toLowerCase();
+  const existingEmail = user && typeof user === "object" ? clean(user.email).toLowerCase() : "";
+  return suppliedEmail || existingEmail || studentAccountEmail(clean(values.nis));
+}
+
 function maskPreviewRows(rows: PreviewRow[]) {
   return rows.map((row) => ({
     ...row,
@@ -283,7 +289,7 @@ async function validateRows(type: ImportType, rows: Record<string, unknown>[]): 
     ? [...new Set(rows.map((values) => {
       const nisn = clean(values.nisn);
       const existing = refs.students.get(nisn) as { user?: { email: string } | null } | undefined;
-      return clean(values.email).toLowerCase() || existing?.user?.email || studentAccountEmail(clean(values.nis));
+      return studentLoginEmail(values, existing?.user);
     }))]
     : [];
   const emailOwners = accountEmails.length
@@ -322,7 +328,7 @@ async function validateRows(type: ImportType, rows: Record<string, unknown>[]): 
       const nis = clean(values.nis);
       const email = clean(values.email).toLowerCase();
       const existingStudent = refs.students.get(nisn) as { user?: { id: string; email: string } | null } | undefined;
-      const accountEmail = email || existingStudent?.user?.email || studentAccountEmail(nis);
+      const accountEmail = studentLoginEmail(values, existingStudent?.user);
       if (seenStudentNisn.has(nisn)) errors.push(`NISN "${nisn}" duplikat di dalam file.`);
       if (seenStudentNis.has(nis)) errors.push(`NIS "${nis}" duplikat di dalam file.`);
       if (email && seenStudentEmails.has(email)) errors.push(`Email "${email}" duplikat di dalam file.`);
@@ -550,10 +556,7 @@ async function commitRows(type: ImportType, rows: PreviewRow[], actor: string, j
 
       const accountEmails = [...new Set(preparedRows.map(({ values }) => {
         const nisn = clean(values.nisn);
-        const nis = clean(values.nis);
-        return clean(values.email).toLowerCase()
-          || studentsByNisn.get(nisn)?.user?.email
-          || studentAccountEmail(nis);
+        return studentLoginEmail(values, studentsByNisn.get(nisn)?.user);
       }))];
       const users = await tx.coreUser.findMany({
         where: { email: { in: accountEmails } },
@@ -597,7 +600,7 @@ async function commitRows(type: ImportType, rows: PreviewRow[], actor: string, j
         const birthPlace = clean(values.tempatLahir) || existingStudent?.birthPlace || null;
         const birthDate = clean(values.tanggalLahir) ? parseDate(values.tanggalLahir) : existingStudent?.birthDate || null;
         const existingUser = existingStudent?.user || null;
-        const accountEmail = suppliedEmail || existingUser?.email || studentAccountEmail(nis);
+        const accountEmail = studentLoginEmail(values, existingUser);
         const userStatus = clean(values.status) || !existingUser
           ? (status === "ACTIVE" ? "ACTIVE" : "DISABLED")
           : undefined;
