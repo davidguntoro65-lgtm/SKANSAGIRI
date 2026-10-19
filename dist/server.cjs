@@ -36,7 +36,7 @@ var require_main = __commonJS({
   "node_modules/dotenv/lib/main.js"(exports2, module2) {
     var fs3 = require("fs");
     var path3 = require("path");
-    var os = require("os");
+    var os2 = require("os");
     var crypto5 = require("crypto");
     var TIPS = [
       "\u25C8 encrypted .env [www.dotenvx.com]",
@@ -182,7 +182,7 @@ var require_main = __commonJS({
       return null;
     }
     function _resolveHome(envPath) {
-      return envPath[0] === "~" ? path3.join(os.homedir(), envPath.slice(1)) : envPath;
+      return envPath[0] === "~" ? path3.join(os2.homedir(), envPath.slice(1)) : envPath;
     }
     function _configVault(options) {
       const debug3 = parseBoolean(process.env.DOTENV_CONFIG_DEBUG || options && options.debug);
@@ -40325,7 +40325,7 @@ var require_client3 = __commonJS({
       "use strict";
     });
     var Hm = {};
-    lt(Hm, { AnyNull: () => ee.AnyNull, DMMF: () => Qt, DbNull: () => ee.DbNull, Debug: () => K, Decimal: () => cu.Decimal, Extensions: () => Rn, JsonNull: () => ee.JsonNull, NullTypes: () => ee.NullTypes, ObjectEnumValue: () => ee.ObjectEnumValue, PrismaClientInitializationError: () => _.PrismaClientInitializationError, PrismaClientKnownRequestError: () => _.PrismaClientKnownRequestError, PrismaClientRustPanicError: () => _.PrismaClientRustPanicError, PrismaClientUnknownRequestError: () => _.PrismaClientUnknownRequestError, PrismaClientValidationError: () => _.PrismaClientValidationError, Public: () => Cn, Sql: () => Fe.Sql, createParam: () => os, defineDmmfProperty: () => ps, deserializeJsonObject: () => Ae, deserializeRawResult: () => Tn, dmmfToRuntimeDataModel: () => so, empty: () => Fe.empty, getPrismaClient: () => au, getRuntime: () => uu, isAnyNull: () => ee.isAnyNull, isDbNull: () => ee.isDbNull, isJsonNull: () => ee.isJsonNull, isObjectEnumValue: () => ee.isObjectEnumValue, join: () => Fe.join, makeStrictEnum: () => lu, makeTypedQueryFactory: () => ds, raw: () => Fe.raw, serializeJsonQuery: () => Vr, skip: () => Lr, sqltag: () => Fe.sql, warnOnce: () => Vn });
+    lt(Hm, { AnyNull: () => ee.AnyNull, DMMF: () => Qt, DbNull: () => ee.DbNull, Debug: () => K, Decimal: () => cu.Decimal, Extensions: () => Rn, JsonNull: () => ee.JsonNull, NullTypes: () => ee.NullTypes, ObjectEnumValue: () => ee.ObjectEnumValue, PrismaClientInitializationError: () => _.PrismaClientInitializationError, PrismaClientKnownRequestError: () => _.PrismaClientKnownRequestError, PrismaClientRustPanicError: () => _.PrismaClientRustPanicError, PrismaClientUnknownRequestError: () => _.PrismaClientUnknownRequestError, PrismaClientValidationError: () => _.PrismaClientValidationError, Public: () => Cn, Sql: () => Fe.Sql, createParam: () => os2, defineDmmfProperty: () => ps, deserializeJsonObject: () => Ae, deserializeRawResult: () => Tn, dmmfToRuntimeDataModel: () => so, empty: () => Fe.empty, getPrismaClient: () => au, getRuntime: () => uu, isAnyNull: () => ee.isAnyNull, isDbNull: () => ee.isDbNull, isJsonNull: () => ee.isJsonNull, isObjectEnumValue: () => ee.isObjectEnumValue, join: () => Fe.join, makeStrictEnum: () => lu, makeTypedQueryFactory: () => ds, raw: () => Fe.raw, serializeJsonQuery: () => Vr, skip: () => Lr, sqltag: () => Fe.sql, warnOnce: () => Vn });
     module2.exports = yu(Hm);
     var Rn = {};
     lt(Rn, { defineExtension: () => ro, getExtensionContext: () => no });
@@ -41596,7 +41596,7 @@ Note that ${s2.bold("include")} statements only accept relation fields.`, a;
     function is(e2) {
       return e2 instanceof $r;
     }
-    function os(e2) {
+    function os2(e2) {
       return new $r(e2);
     }
     var ss = Symbol();
@@ -58625,9 +58625,9 @@ var require_xlsx = __commonJS({
         cell.isst = blob.read_shift(4);
         return cell;
       }
-      function write_LabelSst(R, C, v, os) {
+      function write_LabelSst(R, C, v, os2) {
         var o = new_buf(10);
-        write_XLSCell(R, C, os, o);
+        write_XLSCell(R, C, os2, o);
         o.write_shift(4, v);
         return o;
       }
@@ -58640,10 +58640,10 @@ var require_xlsx = __commonJS({
         cell.val = str;
         return cell;
       }
-      function write_Label(R, C, v, os, opts) {
+      function write_Label(R, C, v, os2, opts) {
         var b8 = !opts || opts.biff == 8;
         var o = new_buf(6 + 2 + +b8 + (1 + b8) * v.length);
-        write_XLSCell(R, C, os, o);
+        write_XLSCell(R, C, os2, o);
         o.write_shift(2, v.length);
         if (b8) o.write_shift(1, 1);
         o.write_shift((1 + b8) * v.length, v, b8 ? "utf16le" : "sbcs");
@@ -58797,9 +58797,9 @@ var require_xlsx = __commonJS({
         cell.t = val === true || val === false ? "b" : "e";
         return cell;
       }
-      function write_BoolErr(R, C, v, os, opts, t2) {
+      function write_BoolErr(R, C, v, os2, opts, t2) {
         var o = new_buf(8);
-        write_XLSCell(R, C, os, o);
+        write_XLSCell(R, C, os2, o);
         write_Bes(v, t2, o);
         return o;
       }
@@ -58810,9 +58810,9 @@ var require_xlsx = __commonJS({
         cell.val = xnum;
         return cell;
       }
-      function write_Number(R, C, v, os) {
+      function write_Number(R, C, v, os2) {
         var o = new_buf(14);
-        write_XLSCell(R, C, os, o);
+        write_XLSCell(R, C, os2, o);
         write_Xnum(v, o);
         return o;
       }
@@ -65635,8 +65635,8 @@ var require_xlsx = __commonJS({
         var cbf = parse_XLSCellParsedFormula(blob, end - blob.l, opts);
         return { cell, val: val[0], formula: cbf, shared: flags >> 3 & 1, tt: val[1] };
       }
-      function write_Formula(cell, R, C, opts, os) {
-        var o1 = write_XLSCell(R, C, os);
+      function write_Formula(cell, R, C, opts, os2) {
+        var o1 = write_XLSCell(R, C, os2);
         var o2 = write_FormulaValue(cell.v);
         var o3 = new_buf(6);
         var flags = 1 | 32;
@@ -67215,8 +67215,8 @@ var require_xlsx = __commonJS({
             break;
         }
         var v = writetag("v", escapexml(vv)), o = { r: ref };
-        var os = get_cell_style(opts.cellXfs, cell, opts);
-        if (os !== 0) o.s = os;
+        var os2 = get_cell_style(opts.cellXfs, cell, opts);
+        if (os2 !== 0) o.s = os2;
         switch (cell.t) {
           case "n":
             break;
@@ -71031,8 +71031,8 @@ var require_xlsx = __commonJS({
             p = escapexlml(cell.v || "");
             break;
         }
-        var os = get_cell_style(opts.cellXfs, cell, opts);
-        attr["ss:StyleID"] = "s" + (21 + os);
+        var os2 = get_cell_style(opts.cellXfs, cell, opts);
+        attr["ss:StyleID"] = "s" + (21 + os2);
         attr["ss:Index"] = addr.c + 1;
         var _v = cell.v != null ? p : "";
         var m2 = cell.t == "z" ? "" : '<Data ss:Type="' + t2 + '">' + _v + "</Data>";
@@ -76867,32 +76867,32 @@ var require_xlsx = __commonJS({
         });
       }
       function write_ws_biff8_cell(ba, cell, R, C, opts) {
-        var os = 16 + get_cell_style(opts.cellXfs, cell, opts);
+        var os2 = 16 + get_cell_style(opts.cellXfs, cell, opts);
         if (cell.v == null && !cell.bf) {
-          write_biff_rec(ba, 513, write_XLSCell(R, C, os));
+          write_biff_rec(ba, 513, write_XLSCell(R, C, os2));
           return;
         }
-        if (cell.bf) write_biff_rec(ba, 6, write_Formula(cell, R, C, opts, os));
+        if (cell.bf) write_biff_rec(ba, 6, write_Formula(cell, R, C, opts, os2));
         else switch (cell.t) {
           case "d":
           case "n":
             var v = cell.t == "d" ? datenum(parseDate2(cell.v)) : cell.v;
-            write_biff_rec(ba, 515, write_Number(R, C, v, os, opts));
+            write_biff_rec(ba, 515, write_Number(R, C, v, os2, opts));
             break;
           case "b":
           case "e":
-            write_biff_rec(ba, 517, write_BoolErr(R, C, cell.v, os, opts, cell.t));
+            write_biff_rec(ba, 517, write_BoolErr(R, C, cell.v, os2, opts, cell.t));
             break;
           /* TODO: codepage, sst */
           case "s":
           case "str":
             if (opts.bookSST) {
               var isst = get_sst_id(opts.Strings, cell.v, opts.revStrings);
-              write_biff_rec(ba, 253, write_LabelSst(R, C, isst, os, opts));
-            } else write_biff_rec(ba, 516, write_Label(R, C, (cell.v || "").slice(0, 255), os, opts));
+              write_biff_rec(ba, 253, write_LabelSst(R, C, isst, os2, opts));
+            } else write_biff_rec(ba, 516, write_Label(R, C, (cell.v || "").slice(0, 255), os2, opts));
             break;
           default:
-            write_biff_rec(ba, 513, write_XLSCell(R, C, os));
+            write_biff_rec(ba, 513, write_XLSCell(R, C, os2));
         }
       }
       function write_ws_biff8(idx, opts, wb) {
@@ -85544,7 +85544,7 @@ var require_make_middleware = __commonJS({
 var require_disk = __commonJS({
   "node_modules/multer/storage/disk.js"(exports2, module2) {
     var fs3 = require("fs");
-    var os = require("os");
+    var os2 = require("os");
     var path3 = require("path");
     var crypto5 = require("crypto");
     var pipeline2 = require("stream").pipeline;
@@ -85563,7 +85563,7 @@ var require_disk = __commonJS({
       });
     }
     function getDestination(req, file, cb) {
-      cb(null, os.tmpdir());
+      cb(null, os2.tmpdir());
     }
     function DiskStorage(opts) {
       opts = opts || {};
@@ -92875,7 +92875,7 @@ var require_gaxios = __commonJS({
     var retry_js_1 = require_retry();
     var stream_1 = require("stream");
     var interceptor_js_1 = require_interceptor();
-    var randomUUID = async () => globalThis.crypto?.randomUUID() || (await import("crypto")).randomUUID();
+    var randomUUID2 = async () => globalThis.crypto?.randomUUID() || (await import("crypto")).randomUUID();
     var HTTP_STATUS_NO_CONTENT = 204;
     var Gaxios = class {
       agentCache = /* @__PURE__ */ new Map();
@@ -93148,7 +93148,7 @@ var require_gaxios = __commonJS({
          */
         ["Blob", "File", "FormData"].includes(opts.data?.constructor?.name || "");
         if (opts.multipart?.length) {
-          const boundary = await randomUUID();
+          const boundary = await randomUUID2();
           preparedHeaders.set("content-type", `multipart/related; boundary=${boundary}`);
           opts.body = stream_1.Readable.from(this.getMultipartRequest(opts.multipart, boundary));
         } else if (shouldDirectlyPassData) {
@@ -93867,7 +93867,7 @@ var require_gaxios2 = __commonJS({
     var retry_js_1 = require_retry2();
     var stream_1 = require("stream");
     var interceptor_js_1 = require_interceptor2();
-    var randomUUID = async () => globalThis.crypto?.randomUUID() || (await import("crypto")).randomUUID();
+    var randomUUID2 = async () => globalThis.crypto?.randomUUID() || (await import("crypto")).randomUUID();
     var HTTP_STATUS_NO_CONTENT = 204;
     var Gaxios = class {
       agentCache = /* @__PURE__ */ new Map();
@@ -94140,7 +94140,7 @@ var require_gaxios2 = __commonJS({
          */
         ["Blob", "File", "FormData"].includes(opts.data?.constructor?.name || "");
         if (opts.multipart?.length) {
-          const boundary = await randomUUID();
+          const boundary = await randomUUID2();
           preparedHeaders.set("content-type", `multipart/related; boundary=${boundary}`);
           opts.body = stream_1.Readable.from(this.getMultipartRequest(opts.multipart, boundary));
         } else if (shouldDirectlyPassData) {
@@ -97136,7 +97136,7 @@ var require_util3 = __commonJS({
     exports2.isValidFile = isValidFile;
     exports2.getWellKnownCertificateConfigFileLocation = getWellKnownCertificateConfigFileLocation;
     var fs3 = require("fs");
-    var os = require("os");
+    var os2 = require("os");
     var path3 = require("path");
     var WELL_KNOWN_CERTIFICATE_CONFIG_FILE = "certificate_config.json";
     var CLOUDSDK_CONFIG_DIRECTORY = "gcloud";
@@ -97234,7 +97234,7 @@ var require_util3 = __commonJS({
       return path3.join(configDir, WELL_KNOWN_CERTIFICATE_CONFIG_FILE);
     }
     function _isWindows() {
-      return os.platform().startsWith("win");
+      return os2.platform().startsWith("win");
     }
   }
 });
@@ -102006,7 +102006,7 @@ var require_googleauth = __commonJS({
     var fs3 = require("fs");
     var gaxios_1 = require_src7();
     var gcpMetadata = require_src10();
-    var os = require("os");
+    var os2 = require("os");
     var path3 = require("path");
     var crypto_1 = require_crypto3();
     var computeclient_1 = require_computeclient();
@@ -102509,7 +102509,7 @@ var require_googleauth = __commonJS({
        * @api private
        */
       _isWindows() {
-        const sys = os.platform();
+        const sys = os2.platform();
         if (sys && sys.length >= 3) {
           if (sys.substring(0, 3).toLowerCase() === "win") {
             return true;
@@ -103669,7 +103669,7 @@ var require_apirequest = __commonJS({
     var h2 = require_http2();
     var util_1 = require_util4();
     var pkg = require_package4();
-    var randomUUID = () => globalThis.crypto?.randomUUID() || require("crypto").randomUUID();
+    var randomUUID2 = () => globalThis.crypto?.randomUUID() || require("crypto").randomUUID();
     function isReadableStream(obj) {
       return obj !== null && typeof obj === "object" && typeof obj.pipe === "function" && obj.readable !== false && typeof obj._read === "function" && typeof obj._readableState === "object";
     }
@@ -103758,7 +103758,7 @@ var require_apirequest = __commonJS({
         authClient = void 0;
       }
       function multipartUpload(multipart) {
-        const boundary = randomUUID();
+        const boundary = randomUUID2();
         const finale = `--${boundary}--`;
         const rStream = new stream.PassThrough({
           flush(callback) {
@@ -103795,7 +103795,7 @@ content-type: ${part["content-type"]}\r
         options.data = rStream;
       }
       function browserMultipartUpload(multipart) {
-        const boundary = randomUUID();
+        const boundary = randomUUID2();
         const finale = `--${boundary}--`;
         headers["content-type"] = `multipart/related; boundary=${boundary}`;
         let content = "";
@@ -837937,7 +837937,7 @@ var require_util5 = __commonJS({
     exports2.isValidFile = isValidFile;
     exports2.getWellKnownCertificateConfigFileLocation = getWellKnownCertificateConfigFileLocation;
     var fs3 = require("fs");
-    var os = require("os");
+    var os2 = require("os");
     var path3 = require("path");
     var WELL_KNOWN_CERTIFICATE_CONFIG_FILE = "certificate_config.json";
     var CLOUDSDK_CONFIG_DIRECTORY = "gcloud";
@@ -838035,7 +838035,7 @@ var require_util5 = __commonJS({
       return path3.join(configDir, WELL_KNOWN_CERTIFICATE_CONFIG_FILE);
     }
     function _isWindows() {
-      return os.platform().startsWith("win");
+      return os2.platform().startsWith("win");
     }
   }
 });
@@ -842875,7 +842875,7 @@ var require_googleauth2 = __commonJS({
     var fs3 = require("fs");
     var gaxios_1 = require_src8();
     var gcpMetadata = require_src10();
-    var os = require("os");
+    var os2 = require("os");
     var path3 = require("path");
     var crypto_1 = require_crypto6();
     var computeclient_1 = require_computeclient2();
@@ -843382,7 +843382,7 @@ var require_googleauth2 = __commonJS({
        * @api private
        */
       _isWindows() {
-        const sys = os.platform();
+        const sys = os2.platform();
         if (sys && sys.length >= 3) {
           if (sys.substring(0, 3).toLowerCase() === "win") {
             return true;
@@ -846747,7 +846747,7 @@ var require_connectors_sdk = __commonJS({
 var import_express = __toESM(require_express2(), 1);
 var import_path2 = __toESM(require("path"), 1);
 var import_fs = __toESM(require("fs"), 1);
-var import_crypto3 = __toESM(require("crypto"), 1);
+var import_crypto4 = __toESM(require("crypto"), 1);
 var import_web_push = __toESM(require_src6(), 1);
 
 // node_modules/@prisma/debug/dist/index.mjs
@@ -847800,16 +847800,286 @@ var PrismaPgAdapterFactory = class {
 
 // src/db.ts
 var import_client = __toESM(require_client5(), 1);
-var poolMax = Number.parseInt(process.env.DATABASE_POOL_MAX || "10", 10);
-var adapter = new PrismaPgAdapterFactory({
+var requestedPoolMax = Number.parseInt(process.env.DATABASE_POOL_MAX || "10", 10);
+var dbPoolMax = Number.isInteger(requestedPoolMax) && requestedPoolMax > 0 ? Math.min(requestedPoolMax, 50) : 10;
+var globalForPrisma = globalThis;
+var reuseGlobal = process.env.NODE_ENV !== "production";
+var dbPool = reuseGlobal && globalForPrisma.dbPool || new Pool({
   connectionString: process.env.DATABASE_URL,
-  max: Number.isInteger(poolMax) && poolMax > 0 ? Math.min(poolMax, 50) : 10,
+  max: dbPoolMax,
   idleTimeoutMillis: 3e4,
   connectionTimeoutMillis: 1e4
 });
-var globalForPrisma = globalThis;
-var db = globalForPrisma.db ?? new import_client.PrismaClient({ adapter });
-if (process.env.NODE_ENV !== "production") globalForPrisma.db = db;
+var adapter = new PrismaPgAdapterFactory(dbPool, {
+  disposeExternalPool: true,
+  onPoolError: (error) => {
+    console.error(JSON.stringify({
+      event: "postgres_pool_error",
+      name: error.name,
+      code: error.code || null
+    }));
+  }
+});
+var db = reuseGlobal && globalForPrisma.db || new import_client.PrismaClient({ adapter });
+if (reuseGlobal) {
+  globalForPrisma.dbPool = dbPool;
+  globalForPrisma.db = db;
+}
+
+// src/pilketosDiagnostics.ts
+var import_crypto = require("crypto");
+var import_os = __toESM(require("os"), 1);
+var import_perf_hooks = require("perf_hooks");
+var REPORT_INTERVAL_MS = 1e4;
+var SLOW_REQUEST_MS = 1e3;
+var LATENCY_BUCKET_LIMITS = [50, 100, 250, 500, 1e3, 3e3];
+var MAX_EXAMPLES_PER_WINDOW = 5;
+var ERROR_REDACTION = /\b(password|token|secret|authorization)\b\s*[:=]\s*[^\s,;]+/gi;
+var LONG_NUMBER = /\b\d{8,}\b/g;
+function emptyWindow(currentInFlight) {
+  return {
+    started: 0,
+    completed: 0,
+    aborted: 0,
+    expressErrors: 0,
+    statusCodes: {},
+    requestBytes: 0,
+    peakInFlight: currentInFlight,
+    routes: /* @__PURE__ */ new Map(),
+    examples: []
+  };
+}
+function routeLabel(originalUrl) {
+  const queryIndex = originalUrl.indexOf("?");
+  const configuredBasePath = (process.env.BASE_PATH || "").replace(/\/$/, "");
+  let pathname = queryIndex >= 0 ? originalUrl.slice(0, queryIndex) : originalUrl;
+  if (configuredBasePath && (pathname === configuredBasePath || pathname.startsWith(`${configuredBasePath}/`))) {
+    pathname = pathname.slice(configuredBasePath.length) || "/";
+  }
+  pathname = pathname.replace(/\/+/g, "/").replace(/\/$/, "") || "/";
+  if (pathname !== "/api/v1/pilketos" && !pathname.startsWith("/api/v1/pilketos/")) return null;
+  return pathname.replace(/\/candidates\/[^/]+\/photo$/, "/candidates/:candidateId/photo").replace(/\/admin\/elections\/[^/]+\/non-voters$/, "/admin/elections/:electionId/non-voters").replace(/\/admin\/election\/[^/]+\/candidates$/, "/admin/election/:electionId/candidates").replace(/\/admin\/candidates\/[^/]+$/, "/admin/candidates/:candidateId");
+}
+function safeErrorMessage(error) {
+  const message = error instanceof Error ? error.message : String(error ?? "Unknown error");
+  return message.replace(ERROR_REDACTION, "$1=[redacted]").replace(LONG_NUMBER, "[redacted-number]").slice(0, 400);
+}
+function rounded(value, decimalPlaces = 1) {
+  const factor = 10 ** decimalPlaces;
+  return Math.round(value * factor) / factor;
+}
+function megabytes(bytes) {
+  return rounded(bytes / (1024 * 1024));
+}
+function bucketIndex(durationMs) {
+  const index = LATENCY_BUCKET_LIMITS.findIndex((limit) => durationMs <= limit);
+  return index < 0 ? LATENCY_BUCKET_LIMITS.length : index;
+}
+function percentileEstimate(buckets, total, percentile) {
+  if (!total) return 0;
+  const target = Math.ceil(total * percentile);
+  let observed = 0;
+  for (let index = 0; index < buckets.length; index += 1) {
+    observed += buckets[index];
+    if (observed >= target) {
+      return index < LATENCY_BUCKET_LIMITS.length ? LATENCY_BUCKET_LIMITS[index] : "3000+";
+    }
+  }
+  return "3000+";
+}
+function getRouteMetrics(window2, route2) {
+  let metrics = window2.routes.get(route2);
+  if (!metrics) {
+    metrics = {
+      requestsStarted: 0,
+      requestsCompleted: 0,
+      statusCodes: {},
+      durationTotalMs: 0,
+      durationMaxMs: 0,
+      durationBuckets: Array(LATENCY_BUCKET_LIMITS.length + 1).fill(0),
+      slowRequests: 0,
+      requestBytes: 0
+    };
+    window2.routes.set(route2, metrics);
+  }
+  return metrics;
+}
+function createPilketosDiagnostics(log) {
+  let inFlightRequests = 0;
+  let openConnections = 0;
+  let window2 = emptyWindow(0);
+  let interval;
+  const eventLoopDelay = (0, import_perf_hooks.monitorEventLoopDelay)({ resolution: 20 });
+  let previousCpuUsage = process.cpuUsage();
+  let previousEventLoopUtilization = import_perf_hooks.performance.eventLoopUtilization();
+  let previousSnapshotAt = import_perf_hooks.performance.now();
+  const middleware = (req, res, next) => {
+    const route2 = routeLabel(req.originalUrl);
+    if (!route2) return next();
+    const requestId = (0, import_crypto.randomUUID)();
+    const requestStartedAt = process.hrtime.bigint();
+    const requestBytes = Math.max(0, Number.parseInt(req.headers["content-length"] || "0", 10) || 0);
+    let finalized = false;
+    let responseFinished = false;
+    res.locals.pilketosRequestId = requestId;
+    res.locals.pilketosRoute = route2;
+    res.setHeader("X-Request-Id", requestId);
+    inFlightRequests += 1;
+    window2.started += 1;
+    window2.requestBytes += requestBytes;
+    window2.peakInFlight = Math.max(window2.peakInFlight, inFlightRequests);
+    const routeMetrics = getRouteMetrics(window2, route2);
+    routeMetrics.requestsStarted += 1;
+    routeMetrics.requestBytes += requestBytes;
+    const finalize = (aborted) => {
+      if (finalized) return;
+      finalized = true;
+      inFlightRequests = Math.max(0, inFlightRequests - 1);
+      const durationMs = Number(process.hrtime.bigint() - requestStartedAt) / 1e6;
+      if (aborted) {
+        window2.aborted += 1;
+      } else {
+        const statusCode = String(res.statusCode);
+        window2.completed += 1;
+        window2.statusCodes[statusCode] = (window2.statusCodes[statusCode] || 0) + 1;
+        const completedRouteMetrics = getRouteMetrics(window2, route2);
+        completedRouteMetrics.requestsCompleted += 1;
+        completedRouteMetrics.statusCodes[statusCode] = (completedRouteMetrics.statusCodes[statusCode] || 0) + 1;
+        completedRouteMetrics.durationTotalMs += durationMs;
+        completedRouteMetrics.durationMaxMs = Math.max(completedRouteMetrics.durationMaxMs, durationMs);
+        completedRouteMetrics.durationBuckets[bucketIndex(durationMs)] += 1;
+        if (durationMs >= SLOW_REQUEST_MS) completedRouteMetrics.slowRequests += 1;
+      }
+      if ((aborted || res.statusCode >= 500 || durationMs >= SLOW_REQUEST_MS) && window2.examples.length < MAX_EXAMPLES_PER_WINDOW) {
+        window2.examples.push({
+          requestId,
+          method: req.method,
+          route: route2,
+          statusCode: aborted ? null : res.statusCode,
+          durationMs: rounded(durationMs),
+          outcome: aborted ? "client_disconnected" : res.statusCode >= 500 ? "server_error" : "slow_request"
+        });
+      }
+    };
+    res.once("finish", () => {
+      responseFinished = true;
+      finalize(false);
+    });
+    res.once("close", () => {
+      if (!responseFinished) finalize(true);
+    });
+    return next();
+  };
+  function recordExpressError(req, res, error, statusCode) {
+    const route2 = String(res.locals?.pilketosRoute || routeLabel(req.originalUrl) || "");
+    if (!route2) return false;
+    window2.expressErrors += 1;
+    if (window2.examples.length < MAX_EXAMPLES_PER_WINDOW) {
+      const errorRecord = error;
+      window2.examples.push({
+        requestId: String(res.locals?.pilketosRequestId || ""),
+        method: req.method,
+        route: route2,
+        statusCode,
+        errorName: typeof errorRecord?.name === "string" ? errorRecord.name : "Error",
+        errorCode: typeof errorRecord?.code === "string" ? errorRecord.code : null,
+        message: safeErrorMessage(error),
+        outcome: "express_error"
+      });
+    }
+    return true;
+  }
+  function attachHttpServer(server) {
+    server.on("connection", (socket) => {
+      openConnections += 1;
+      socket.once("close", () => {
+        openConnections = Math.max(0, openConnections - 1);
+      });
+    });
+  }
+  function start() {
+    if (interval) return;
+    eventLoopDelay.enable();
+    previousCpuUsage = process.cpuUsage();
+    previousEventLoopUtilization = import_perf_hooks.performance.eventLoopUtilization();
+    previousSnapshotAt = import_perf_hooks.performance.now();
+    interval = setInterval(() => {
+      if (!window2.started && !inFlightRequests && !window2.aborted && !window2.expressErrors) return;
+      const now = import_perf_hooks.performance.now();
+      const elapsedMs = Math.max(1, now - previousSnapshotAt);
+      const currentCpuUsage = process.cpuUsage();
+      const cpuUserUs = currentCpuUsage.user - previousCpuUsage.user;
+      const cpuSystemUs = currentCpuUsage.system - previousCpuUsage.system;
+      const cpuPercent = (cpuUserUs + cpuSystemUs) / (elapsedMs * 1e3) * 100;
+      const currentEventLoopUtilization = import_perf_hooks.performance.eventLoopUtilization();
+      const eventLoopUtilization = import_perf_hooks.performance.eventLoopUtilization(previousEventLoopUtilization);
+      const memory = process.memoryUsage();
+      const pool = {
+        total: dbPool.totalCount,
+        idle: dbPool.idleCount,
+        waiting: dbPool.waitingCount,
+        max: dbPoolMax
+      };
+      const routes = [...window2.routes.entries()].map(([route2, metrics]) => ({
+        route: route2,
+        started: metrics.requestsStarted,
+        completed: metrics.requestsCompleted,
+        statusCodes: metrics.statusCodes,
+        avgMs: metrics.requestsCompleted ? rounded(metrics.durationTotalMs / metrics.requestsCompleted) : null,
+        p95MsApprox: percentileEstimate(metrics.durationBuckets, metrics.requestsCompleted, 0.95),
+        maxMs: metrics.requestsCompleted ? rounded(metrics.durationMaxMs) : null,
+        slowOver1s: metrics.slowRequests,
+        requestBytes: metrics.requestBytes
+      }));
+      const total5xx = Object.entries(window2.statusCodes).filter(([status]) => Number(status) >= 500).reduce((sum, [, count]) => sum + count, 0);
+      const eventLoopP99Ms = eventLoopDelay.percentile(99) / 1e6;
+      const eventLoopMaxMs = eventLoopDelay.max / 1e6;
+      const summary = {
+        event: "pilketos_load_window",
+        windowMs: Math.round(elapsedMs),
+        pid: process.pid,
+        uptimeSeconds: Math.round(process.uptime()),
+        requests: {
+          started: window2.started,
+          completed: window2.completed,
+          aborted: window2.aborted,
+          expressErrors: window2.expressErrors,
+          statusCodes: window2.statusCodes,
+          inFlightNow: inFlightRequests,
+          peakInFlight: window2.peakInFlight,
+          openConnections,
+          requestBytes: window2.requestBytes
+        },
+        databasePool: pool,
+        process: {
+          rssMB: megabytes(memory.rss),
+          heapUsedMB: megabytes(memory.heapUsed),
+          heapTotalMB: megabytes(memory.heapTotal),
+          externalMB: megabytes(memory.external),
+          cpuPercentOfOneCore: rounded(cpuPercent),
+          eventLoopUtilization: rounded(eventLoopUtilization.utilization, 3),
+          eventLoopP99Ms: rounded(eventLoopP99Ms),
+          eventLoopMaxMs: rounded(eventLoopMaxMs)
+        },
+        host: {
+          cpuCores: typeof import_os.default.availableParallelism === "function" ? import_os.default.availableParallelism() : import_os.default.cpus().length,
+          loadAverage: import_os.default.loadavg().map((value) => rounded(value, 2))
+        },
+        routes,
+        examples: window2.examples
+      };
+      const level = total5xx > 0 ? "ERROR" : pool.waiting > 0 || eventLoopP99Ms > 100 || window2.aborted > 0 ? "WARN" : "INFO";
+      log(level, JSON.stringify(summary));
+      window2 = emptyWindow(inFlightRequests);
+      previousCpuUsage = currentCpuUsage;
+      previousEventLoopUtilization = currentEventLoopUtilization;
+      previousSnapshotAt = now;
+      eventLoopDelay.reset();
+    }, REPORT_INTERVAL_MS);
+    interval.unref();
+  }
+  return { middleware, recordExpressError, attachHttpServer, start };
+}
 
 // src/data.ts
 var INDUSTRI_PARTNERS = [
@@ -848083,7 +848353,7 @@ var NEWS_COMPILATION = [
 ];
 
 // src/corePlatformRoutes.ts
-var import_crypto = __toESM(require("crypto"), 1);
+var import_crypto2 = __toESM(require("crypto"), 1);
 var XLSX = __toESM(require_xlsx(), 1);
 var STUDENT_DATA_HEADERS = [
   "nisn",
@@ -848131,6 +848401,11 @@ function fail(res, status, code, message, fields) {
 }
 function clean(value) {
   return String(value ?? "").trim();
+}
+function asyncRoute(handler) {
+  return (req, res, next) => {
+    Promise.resolve(handler(req, res, next)).catch(next);
+  };
 }
 var pilketosRateBuckets = /* @__PURE__ */ new Map();
 var PILKETOS_RATE_WINDOW_MS = 6e4;
@@ -848187,9 +848462,9 @@ function pilketosRateLimit(scope, perIdentifierLimit) {
       }
     }
     const identifier = clean(req.body?.identifier).toUpperCase();
-    const identifierHash = import_crypto.default.createHash("sha256").update(identifier || "__missing__").digest("hex");
+    const identifierHash = import_crypto2.default.createHash("sha256").update(identifier || "__missing__").digest("hex");
     const sessionToken = (req.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
-    const source = sessionToken ? import_crypto.default.createHash("sha256").update(sessionToken).digest("hex") : req.socket.remoteAddress || "unknown";
+    const source = sessionToken ? import_crypto2.default.createHash("sha256").update(sessionToken).digest("hex") : req.socket.remoteAddress || "unknown";
     const keys = [
       { key: `source:${source}`, limit: PILKETOS_RATE_PER_SOURCE },
       { key: `${scope}:${identifierHash}`, limit: perIdentifierLimit }
@@ -848219,15 +848494,15 @@ function pilketosRateLimit(scope, perIdentifierLimit) {
 function safeTextEqual(leftText, rightText) {
   const left = Buffer.from(leftText);
   const right = Buffer.from(rightText);
-  return left.length === right.length && import_crypto.default.timingSafeEqual(left, right);
+  return left.length === right.length && import_crypto2.default.timingSafeEqual(left, right);
 }
-function hashPassword(password, salt = import_crypto.default.randomBytes(16).toString("hex")) {
-  const hash = import_crypto.default.scryptSync(password, salt, 64).toString("hex");
+function hashPassword(password, salt = import_crypto2.default.randomBytes(16).toString("hex")) {
+  const hash = import_crypto2.default.scryptSync(password, salt, 64).toString("hex");
   return `${salt}:${hash}`;
 }
-function hashPasswordAsync(password, salt = import_crypto.default.randomBytes(16).toString("hex")) {
+function hashPasswordAsync(password, salt = import_crypto2.default.randomBytes(16).toString("hex")) {
   return new Promise((resolve, reject) => {
-    import_crypto.default.scrypt(password, salt, 64, (error, derivedKey) => {
+    import_crypto2.default.scrypt(password, salt, 64, (error, derivedKey) => {
       if (error) return reject(error);
       resolve(`${salt}:${derivedKey.toString("hex")}`);
     });
@@ -848235,7 +848510,7 @@ function hashPasswordAsync(password, salt = import_crypto.default.randomBytes(16
 }
 function studentAccountEmail(nis) {
   const normalizedNis = nis.toLowerCase().replace(/[^a-z0-9._-]/g, "-");
-  const uniqueSuffix = import_crypto.default.createHash("sha256").update(nis).digest("hex").slice(0, 12);
+  const uniqueSuffix = import_crypto2.default.createHash("sha256").update(nis).digest("hex").slice(0, 12);
   return `siswa.${normalizedNis}.${uniqueSuffix}@akun.smkn1wonogiri.local`;
 }
 function studentLoginEmail(values, user) {
@@ -848276,7 +848551,7 @@ function parseWorkbook(fileBase64, type) {
   const base64 = fileBase64.replace(/^data:.*?;base64,/, "");
   const buffer = Buffer.from(base64, "base64");
   if (!buffer.length || buffer.length > 10 * 1024 * 1024) throw new Error("File XLSX kosong atau melebihi batas 10 MB.");
-  const checksum = import_crypto.default.createHash("sha256").update(buffer).digest("hex");
+  const checksum = import_crypto2.default.createHash("sha256").update(buffer).digest("hex");
   const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
   const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
   if (!firstSheet) throw new Error("Workbook tidak memiliki sheet.");
@@ -848880,7 +849155,7 @@ function registerCorePlatformRoutes(app2, requireAuth2, getAdminPassword) {
     adminPasswordAttempts.delete(source);
     return true;
   };
-  app2.get("/api/v1/pilketos/active", async (req, res) => {
+  app2.get("/api/v1/pilketos/active", asyncRoute(async (req, res) => {
     const election = await getCachedPublicPilketosElection(true);
     let votedPositions = [];
     let votedCandidateIds = [];
@@ -848897,8 +849172,8 @@ function registerCorePlatformRoutes(app2, requireAuth2, getAdminPassword) {
     return ok(res, {
       election: publicPilketosElection(election, votedPositions, votedCandidateIds, void 0, { includePhotoData: false })
     });
-  });
-  app2.get("/api/v1/pilketos/candidates/:candidateId/photo", async (req, res) => {
+  }));
+  app2.get("/api/v1/pilketos/candidates/:candidateId/photo", asyncRoute(async (req, res) => {
     const election = await getCachedPublicPilketosElection(true);
     const candidate = election?.candidates.find((item) => item.id === req.params.candidateId);
     const photo = typeof candidate?.photoData === "string" ? candidate.photoData.match(/^data:(image\/(?:png|jpe?g|webp));base64,([a-z\d+/=\s]+)$/i) : null;
@@ -848910,8 +849185,8 @@ function registerCorePlatformRoutes(app2, requireAuth2, getAdminPassword) {
     res.setHeader("X-Content-Type-Options", "nosniff");
     if (req.get("If-None-Match") === etag) return res.status(304).end();
     return res.type(photo[1].toLowerCase()).send(Buffer.from(photo[2].replace(/\s/g, ""), "base64"));
-  });
-  app2.post("/api/v1/pilketos/identify", pilketosRateLimit("identify", 30), async (req, res) => {
+  }));
+  app2.post("/api/v1/pilketos/identify", pilketosRateLimit("identify", 30), asyncRoute(async (req, res) => {
     const election = await getCachedPublicPilketosElection();
     if (!election) {
       return fail(res, 409, "ELECTION_NOT_OPEN", "Pemilihan belum dibuka atau sudah ditutup.");
@@ -848945,8 +849220,8 @@ function registerCorePlatformRoutes(app2, requireAuth2, getAdminPassword) {
         { includePhotoData: false }
       )
     });
-  });
-  app2.post("/api/v1/pilketos/vote", pilketosRateLimit("vote", 10), async (req, res) => {
+  }));
+  app2.post("/api/v1/pilketos/vote", pilketosRateLimit("vote", 10), asyncRoute(async (req, res) => {
     const student = await resolvePilketosStudent(req.body?.identifier);
     if (!student) {
       return fail(res, 404, "STUDENT_NOT_FOUND", "NIS/NISN tidak ditemukan atau siswa tidak aktif.");
@@ -849032,8 +849307,8 @@ function registerCorePlatformRoutes(app2, requireAuth2, getAdminPassword) {
       }
       throw error;
     }
-  });
-  app2.get("/api/v1/pilketos/admin", requireAuth2, async (req, res) => {
+  }));
+  app2.get("/api/v1/pilketos/admin", requireAuth2, asyncRoute(async (req, res) => {
     if (!await hasPilketosAdminAccess(req)) return fail(res, 403, "FORBIDDEN", "Akses pengelolaan Pilketos tidak diizinkan.");
     const election = await db.pilketosElection.findFirst({
       include: {
@@ -849074,8 +849349,49 @@ function registerCorePlatformRoutes(app2, requireAuth2, getAdminPassword) {
       }))
     };
     return ok(res, { election: publicPilketosElection(electionWithVoteCounts), stats });
-  });
-  app2.post("/api/v1/pilketos/admin/election", requireAuth2, async (req, res) => {
+  }));
+  app2.get("/api/v1/pilketos/admin/elections/:electionId/non-voters", requireAuth2, asyncRoute(async (req, res) => {
+    if (!await hasPilketosAdminAccess(req)) return fail(res, 403, "FORBIDDEN", "Akses pengelolaan Pilketos tidak diizinkan.");
+    const election = await db.pilketosElection.findUnique({
+      where: { id: req.params.electionId },
+      select: { id: true, academicYear: true }
+    });
+    if (!election) return fail(res, 404, "ELECTION_NOT_FOUND", "Data pemilihan tidak ditemukan.");
+    const [students, votes] = await Promise.all([
+      db.coreStudent.findMany({
+        where: { status: "ACTIVE" },
+        select: {
+          id: true,
+          nis: true,
+          nisn: true,
+          fullName: true,
+          enrollments: {
+            where: { status: "ACTIVE" },
+            select: {
+              academicYear: { select: { name: true, isActive: true } },
+              academicClass: { select: { name: true } }
+            }
+          }
+        },
+        orderBy: [{ fullName: "asc" }, { nisn: "asc" }]
+      }),
+      db.pilketosVote.findMany({
+        where: { electionId: election.id },
+        select: { studentId: true }
+      })
+    ]);
+    const votedStudentIds = new Set(votes.map((vote) => vote.studentId));
+    const nonVoters = students.filter((student) => !votedStudentIds.has(student.id)).map((student) => {
+      const enrollment = student.enrollments.find((item) => item.academicYear.name === election.academicYear) || student.enrollments.find((item) => item.academicYear.isActive) || student.enrollments[0];
+      return {
+        studentNumber: student.nis?.trim() || student.nisn,
+        fullName: student.fullName,
+        className: enrollment?.academicClass.name || "-"
+      };
+    });
+    return ok(res, { electionId: election.id, academicYear: election.academicYear, students: nonVoters });
+  }));
+  app2.post("/api/v1/pilketos/admin/election", requireAuth2, asyncRoute(async (req, res) => {
     if (!await hasPilketosAdminAccess(req)) return fail(res, 403, "FORBIDDEN", "Akses pengelolaan Pilketos tidak diizinkan.");
     const electionId = clean(req.body.id);
     const title = clean(req.body.title);
@@ -849107,8 +849423,8 @@ function registerCorePlatformRoutes(app2, requireAuth2, getAdminPassword) {
     });
     invalidatePublicPilketosElectionCache();
     return ok(res, { election: publicPilketosElection(election), stats: await getPilketosStats(election.id) });
-  });
-  app2.post("/api/v1/pilketos/admin/election/:electionId/candidates", requireAuth2, async (req, res) => {
+  }));
+  app2.post("/api/v1/pilketos/admin/election/:electionId/candidates", requireAuth2, asyncRoute(async (req, res) => {
     if (!await hasPilketosAdminAccess(req)) return fail(res, 403, "FORBIDDEN", "Akses pengelolaan Pilketos tidak diizinkan.");
     const election = await db.pilketosElection.findUnique({ where: { id: req.params.electionId } });
     if (!election) return fail(res, 404, "ELECTION_NOT_FOUND", "Pemilihan tidak ditemukan.");
@@ -849134,8 +849450,8 @@ function registerCorePlatformRoutes(app2, requireAuth2, getAdminPassword) {
       if (error?.code === "P2002") return fail(res, 409, "DUPLICATE_NUMBER", "Nomor kandidat sudah digunakan.");
       throw error;
     }
-  });
-  app2.patch("/api/v1/pilketos/admin/candidates/:candidateId", requireAuth2, async (req, res) => {
+  }));
+  app2.patch("/api/v1/pilketos/admin/candidates/:candidateId", requireAuth2, asyncRoute(async (req, res) => {
     if (!await hasPilketosAdminAccess(req)) return fail(res, 403, "FORBIDDEN", "Akses pengelolaan Pilketos tidak diizinkan.");
     const current = await db.pilketosCandidate.findUnique({
       where: { id: req.params.candidateId },
@@ -849165,8 +849481,8 @@ function registerCorePlatformRoutes(app2, requireAuth2, getAdminPassword) {
       if (error?.code === "P2002") return fail(res, 409, "DUPLICATE_NUMBER", "Nomor kandidat sudah digunakan.");
       throw error;
     }
-  });
-  app2.delete("/api/v1/pilketos/admin/candidates/:candidateId", requireAuth2, async (req, res) => {
+  }));
+  app2.delete("/api/v1/pilketos/admin/candidates/:candidateId", requireAuth2, asyncRoute(async (req, res) => {
     if (!await hasPilketosAdminAccess(req)) return fail(res, 403, "FORBIDDEN", "Akses pengelolaan Pilketos tidak diizinkan.");
     const current = await db.pilketosCandidate.findUnique({ where: { id: req.params.candidateId }, include: { election: true, _count: { select: { votes: true } } } });
     if (!current) return fail(res, 404, "CANDIDATE_NOT_FOUND", "Kandidat tidak ditemukan.");
@@ -849175,8 +849491,8 @@ function registerCorePlatformRoutes(app2, requireAuth2, getAdminPassword) {
     await db.pilketosCandidate.delete({ where: { id: current.id } });
     invalidatePublicPilketosElectionCache();
     return ok(res, { deleted: true });
-  });
-  app2.post("/api/v1/pilketos/admin/reset-votes", requireAuth2, async (req, res) => {
+  }));
+  app2.post("/api/v1/pilketos/admin/reset-votes", requireAuth2, asyncRoute(async (req, res) => {
     if (!await hasPilketosAdminAccess(req)) return fail(res, 403, "FORBIDDEN", "Akses pengelolaan Pilketos tidak diizinkan.");
     const password = typeof req.body?.password === "string" ? req.body.password : "";
     const electionId = clean(req.body?.electionId);
@@ -849216,7 +849532,7 @@ function registerCorePlatformRoutes(app2, requireAuth2, getAdminPassword) {
       return fail(res, 500, "VOTE_RESET_FAILED", "Reset suara gagal. Tidak ada perubahan yang diterapkan.");
     }
     return ok(res, { deletedCount });
-  });
+  }));
   app2.get("/api/v1/lms/guru/context", requireAuth2, async (req, res) => {
     const actor = await getLmsActor(req);
     if (!actor) return fail(res, 401, "UNAUTHENTICATED", "Session guru tidak valid.");
@@ -849949,8 +850265,8 @@ function registerCorePlatformRoutes(app2, requireAuth2, getAdminPassword) {
   app2.post("/api/v1/akademik/users/:id/invite", requireAuth2, async (req, res) => {
     const user = await db.coreUser.findUnique({ where: { id: req.params.id } });
     if (!user) return fail(res, 404, "NOT_FOUND", "User tidak ditemukan.");
-    const activationToken = import_crypto.default.randomBytes(32).toString("hex");
-    await db.coreUser.update({ where: { id: user.id }, data: { status: "INVITED", activationTokenHash: import_crypto.default.createHash("sha256").update(activationToken).digest("hex"), activationExpiresAt: new Date(Date.now() + 48 * 60 * 60 * 1e3) } });
+    const activationToken = import_crypto2.default.randomBytes(32).toString("hex");
+    await db.coreUser.update({ where: { id: user.id }, data: { status: "INVITED", activationTokenHash: import_crypto2.default.createHash("sha256").update(activationToken).digest("hex"), activationExpiresAt: new Date(Date.now() + 48 * 60 * 60 * 1e3) } });
     await audit("USER_STATUS_CHANGE", "CoreUser", user.id, { status: "INVITED", action: "INVITATION_CREATED" });
     return ok(res, { userId: user.id, email: user.email, activationToken, expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1e3) });
   });
@@ -850059,7 +850375,7 @@ function registerCorePlatformRoutes(app2, requireAuth2, getAdminPassword) {
 }
 
 // src/diklatRoutes.ts
-var import_crypto2 = __toESM(require("crypto"), 1);
+var import_crypto3 = __toESM(require("crypto"), 1);
 var import_path = __toESM(require("path"), 1);
 var import_stream = require("stream");
 var import_multer = __toESM(require_multer(), 1);
@@ -850210,9 +850526,9 @@ function makeGoogleOAuthClient() {
   );
 }
 function encryptDriveRefreshToken(refreshToken) {
-  const iv = import_crypto2.default.randomBytes(12);
-  const key = import_crypto2.default.createHash("sha256").update(process.env.SESSION_SECRET).digest();
-  const cipher = import_crypto2.default.createCipheriv("aes-256-gcm", key, iv);
+  const iv = import_crypto3.default.randomBytes(12);
+  const key = import_crypto3.default.createHash("sha256").update(process.env.SESSION_SECRET).digest();
+  const cipher = import_crypto3.default.createCipheriv("aes-256-gcm", key, iv);
   const ciphertext = Buffer.concat([cipher.update(refreshToken, "utf8"), cipher.final()]);
   return {
     version: 1,
@@ -850229,8 +850545,8 @@ async function getStoredDriveRefreshToken() {
     throw new Error("GOOGLE_DRIVE_OAUTH_TOKEN_INVALID");
   }
   try {
-    const key = import_crypto2.default.createHash("sha256").update(process.env.SESSION_SECRET).digest();
-    const decipher = import_crypto2.default.createDecipheriv("aes-256-gcm", key, Buffer.from(value.iv, "base64"));
+    const key = import_crypto3.default.createHash("sha256").update(process.env.SESSION_SECRET).digest();
+    const decipher = import_crypto3.default.createDecipheriv("aes-256-gcm", key, Buffer.from(value.iv, "base64"));
     decipher.setAuthTag(Buffer.from(value.tag, "base64"));
     return Buffer.concat([
       decipher.update(Buffer.from(value.ciphertext, "base64")),
@@ -850299,7 +850615,7 @@ function getConnectorDriveClient() {
         return connectorDriveRequest(pathname, { method: "POST", body: parameters.requestBody || {} });
       }
       const mimeType = parameters.media.mimeType || "application/octet-stream";
-      const boundary = `diklat-${import_crypto2.default.randomBytes(18).toString("hex")}`;
+      const boundary = `diklat-${import_crypto3.default.randomBytes(18).toString("hex")}`;
       const metadata = Buffer.from(
         `--${boundary}\r
 Content-Type: application/json; charset=UTF-8\r
@@ -850725,7 +851041,7 @@ function submissionShape(submission) {
 function privateSubmissionAccessToken(reference) {
   const secret = process.env.SESSION_SECRET;
   if (!secret) return null;
-  return import_crypto2.default.createHmac("sha256", secret).update(`diklat-submission:${reference}`).digest("base64url");
+  return import_crypto3.default.createHmac("sha256", secret).update(`diklat-submission:${reference}`).digest("base64url");
 }
 function submissionReceiptShape(submission, duplicate = false) {
   const driveFile = submission.driveFile;
@@ -850999,7 +851315,7 @@ function registerDiklatRoutes(app2, requireAuth2) {
     if (!expected || !provided) return fail2(res, 403, "FILE_ACCESS_DENIED", "Tautan file tidak valid atau sudah tidak tersedia.");
     const actualBytes = Buffer.from(provided);
     const expectedBytes = Buffer.from(expected);
-    if (actualBytes.length !== expectedBytes.length || !import_crypto2.default.timingSafeEqual(actualBytes, expectedBytes)) {
+    if (actualBytes.length !== expectedBytes.length || !import_crypto3.default.timingSafeEqual(actualBytes, expectedBytes)) {
       return fail2(res, 403, "FILE_ACCESS_DENIED", "Tautan file tidak valid atau sudah tidak tersedia.");
     }
     const submission = await db.diklatSubmission.findUnique({
@@ -851022,7 +851338,7 @@ function registerDiklatRoutes(app2, requireAuth2) {
       return fail2(res, 400, "VALIDATION_ERROR", "Diklat, nama lengkap, asal instansi, jenis tugas, file, dan kunci pengiriman diperlukan.");
     }
     if (!/^[\p{L}\p{N} .,'’()-]+$/u.test(fullName) || !fullName.trim()) return fail2(res, 400, "INVALID_NAME", "Nama lengkap tidak valid.");
-    const idempotencyKey = import_crypto2.default.createHash("sha256").update(rawKey).digest("hex");
+    const idempotencyKey = import_crypto3.default.createHash("sha256").update(rawKey).digest("hex");
     const previous = await db.diklatSubmission.findUnique({
       where: { idempotencyKey },
       include: { training: { select: { title: true } }, driveFile: true }
@@ -851048,7 +851364,7 @@ function registerDiklatRoutes(app2, requireAuth2) {
     if (!settings.allowedExtensions.includes(detected.extension) || !settings.allowedMimeTypes.includes(detected.mimeType) || !taskAllowed.includes(detected.mimeType)) {
       return fail2(res, 415, "FILE_TYPE_NOT_ALLOWED", "Jenis file ini tidak diizinkan untuk tugas yang dipilih.");
     }
-    const reference = `PD-${(/* @__PURE__ */ new Date()).getFullYear()}-${import_crypto2.default.randomBytes(5).toString("hex").toUpperCase()}`;
+    const reference = `PD-${(/* @__PURE__ */ new Date()).getFullYear()}-${import_crypto3.default.randomBytes(5).toString("hex").toUpperCase()}`;
     const safeName = cleanFileName(req.file.originalname);
     let driveFile = null;
     try {
@@ -851616,7 +851932,7 @@ function registerDiklatRoutes(app2, requireAuth2) {
     if (!googleOAuthConfigured()) {
       return fail2(res, 503, "DRIVE_OAUTH_NOT_CONFIGURED", "Login Google belum disiapkan. Isi GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, GOOGLE_OAUTH_REDIRECT_URI, dan SESSION_SECRET pada environment server.");
     }
-    const state = import_crypto2.default.randomBytes(32).toString("hex");
+    const state = import_crypto3.default.randomBytes(32).toString("hex");
     const expiresAt = Date.now() + 10 * 60 * 1e3;
     await db.setting.create({
       data: { key: `${DRIVE_OAUTH_STATE_PREFIX}${state}`, value: { expiresAt } }
@@ -851867,6 +852183,8 @@ function serverLog(level, message) {
   } catch {
   }
 }
+var pilketosDiagnostics = createPilketosDiagnostics(serverLog);
+app.use(pilketosDiagnostics.middleware);
 if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
   try {
     import_web_push.default.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
@@ -852225,7 +852543,7 @@ app.post("/api/auth/login", async (req, res) => {
     }
     if (username === creds.username && password === creds.password) {
       clearAttempts(ip);
-      const token = import_crypto3.default.randomBytes(48).toString("hex");
+      const token = import_crypto4.default.randomBytes(48).toString("hex");
       await addSession(token);
       return res.json({ token });
     }
@@ -852272,19 +852590,19 @@ app.get("/api/auth/verify", async (req, res) => {
   if (token && await hasSession(token)) return res.json({ valid: true });
   return res.status(401).json({ valid: false });
 });
-function hashPassword2(password, salt = import_crypto3.default.randomBytes(16).toString("hex")) {
-  const hash = import_crypto3.default.scryptSync(password, salt, 64).toString("hex");
+function hashPassword2(password, salt = import_crypto4.default.randomBytes(16).toString("hex")) {
+  const hash = import_crypto4.default.scryptSync(password, salt, 64).toString("hex");
   return `${salt}:${hash}`;
 }
 function verifyPassword(password, encoded) {
   if (!encoded) return false;
   const [salt, expected] = encoded.split(":");
   if (!salt || !expected) return false;
-  const actual = import_crypto3.default.scryptSync(password, salt, 64).toString("hex");
-  return import_crypto3.default.timingSafeEqual(Buffer.from(actual, "hex"), Buffer.from(expected, "hex"));
+  const actual = import_crypto4.default.scryptSync(password, salt, 64).toString("hex");
+  return import_crypto4.default.timingSafeEqual(Buffer.from(actual, "hex"), Buffer.from(expected, "hex"));
 }
 function hashToken(token) {
-  return import_crypto3.default.createHash("sha256").update(token).digest("hex");
+  return import_crypto4.default.createHash("sha256").update(token).digest("hex");
 }
 function publicCoreUser(user) {
   return {
@@ -852315,7 +852633,7 @@ app.post("/api/v1/auth/login", async (req, res) => {
     return res.status(401).json({ success: false, error: { code: "INVALID_CREDENTIALS", message: "Email, NIS/NISN, atau password tidak valid." } });
   }
   clearAttempts(ip);
-  const token = import_crypto3.default.randomBytes(48).toString("hex");
+  const token = import_crypto4.default.randomBytes(48).toString("hex");
   await addSession(token, user.id);
   const passwordChangeOffer = Boolean(user.student && user.passwordChangeRecommended);
   if (passwordChangeOffer) {
@@ -853744,14 +854062,20 @@ async function main() {
     });
   }
   app.use((err, req, res, _next) => {
-    serverLog("ERROR", `Unhandled Express error on ${req.method} ${req.originalUrl}: ${err.stack || err.message}`);
     const status = Number.isInteger(err?.status) && err.status >= 400 && err.status < 500 ? err.status : 500;
+    const pilketosErrorRecorded = pilketosDiagnostics.recordExpressError(req, res, err, status);
+    if (!pilketosErrorRecorded) {
+      const safeUrl = req.originalUrl.split("?")[0];
+      serverLog("ERROR", `Unhandled Express error on ${req.method} ${safeUrl}: ${err.stack || err.message}`);
+    }
     const message = status === 413 ? "Ukuran data permintaan terlalu besar." : status === 400 ? "Format data permintaan tidak valid." : "Internal server error";
     res.status(status).json({ error: message });
   });
-  app.listen(PORT, "0.0.0.0", () => {
+  const httpServer = app.listen(PORT, "0.0.0.0", () => {
     serverLog("INFO", `Express listening on port ${PORT} \u2014 ready to accept requests`);
+    pilketosDiagnostics.start();
   });
+  pilketosDiagnostics.attachHttpServer(httpServer);
 }
 main().catch((err) => {
   serverLog("ERROR", `main() failed: ${err.stack || err.message}`);
