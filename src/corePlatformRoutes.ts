@@ -924,7 +924,7 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
     return true;
   };
 
-  app.get("/api/v1/pilketos/active", async (req, res) => {
+  app.get("/api/v1/pilketos/active", asyncRoute(async (req, res) => {
     // The public landing page also needs to preview candidates while the
     // committee is still preparing a draft. Prefer the live election, then
     // fall back to the newest draft so names and photos are visible before
@@ -945,9 +945,9 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
     return ok(res, {
       election: publicPilketosElection(election, votedPositions, votedCandidateIds, undefined, { includePhotoData: false }),
     });
-  });
+  }));
 
-  app.get("/api/v1/pilketos/candidates/:candidateId/photo", async (req, res) => {
+  app.get("/api/v1/pilketos/candidates/:candidateId/photo", asyncRoute(async (req, res) => {
     const election = await getCachedPublicPilketosElection(true);
     const candidate = election?.candidates.find((item: any) => item.id === req.params.candidateId);
     const photo = typeof candidate?.photoData === "string"
@@ -962,9 +962,9 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
     res.setHeader("X-Content-Type-Options", "nosniff");
     if (req.get("If-None-Match") === etag) return res.status(304).end();
     return res.type(photo[1].toLowerCase()).send(Buffer.from(photo[2].replace(/\s/g, ""), "base64"));
-  });
+  }));
 
-  app.post("/api/v1/pilketos/identify", pilketosRateLimit("identify", 30), async (req, res) => {
+  app.post("/api/v1/pilketos/identify", pilketosRateLimit("identify", 30), asyncRoute(async (req, res) => {
     const election = await getCachedPublicPilketosElection();
     if (!election) {
       return fail(res, 409, "ELECTION_NOT_OPEN", "Pemilihan belum dibuka atau sudah ditutup.");
@@ -1000,9 +1000,9 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
         { includePhotoData: false },
       ),
     });
-  });
+  }));
 
-  app.post("/api/v1/pilketos/vote", pilketosRateLimit("vote", 10), async (req, res) => {
+  app.post("/api/v1/pilketos/vote", pilketosRateLimit("vote", 10), asyncRoute(async (req, res) => {
     const student = await resolvePilketosStudent(req.body?.identifier);
     if (!student) {
       return fail(res, 404, "STUDENT_NOT_FOUND", "NIS/NISN tidak ditemukan atau siswa tidak aktif.");
@@ -1101,9 +1101,9 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
       }
       throw error;
     }
-  });
+  }));
 
-  app.get("/api/v1/pilketos/admin", requireAuth, async (req, res) => {
+  app.get("/api/v1/pilketos/admin", requireAuth, asyncRoute(async (req, res) => {
     if (!(await hasPilketosAdminAccess(req))) return fail(res, 403, "FORBIDDEN", "Akses pengelolaan Pilketos tidak diizinkan.");
     const election = await db.pilketosElection.findFirst({
       include: {
@@ -1146,9 +1146,9 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
       })),
     };
     return ok(res, { election: publicPilketosElection(electionWithVoteCounts), stats });
-  });
+  }));
 
-  app.get("/api/v1/pilketos/admin/elections/:electionId/non-voters", requireAuth, async (req, res) => {
+  app.get("/api/v1/pilketos/admin/elections/:electionId/non-voters", requireAuth, asyncRoute(async (req, res) => {
     if (!(await hasPilketosAdminAccess(req))) return fail(res, 403, "FORBIDDEN", "Akses pengelolaan Pilketos tidak diizinkan.");
 
     const election = await db.pilketosElection.findUnique({
@@ -1196,9 +1196,9 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
       });
 
     return ok(res, { electionId: election.id, academicYear: election.academicYear, students: nonVoters });
-  });
+  }));
 
-  app.post("/api/v1/pilketos/admin/election", requireAuth, async (req, res) => {
+  app.post("/api/v1/pilketos/admin/election", requireAuth, asyncRoute(async (req, res) => {
     if (!(await hasPilketosAdminAccess(req))) return fail(res, 403, "FORBIDDEN", "Akses pengelolaan Pilketos tidak diizinkan.");
     const electionId = clean(req.body.id);
     const title = clean(req.body.title);
@@ -1234,9 +1234,9 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
     });
     invalidatePublicPilketosElectionCache();
     return ok(res, { election: publicPilketosElection(election), stats: await getPilketosStats(election.id) });
-  });
+  }));
 
-  app.post("/api/v1/pilketos/admin/election/:electionId/candidates", requireAuth, async (req, res) => {
+  app.post("/api/v1/pilketos/admin/election/:electionId/candidates", requireAuth, asyncRoute(async (req, res) => {
     if (!(await hasPilketosAdminAccess(req))) return fail(res, 403, "FORBIDDEN", "Akses pengelolaan Pilketos tidak diizinkan.");
     const election = await db.pilketosElection.findUnique({ where: { id: req.params.electionId } });
     if (!election) return fail(res, 404, "ELECTION_NOT_FOUND", "Pemilihan tidak ditemukan.");
@@ -1262,9 +1262,9 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
       if (error?.code === "P2002") return fail(res, 409, "DUPLICATE_NUMBER", "Nomor kandidat sudah digunakan.");
       throw error;
     }
-  });
+  }));
 
-  app.patch("/api/v1/pilketos/admin/candidates/:candidateId", requireAuth, async (req, res) => {
+  app.patch("/api/v1/pilketos/admin/candidates/:candidateId", requireAuth, asyncRoute(async (req, res) => {
     if (!(await hasPilketosAdminAccess(req))) return fail(res, 403, "FORBIDDEN", "Akses pengelolaan Pilketos tidak diizinkan.");
     const current = await db.pilketosCandidate.findUnique({
       where: { id: req.params.candidateId },
@@ -1294,9 +1294,9 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
       if (error?.code === "P2002") return fail(res, 409, "DUPLICATE_NUMBER", "Nomor kandidat sudah digunakan.");
       throw error;
     }
-  });
+  }));
 
-  app.delete("/api/v1/pilketos/admin/candidates/:candidateId", requireAuth, async (req, res) => {
+  app.delete("/api/v1/pilketos/admin/candidates/:candidateId", requireAuth, asyncRoute(async (req, res) => {
     if (!(await hasPilketosAdminAccess(req))) return fail(res, 403, "FORBIDDEN", "Akses pengelolaan Pilketos tidak diizinkan.");
     const current = await db.pilketosCandidate.findUnique({ where: { id: req.params.candidateId }, include: { election: true, _count: { select: { votes: true } } } });
     if (!current) return fail(res, 404, "CANDIDATE_NOT_FOUND", "Kandidat tidak ditemukan.");
@@ -1305,9 +1305,9 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
     await db.pilketosCandidate.delete({ where: { id: current.id } });
     invalidatePublicPilketosElectionCache();
     return ok(res, { deleted: true });
-  });
+  }));
 
-  app.post("/api/v1/pilketos/admin/reset-votes", requireAuth, async (req, res) => {
+  app.post("/api/v1/pilketos/admin/reset-votes", requireAuth, asyncRoute(async (req, res) => {
     if (!(await hasPilketosAdminAccess(req))) return fail(res, 403, "FORBIDDEN", "Akses pengelolaan Pilketos tidak diizinkan.");
     const password = typeof req.body?.password === "string" ? req.body.password : "";
     const electionId = clean(req.body?.electionId);
@@ -1351,7 +1351,7 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
     }
 
     return ok(res, { deletedCount });
-  });
+  }));
 
   // Wave 2 / Sprint 5: curriculum module foundation. Upload and ingestion are
   // intentionally separate follow-up stages so a module can be managed safely

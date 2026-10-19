@@ -5,6 +5,7 @@ import fs from "fs";
 import crypto from "crypto";
 import webpush from "web-push";
 import { db } from "./src/db";
+import { createPilketosDiagnostics } from "./src/pilketosDiagnostics";
 import {
   COMPETENCY_DATA,
   TIMELINE_ACHIEVEMENTS,
@@ -43,6 +44,9 @@ function serverLog(level: "INFO" | "WARN" | "ERROR", message: string) {
     fs.appendFileSync(SERVER_LOG, line, "utf-8");
   } catch { /* best-effort */ }
 }
+
+const pilketosDiagnostics = createPilketosDiagnostics(serverLog);
+app.use(pilketosDiagnostics.middleware);
 
 if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
   try {
@@ -2057,8 +2061,12 @@ async function main() {
   }
 
   app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    serverLog("ERROR", `Unhandled Express error on ${req.method} ${req.originalUrl}: ${err.stack || err.message}`);
     const status = Number.isInteger(err?.status) && err.status >= 400 && err.status < 500 ? err.status : 500;
+    const pilketosErrorRecorded = pilketosDiagnostics.recordExpressError(req, res, err, status);
+    if (!pilketosErrorRecorded) {
+      const safeUrl = req.originalUrl.split("?")[0];
+      serverLog("ERROR", `Unhandled Express error on ${req.method} ${safeUrl}: ${err.stack || err.message}`);
+    }
     const message = status === 413
       ? "Ukuran data permintaan terlalu besar."
       : status === 400
@@ -2067,9 +2075,11 @@ async function main() {
     res.status(status).json({ error: message });
   });
 
-  app.listen(PORT, "0.0.0.0", () => {
+  const httpServer = app.listen(PORT, "0.0.0.0", () => {
     serverLog("INFO", `Express listening on port ${PORT} — ready to accept requests`);
+    pilketosDiagnostics.start();
   });
+  pilketosDiagnostics.attachHttpServer(httpServer);
 }
 
 main().catch(err => {
