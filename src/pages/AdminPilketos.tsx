@@ -34,6 +34,12 @@ type ParticipationStats = {
   legacyVoterCount?: number;
 };
 
+type NonVoter = {
+  studentNumber: string;
+  fullName: string;
+  className: string;
+};
+
 type Props = { theme?: "light" | "dark" };
 type Position = "KETUA_UMUM" | "KETUA_1" | "KETUA_3" | "KETUA_4";
 type AdminSection = "dashboard" | "candidates" | "settings" | "results";
@@ -318,6 +324,85 @@ function createPilketosResultsPdf(election: Election, stats: ParticipationStats 
   doc.save("Berita-Acara-Pilketos-SMKN-1-Wonogiri-2026-2027.pdf");
 }
 
+function createNonVotersPdf(election: Election, students: NonVoter[]) {
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 15;
+  const dark: [number, number, number] = [28, 43, 59];
+  const gold: [number, number, number] = [181, 137, 50];
+  const slate: [number, number, number] = [89, 101, 115];
+  const white: [number, number, number] = [255, 255, 255];
+  const generatedAt = new Intl.DateTimeFormat("id-ID", {
+    dateStyle: "long",
+    timeStyle: "medium",
+    timeZone: "Asia/Jakarta",
+  }).format(new Date());
+
+  doc.setFillColor(...dark);
+  doc.rect(0, 0, pageWidth, 3, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(15);
+  doc.setTextColor(...dark);
+  doc.text("SMK NEGERI 1 WONOGIRI", pageWidth / 2, 14, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(...slate);
+  doc.text(`PEMILIHAN KETUA OSIS · TAHUN AJARAN ${election.academicYear}`, pageWidth / 2, 20, { align: "center" });
+  doc.setDrawColor(...gold);
+  doc.setLineWidth(0.8);
+  doc.line(margin, 25, pageWidth - margin, 25);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(...dark);
+  doc.text("DAFTAR SISWA BELUM MENGGUNAKAN HAK PILIH", pageWidth / 2, 35, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.text(election.title, pageWidth / 2, 42, { align: "center" });
+  doc.setFontSize(8);
+  doc.setTextColor(...slate);
+  doc.text(`Data dibuat: ${generatedAt} WIB`, margin, 50);
+  doc.text(`Jumlah siswa: ${formatIndonesianNumber(students.length)}`, pageWidth - margin, 50, { align: "right" });
+
+  autoTable(doc, {
+    startY: 55,
+    margin: { left: margin, right: margin, bottom: 17 },
+    head: [["No.", "NIS / NISN", "Nama siswa", "Kelas"]],
+    body: students.map((student, index) => [
+      formatIndonesianNumber(index + 1),
+      student.studentNumber,
+      student.fullName,
+      student.className,
+    ]),
+    theme: "grid",
+    styles: { font: "helvetica", fontSize: 8, textColor: dark, cellPadding: 2, minCellHeight: 7, lineColor: [216, 222, 228], lineWidth: 0.15, overflow: "linebreak" },
+    headStyles: { fillColor: dark, textColor: white, fontStyle: "bold", fontSize: 8, halign: "center" },
+    alternateRowStyles: { fillColor: [246, 248, 250] },
+    columnStyles: {
+      0: { cellWidth: 15, halign: "center" },
+      1: { cellWidth: 38, halign: "center" },
+      2: { cellWidth: 83 },
+      3: { cellWidth: 41 },
+    },
+    didDrawPage: () => {
+      const pageHeight = doc.internal.pageSize.getHeight();
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(...slate);
+      doc.text("Laporan ini hanya membaca data pemilihan dan data siswa.", margin, pageHeight - 8);
+    },
+  });
+
+  if (students.length === 0) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(...slate);
+    doc.text("Semua siswa aktif tercatat telah menggunakan hak pilih.", pageWidth / 2, 68, { align: "center" });
+  }
+
+  const safeAcademicYear = election.academicYear.replace(/[^A-Za-z0-9-]+/g, "-").replace(/^-|-$/g, "");
+  doc.save(`Laporan-Siswa-Belum-Memilih-Pilketos-${safeAcademicYear || "pemilihan"}.pdf`);
+}
+
 function toJakartaInput(value?: string | null) {
   if (!value) return "";
   const parts = new Intl.DateTimeFormat("en-GB", {
@@ -404,6 +489,7 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
   const [resetPassword, setResetPassword] = useState("");
   const [resetError, setResetError] = useState("");
   const [resettingVotes, setResettingVotes] = useState(false);
+  const [downloadingNonVoters, setDownloadingNonVoters] = useState(false);
   const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   async function load() {
@@ -594,6 +680,29 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
     }
   }
 
+  async function downloadNonVotersPdf() {
+    if (!election || downloadingNonVoters) return;
+    setDownloadingNonVoters(true);
+    try {
+      const response = await apiFetch(`/api/v1/pilketos/admin/elections/${encodeURIComponent(election.id)}/non-voters`, {
+        headers: headers(),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error?.message || "Daftar siswa belum dapat dimuat.");
+      const students = payload.data?.students;
+      if (!Array.isArray(students)) throw new Error("Format daftar siswa dari server tidak sesuai.");
+      createNonVotersPdf(election, students as NonVoter[]);
+      setNotice({
+        type: "success",
+        text: `Laporan ${formatIndonesianNumber(students.length)} siswa yang belum memilih berhasil diunduh dalam format PDF.`,
+      });
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "PDF laporan siswa belum dapat dibuat." });
+    } finally {
+      setDownloadingNonVoters(false);
+    }
+  }
+
   return (
     <div className="text-left">
       <div className="flex flex-col justify-between gap-4 border-b border-current/10 pb-6 sm:flex-row sm:items-start">
@@ -725,6 +834,23 @@ export default function AdminPilketos({ theme = "dark" }: Props) {
             <p className={`mt-3 text-[10px] leading-relaxed ${muted}`}>
               Persentase dihitung dari pemilih unik yang telah menggunakan hak pilih dibanding total siswa aktif. Ballot tidak valid ditolak oleh sistem dan tidak disimpan; angka 0 menunjukkan suara tidak sah yang tercatat.
             </p>
+          </section>
+          <section className={`mt-5 flex flex-col gap-4 rounded-2xl border border-current/10 p-4 sm:flex-row sm:items-center sm:justify-between ${dark ? "bg-slate-950/30" : "bg-white"}`}>
+            <div>
+              <h4 className="font-black">Laporan siswa yang belum memilih</h4>
+              <p className={`mt-1 max-w-2xl text-xs leading-relaxed ${muted}`}>
+                Unduh daftar siswa aktif yang belum memiliki catatan suara pada pemilihan ini, lengkap dengan NIS/NISN, nama, dan kelas.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={downloadingNonVoters}
+              onClick={() => void downloadNonVotersPdf()}
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-black text-slate-950 transition hover:bg-amber-300 disabled:cursor-wait disabled:opacity-60"
+            >
+              {downloadingNonVoters ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              {downloadingNonVoters ? "Menyiapkan PDF..." : "Unduh laporan PDF"}
+            </button>
           </section>
           </> : <div className={`mt-5 rounded-2xl border border-dashed border-current/15 p-8 text-center text-sm ${muted}`}>Belum ada data pemilihan untuk ditampilkan.</div>}
         </section>}

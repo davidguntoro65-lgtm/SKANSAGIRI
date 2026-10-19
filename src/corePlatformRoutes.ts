@@ -1148,6 +1148,56 @@ export function registerCorePlatformRoutes(app: Express, requireAuth: AuthMiddle
     return ok(res, { election: publicPilketosElection(electionWithVoteCounts), stats });
   });
 
+  app.get("/api/v1/pilketos/admin/elections/:electionId/non-voters", requireAuth, async (req, res) => {
+    if (!(await hasPilketosAdminAccess(req))) return fail(res, 403, "FORBIDDEN", "Akses pengelolaan Pilketos tidak diizinkan.");
+
+    const election = await db.pilketosElection.findUnique({
+      where: { id: req.params.electionId },
+      select: { id: true, academicYear: true },
+    });
+    if (!election) return fail(res, 404, "ELECTION_NOT_FOUND", "Data pemilihan tidak ditemukan.");
+
+    const [students, votes] = await Promise.all([
+      db.coreStudent.findMany({
+        where: { status: "ACTIVE" },
+        select: {
+          id: true,
+          nis: true,
+          nisn: true,
+          fullName: true,
+          enrollments: {
+            where: { status: "ACTIVE" },
+            select: {
+              academicYear: { select: { name: true, isActive: true } },
+              academicClass: { select: { name: true } },
+            },
+          },
+        },
+        orderBy: [{ fullName: "asc" }, { nisn: "asc" }],
+      }),
+      db.pilketosVote.findMany({
+        where: { electionId: election.id },
+        select: { studentId: true },
+      }),
+    ]);
+    const votedStudentIds = new Set(votes.map((vote) => vote.studentId));
+    const nonVoters = students
+      .filter((student) => !votedStudentIds.has(student.id))
+      .map((student) => {
+        const enrollment =
+          student.enrollments.find((item) => item.academicYear.name === election.academicYear) ||
+          student.enrollments.find((item) => item.academicYear.isActive) ||
+          student.enrollments[0];
+        return {
+          studentNumber: student.nis?.trim() || student.nisn,
+          fullName: student.fullName,
+          className: enrollment?.academicClass.name || "-",
+        };
+      });
+
+    return ok(res, { electionId: election.id, academicYear: election.academicYear, students: nonVoters });
+  });
+
   app.post("/api/v1/pilketos/admin/election", requireAuth, async (req, res) => {
     if (!(await hasPilketosAdminAccess(req))) return fail(res, 403, "FORBIDDEN", "Akses pengelolaan Pilketos tidak diizinkan.");
     const electionId = clean(req.body.id);
